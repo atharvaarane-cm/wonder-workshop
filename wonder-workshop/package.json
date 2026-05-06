@@ -1,0 +1,16 @@
+{
+  "name": "wonder-workshop",
+  "version": "1.0.0",
+  "description": "Creative production brief tool powered by Ollama",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.js & cd client && npm run dev",
+    "server": "node --watch server.js",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
