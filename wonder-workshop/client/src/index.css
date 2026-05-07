@@ -23,13 +23,13 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Discover layout ──────────────────────────────────────────── */
 .discover-layout {
   flex: 1; display: flex; overflow: hidden;
-  background: #E8E0D0; color: #1A1A1A;
+  background: #F4F4F2; color: #1A1A1A;
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
 .sidebar {
   width: 148px; flex-shrink: 0; display: flex; flex-direction: column;
-  background: #EDE5D5; border-right: 1px solid rgba(0,0,0,0.09);
+  background: #FFFFFF; border-right: 1px solid rgba(0,0,0,0.07);
   padding: 20px 0 0;
 }
 .sidebar-logo {
@@ -65,7 +65,7 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Discover topbar ─────────────────────────────────────────── */
 .discover-topbar {
   height: 52px; flex-shrink: 0; display: flex; align-items: center;
-  padding: 0 32px; background: #F0E8D8; border-bottom: 1px solid rgba(0,0,0,0.08);
+  padding: 0 32px; background: #FFFFFF; border-bottom: 1px solid rgba(0,0,0,0.07);
   justify-content: space-between;
 }
 .topbar-ww-brand {
@@ -76,22 +76,22 @@ textarea { font-family: var(--font); resize: none; }
 .new-brief-btn {
   display: flex; align-items: center; gap: 5px;
   font-size: 13px; font-family: var(--font); font-weight: 600;
-  padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.14);
-  color: #1A1A1A; background: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.12s;
+  padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12);
+  color: #1A1A1A; background: #FFFFFF; cursor: pointer; transition: all 0.12s;
 }
-.new-brief-btn:hover { background: rgba(255,255,255,0.9); }
+.new-brief-btn:hover { background: #F4F4F2; }
 .bell-btn {
-  width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12);
-  background: rgba(255,255,255,0.6); color: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);
+  background: none; color: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: all 0.12s;
 }
-.bell-btn:hover { background: rgba(255,255,255,0.9); color: rgba(0,0,0,0.7); }
+.bell-btn:hover { background: #F4F4F2; color: rgba(0,0,0,0.7); }
 
 /* ── Form (full width, single column) ───────────────────────── */
 .discover-form {
   flex: 1; overflow-y: auto;
   padding: 44px 64px 64px; display: flex; flex-direction: column; gap: 28px;
-  background: #E8E0D0; max-width: 900px; width: 100%; margin: 0 auto;
+  background: #F4F4F2; max-width: 900px; width: 100%; margin: 0 auto;
 }
 
 .form-welcome { font-size: 13px; color: #7C5CFC; font-weight: 500; margin-bottom: 8px; }
