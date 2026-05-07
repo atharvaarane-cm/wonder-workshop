@@ -135,6 +135,10 @@ textarea { font-family: var(--font); resize: none; }
 .env-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .env-tag { font-size: 11px; padding: 3px 9px; border-radius: 12px; background: var(--bg); color: var(--muted); }
 
+/* ── Mood Board ────────────────────────────────────────────────── */
+.moodboard-grid { display: flex; flex-direction: column; gap: 8px; }
+.moodboard-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
 /* ── Shot List ─────────────────────────────────────────────────── */
 .shot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .shot-cell { background: var(--bg); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; min-height: 90px; }
