@@ -50,7 +50,6 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
   const [error, setError]           = useState(null)
   const [ratio, setRatio]           = useState('16:9')
   const [category, setCategory]     = useState(null)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const textRef = useRef(null)
 
   async function handleSend() {
@@ -91,7 +90,7 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
       {/* ── Sidebar ───────────────────────────────────────────── */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <span className="sidebar-w-mark">w</span>
+          <img className="sidebar-w-mark" src="/brand-assets/wonder-w-mark-transparent.png" alt="Wonder" />
         </div>
 
         <nav className="sidebar-nav">
@@ -102,6 +101,18 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
             </div>
           ))}
         </nav>
+
+        {recents.length > 0 && (
+          <div className="sidebar-recents">
+            <div className="sidebar-recents-label">Recent Briefs</div>
+            {recents.slice(0, 5).map(r => (
+              <div key={r.id} className="sidebar-recent-item" onClick={() => onOpenBrief(r.brief)}>
+                <span className="sidebar-recent-dot" />
+                <span className="sidebar-recent-name">{r.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="sidebar-user">
           <div className="user-avatar">A</div>
@@ -114,7 +125,10 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
 
         {/* Topbar */}
         <header className="discover-topbar">
-          <span className="topbar-ww-brand">wonder workshop</span>
+          <span className="topbar-ww-brand">
+            <img className="topbar-wonder-wordmark" src="/brand-assets/wonder-wordmark-transparent.png" alt="Wonder" />
+            <span>workshop</span>
+          </span>
           <div className="discover-topbar-right">
             <button className="new-brief-btn">
               + New brief
@@ -136,7 +150,7 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
           <div className="form-heading">
             <p className="form-welcome">Welcome, Creative Director</p>
             <h1 className="form-title">
-              Turn your <em className="wonder-em">wonder workshop</em> into a scene.
+              Turn your imagination into a scene.
             </h1>
             <p className="form-sub">
               Describe your idea and we'll craft a production one-pager that helps you visualize every detail.
@@ -167,11 +181,6 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
               <button className="input-icon-btn" title="Options">
                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
                   <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                </svg>
-              </button>
-              <button className="input-icon-btn input-sparkle-btn" title="Enhance with AI">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#7C5CFC">
-                  <path d="M12 2L14 9.5H22L15.5 14L18 22L12 17.5L6 22L8.5 14L2 9.5H10L12 2Z"/>
                 </svg>
               </button>
               <button className="generate-btn" onClick={handleSend} disabled={!prompt.trim() || loading}>
@@ -229,28 +238,9 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
             </div>
           </div>
 
-          {/* Advanced options */}
-          <div className="advanced-section">
-            <button className="advanced-toggle" onClick={() => setAdvancedOpen(!advancedOpen)}>
-              Advanced options
-              <svg
-                width="12" height="12" viewBox="0 0 12 12" fill="none"
-                style={{ transform: advancedOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
-              >
-                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-              </svg>
-            </button>
-            {advancedOpen && (
-              <div className="advanced-content">
-                <p className="advanced-placeholder">Additional generation options coming soon.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Recent briefs — shown only when available */}
-          {recents.length > 0 && (
-            <div className="briefs-section">
-              <h3 className="form-section-label">Recent briefs</h3>
+          <div className="briefs-section">
+            <h3 className="form-section-label">Recent briefs</h3>
+            {recents.length > 0 && (
               <div className="brief-grid">
                 {recents.map((r, i) => (
                   <div key={r.id} className="brief-card" onClick={() => onOpenBrief(r.brief)}>
@@ -270,8 +260,8 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
         </main>
       </div>

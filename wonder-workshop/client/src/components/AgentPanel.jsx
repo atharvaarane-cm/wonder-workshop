@@ -125,31 +125,6 @@ export default function AgentPanel({ activeSection, brief }) {
         ))}
       </div>
 
-      {/* Reference Sources */}
-      <div className="ref-sources">
-        <div className="ref-sources-title">Reference Sources</div>
-        <div className="ref-sources-sub">Tell me what to change — I'll only update this section.</div>
-        <div className="ref-sources-btns">
-          <button className="ref-btn">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-            Brand guidelines
-          </button>
-          <button className="ref-btn">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="3" y="1" width="10" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M6 5h4M6 8h4M6 11h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
-            Campaign brief
-          </button>
-        </div>
-      </div>
-
-      {/* Mind Reader toggle */}
-      <div className="mind-reader-row">
-        <div className="toggle-track">
-          <div className="toggle-thumb" />
-        </div>
-        <span className="mind-reader-label">Mind Reader</span>
-        <span className="mind-reader-off">Off — V2</span>
-      </div>
-
       {/* Input */}
       <div className="panel-input">
         <textarea
