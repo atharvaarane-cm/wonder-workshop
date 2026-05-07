@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import AgentPanel from '../components/AgentPanel.jsx'
-import FloatCard from '../components/FloatCard.jsx'
+import SectionCard from '../components/SectionCard.jsx'
 import CreativeDirection from '../components/sections/CreativeDirection.jsx'
 import BrandInfo from '../components/sections/BrandInfo.jsx'
 import LightingMood from '../components/sections/LightingMood.jsx'
@@ -16,35 +16,19 @@ function setIn(obj, keys, value) {
   return { ...obj, [keys[0]]: setIn(obj[keys[0]] || {}, keys.slice(1), value) }
 }
 
-const W = 540
-const G = 20
-const L = 40
-const R = L + W + G
-
-const CARDS = [
-  { id: 'cd',  num: '1',  title: 'Creative Direction',      width: W*2+G, pos: { x: L, y: 40   } },
-  { id: 'bi',  num: '2',  title: 'Brand Info',              width: W,     pos: { x: L, y: 320  } },
-  { id: 'lm',  num: '3',  title: 'Lighting & Mood',         width: W,     pos: { x: R, y: 320  } },
-  { id: 'mb',  num: '4',  title: 'Mood Board / Style Ref',  width: W,     pos: { x: L, y: 620  } },
-  { id: 'loc', num: '5',  title: 'Locations / Set Design',  width: W,     pos: { x: R, y: 620  } },
-  { id: 'cr',  num: '6',  title: 'Char Ref',                width: W,     pos: { x: L, y: 1060 } },
-  { id: 'cp',  num: '7',  title: 'Clothing / Props',        width: W,     pos: { x: R, y: 1060 } },
-  { id: 'ch',  num: '8',  title: 'Character — Full Body',   width: W,     pos: { x: L, y: 1440 } },
-  { id: 'chu', num: '9',  title: 'Character — Close Up',    width: W,     pos: { x: R, y: 1440 } },
-  { id: 'sl',  num: '10', title: 'Shot List',               width: W*2+G, pos: { x: L, y: 1900 } },
+const ROWS = [
+  [{ id: 'cd',  num: '1',  title: 'Creative Direction' }],
+  [{ id: 'bi',  num: '2',  title: 'Brand Info' }, { id: 'lm', num: '3', title: 'Lighting & Mood' }],
+  [{ id: 'mb',  num: '4',  title: 'Mood Board / Style Ref' }, { id: 'loc', num: '5', title: 'Locations / Set Design' }],
+  [{ id: 'cr',  num: '6',  title: 'Char Ref' }, { id: 'cp', num: '7', title: 'Clothing / Props' }],
+  [{ id: 'ch',  num: '8',  title: 'Character — Full Body' }, { id: 'chu', num: '9', title: 'Character — Close Up' }],
+  [{ id: 'sl',  num: '10', title: 'Shot List' }],
 ]
 
 export default function Board({ brief: initialBrief, onBack }) {
   const [brief, setBrief] = useState(initialBrief)
-  const [positions, setPositions] = useState(() =>
-    Object.fromEntries(CARDS.map(c => [c.id, c.pos]))
-  )
-  const [activeCard, setActiveCard] = useState('cd')
-  const [zoom, setZoom] = useState(0.72)
-  const [pan, setPan] = useState({ x: 80, y: 80 })
-  const isPanning = useRef(false)
-  const panOrigin = useRef(null)
-  const viewportRef = useRef(null)
+  const [activeId, setActiveId] = useState('cd')
+  const rowRefs = useRef({})
 
   function update(path, value) {
     setBrief(prev => setIn(prev, path.split('.'), value))
@@ -56,111 +40,90 @@ export default function Board({ brief: initialBrief, onBack }) {
     setBrief(prev => ({ ...prev, lightingMood: prev.lightingMood.map((m, idx) => idx === i ? { ...m, [field]: value } : m) }))
   }
 
-  const onDrag = useCallback((id, newPos) => {
-    setPositions(prev => ({ ...prev, [id]: newPos }))
-  }, [])
+  function scrollToRow(rowIdx) {
+    const firstId = ROWS[rowIdx][0].id
+    rowRefs.current[rowIdx]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setActiveId(firstId)
+  }
 
-  const onMouseDown = useCallback((e) => {
-    if (e.target !== viewportRef.current && !e.target.classList.contains('canvas-bg')) return
-    isPanning.current = true
-    panOrigin.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }
-    e.currentTarget.style.cursor = 'grabbing'
-  }, [pan])
+  const activeTitle = ROWS.flat().find(s => s.id === activeId)?.title ?? 'Brief'
+  const activeRowIdx = ROWS.findIndex(row => row.some(s => s.id === activeId))
 
-  const onMouseMove = useCallback((e) => {
-    if (!isPanning.current) return
-    setPan({ x: e.clientX - panOrigin.current.x, y: e.clientY - panOrigin.current.y })
-  }, [])
-
-  const onMouseUp = useCallback(() => {
-    isPanning.current = false
-    if (viewportRef.current) viewportRef.current.style.cursor = 'grab'
-  }, [])
-
-  const onWheel = useCallback((e) => {
-    e.preventDefault()
-    setZoom(z => Math.min(2, Math.max(0.2, z * (e.deltaY < 0 ? 1.08 : 0.93))))
-  }, [])
-
-  useEffect(() => {
-    const el = viewportRef.current
-    if (!el) return
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [onWheel])
-
-  const activeTitle = CARDS.find(c => c.id === activeCard)?.title ?? 'Brief'
+  function renderContent(id) {
+    switch (id) {
+      case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} />
+      case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
+      case 'lm':  return <LightingMood data={brief.lightingMood} imagePrompts={brief.imagePrompts} updateMood={updateMood} />
+      case 'mb':  return <MoodBoard data={brief.creativeDirection} />
+      case 'loc': return <LocationsSetDesign data={brief.environment} />
+      case 'cr':  return <CharRef data={brief.character} />
+      case 'cp':  return <ClothingProps data={brief.character} />
+      case 'ch':  return <Character data={brief.character} update={update} mode="fullbody" />
+      case 'chu': return <Character data={brief.character} update={update} mode="closeup" />
+      case 'sl':  return <ShotList data={brief.shotList} updateShot={updateShot} />
+      default:    return null
+    }
+  }
 
   return (
     <div className="board-screen">
       <div className="topbar">
         <span className="topbar-back" onClick={onBack}>← Back</span>
-        <span className="topbar-title">{brief.title}</span>
-        <span className="topbar-meta">{brief.meta}</span>
+        <span className="topbar-brand">WONDER WORKSHOP</span>
+        <span className="topbar-sep">|</span>
+        <span className="topbar-meta">{brief.meta ?? brief.title}</span>
+        <button className="topbar-desc-btn">
+          Description
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+        </button>
         <div className="topbar-right">
-          <div className="zoom-controls">
-            <button className="zoom-btn" onClick={() => setZoom(z => Math.max(0.2, +(z - 0.1).toFixed(2)))}>−</button>
-            <span className="zoom-label">{Math.round(zoom * 100)}%</span>
-            <button className="zoom-btn" onClick={() => setZoom(z => Math.min(2, +(z + 0.1).toFixed(2)))}>+</button>
-          </div>
-          <button className="btn-outline">Share</button>
-          <button className="btn-dark">Export PDF</button>
+          <button className="btn-outline">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+            Share
+          </button>
+          <button className="btn-dark">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 13h10" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/></svg>
+            Export PDF
+          </button>
         </div>
       </div>
 
       <div className="board-body">
-        <div
-          ref={viewportRef}
-          className="canvas-viewport"
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
-          style={{ cursor: 'grab' }}
-        >
-          <div className="canvas-bg" />
-          <div className="canvas-layer" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
+        <div className="board-content">
+          <div className="board-scroll">
+            <div className="board-cards">
+              {ROWS.map((row, ri) => (
+                <div
+                  key={ri}
+                  ref={el => rowRefs.current[ri] = el}
+                  className={row.length === 1 ? 'board-full-row' : 'board-pair-row'}
+                >
+                  {row.map(sec => (
+                    <SectionCard
+                      key={sec.id}
+                      num={sec.num}
+                      name={sec.title}
+                      active={activeId === sec.id}
+                      onClick={() => setActiveId(sec.id)}
+                    >
+                      {renderContent(sec.id)}
+                    </SectionCard>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
 
-            <FloatCard {...CARDS[0]} pos={positions.cd} onDrag={onDrag} active={activeCard==='cd'} onClick={() => setActiveCard('cd')}>
-              <CreativeDirection data={brief.creativeDirection} update={update} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[1]} pos={positions.bi} onDrag={onDrag} active={activeCard==='bi'} onClick={() => setActiveCard('bi')}>
-              <BrandInfo data={brief.brandInfo} update={update} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[2]} pos={positions.lm} onDrag={onDrag} active={activeCard==='lm'} onClick={() => setActiveCard('lm')}>
-              <LightingMood data={brief.lightingMood} imagePrompts={brief.imagePrompts} updateMood={updateMood} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[3]} pos={positions.mb} onDrag={onDrag} active={activeCard==='mb'} onClick={() => setActiveCard('mb')}>
-              <MoodBoard data={brief.creativeDirection} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[4]} pos={positions.loc} onDrag={onDrag} active={activeCard==='loc'} onClick={() => setActiveCard('loc')}>
-              <LocationsSetDesign data={brief.environment} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[5]} pos={positions.cr} onDrag={onDrag} active={activeCard==='cr'} onClick={() => setActiveCard('cr')}>
-              <CharRef data={brief.character} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[6]} pos={positions.cp} onDrag={onDrag} active={activeCard==='cp'} onClick={() => setActiveCard('cp')}>
-              <ClothingProps data={brief.character} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[7]} pos={positions.ch} onDrag={onDrag} active={activeCard==='ch'} onClick={() => setActiveCard('ch')}>
-              <Character data={brief.character} update={update} mode="fullbody" />
-            </FloatCard>
-
-            <FloatCard {...CARDS[8]} pos={positions.chu} onDrag={onDrag} active={activeCard==='chu'} onClick={() => setActiveCard('chu')}>
-              <Character data={brief.character} update={update} mode="closeup" />
-            </FloatCard>
-
-            <FloatCard {...CARDS[9]} pos={positions.sl} onDrag={onDrag} active={activeCard==='sl'} onClick={() => setActiveCard('sl')}>
-              <ShotList data={brief.shotList} updateShot={updateShot} />
-            </FloatCard>
-
+          <div className="board-nav-dots">
+            {ROWS.map((row, ri) => (
+              <button
+                key={ri}
+                className={`board-dot${ri === activeRowIdx ? ' active' : ''}`}
+                onClick={() => scrollToRow(ri)}
+              />
+            ))}
           </div>
         </div>
 
