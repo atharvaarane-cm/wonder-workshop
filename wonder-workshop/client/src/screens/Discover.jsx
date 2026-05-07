@@ -33,7 +33,6 @@ const NAV_ITEMS = [
   { label: 'Projects', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.6"/><path d="M3 9h18" stroke="currentColor" strokeWidth="1.6"/></svg> },
   { label: 'Inspiration', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 21h6M12 21v-3M12 4v1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M9 18h6a5 5 0 10-6 0z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg> },
   { label: 'Boards', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6"/></svg> },
-  { label: 'Assets', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2l9 5v10l-9 5-9-5V7l9-5z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg> },
 ]
 
 const CARD_GRADIENTS = [
@@ -92,10 +91,7 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
       {/* ── Sidebar ───────────────────────────────────────────── */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="#7C5CFC">
-            <path d="M12 2L14 9.5H22L15.5 14L18 22L12 17.5L6 22L8.5 14L2 9.5H10L12 2Z"/>
-          </svg>
-          <span className="sidebar-logo-text">WW</span>
+          <span className="sidebar-w-mark">w</span>
         </div>
 
         <nav className="sidebar-nav">
@@ -251,7 +247,7 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
             )}
           </div>
 
-          {/* Recent briefs */}
+          {/* Recent briefs — shown only when available */}
           {recents.length > 0 && (
             <div className="briefs-section">
               <h3 className="form-section-label">Recent briefs</h3>
@@ -273,21 +269,6 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
                     </div>
                   </div>
                 ))}
-                <div className="brief-card new-brief-card" onClick={() => textRef.current?.focus()}>
-                  <span className="new-brief-plus">+</span>
-                  <span className="new-brief-label">New Brief</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {recents.length === 0 && (
-            <div className="briefs-section">
-              <div className="brief-grid">
-                <div className="brief-card new-brief-card" onClick={() => textRef.current?.focus()}>
-                  <span className="new-brief-plus">+</span>
-                  <span className="new-brief-label">New Brief</span>
-                </div>
               </div>
             </div>
           )}
