@@ -3,9 +3,11 @@ import AgentPanel from '../components/AgentPanel.jsx'
 import FloatCard from '../components/FloatCard.jsx'
 import CreativeDirection from '../components/sections/CreativeDirection.jsx'
 import BrandInfo from '../components/sections/BrandInfo.jsx'
-import Environment from '../components/sections/Environment.jsx'
-import MoodBoard from '../components/sections/MoodBoard.jsx'
 import LightingMood from '../components/sections/LightingMood.jsx'
+import MoodBoard from '../components/sections/MoodBoard.jsx'
+import LocationsSetDesign from '../components/sections/LocationsSetDesign.jsx'
+import CharRef from '../components/sections/CharRef.jsx'
+import ClothingProps from '../components/sections/ClothingProps.jsx'
 import Character from '../components/sections/Character.jsx'
 import ShotList from '../components/sections/ShotList.jsx'
 
@@ -14,27 +16,22 @@ function setIn(obj, keys, value) {
   return { ...obj, [keys[0]]: setIn(obj[keys[0]] || {}, keys.slice(1), value) }
 }
 
-// Layout: two-column grid, 540px per column, 20px gap → total canvas width ~1100px
-// Row 1 (y:40):   Creative Direction — full width 1100px
-// Row 2 (y:400):  Brand Info (left) | Environment (right)
-// Row 3 (y:780):  Mood Board (left) | Lighting & Mood (right)
-// Row 4 (y:1260): Character Full Body (left) | Character Close Up (right)
-// Row 5 (y:1720): Shot List — full width 1100px
-
-const W = 540   // half-width column
-const G = 20    // gap
-const L = 40    // left margin
-const R = L + W + G  // right column x
+const W = 540
+const G = 20
+const L = 40
+const R = L + W + G
 
 const CARDS = [
-  { id: 'cd',   num: '1', title: 'Creative Direction',       width: W*2+G, pos: { x: L,    y: 40   } },
-  { id: 'bi',   num: '2', title: 'Brand Info',               width: W,     pos: { x: L,    y: 400  } },
-  { id: 'env',  num: '3', title: 'Environment',              width: W,     pos: { x: R,    y: 400  } },
-  { id: 'mb',   num: '4', title: 'Mood Board',               width: W,     pos: { x: L,    y: 780  } },
-  { id: 'lm',   num: '5', title: 'Lighting & Mood',          width: W,     pos: { x: R,    y: 780  } },
-  { id: 'ch',   num: '6', title: 'Character — Full Body',    width: W,     pos: { x: L,    y: 1260 } },
-  { id: 'chu',  num: '7', title: 'Character — Close Up',     width: W,     pos: { x: R,    y: 1260 } },
-  { id: 'sl',   num: '8', title: 'Shot List',                width: W*2+G, pos: { x: L,    y: 1720 } },
+  { id: 'cd',  num: '1',  title: 'Creative Direction',      width: W*2+G, pos: { x: L, y: 40   } },
+  { id: 'bi',  num: '2',  title: 'Brand Info',              width: W,     pos: { x: L, y: 320  } },
+  { id: 'lm',  num: '3',  title: 'Lighting & Mood',         width: W,     pos: { x: R, y: 320  } },
+  { id: 'mb',  num: '4',  title: 'Mood Board / Style Ref',  width: W,     pos: { x: L, y: 620  } },
+  { id: 'loc', num: '5',  title: 'Locations / Set Design',  width: W,     pos: { x: R, y: 620  } },
+  { id: 'cr',  num: '6',  title: 'Char Ref',                width: W,     pos: { x: L, y: 1060 } },
+  { id: 'cp',  num: '7',  title: 'Clothing / Props',        width: W,     pos: { x: R, y: 1060 } },
+  { id: 'ch',  num: '8',  title: 'Character — Full Body',   width: W,     pos: { x: L, y: 1440 } },
+  { id: 'chu', num: '9',  title: 'Character — Close Up',    width: W,     pos: { x: R, y: 1440 } },
+  { id: 'sl',  num: '10', title: 'Shot List',               width: W*2+G, pos: { x: L, y: 1900 } },
 ]
 
 export default function Board({ brief: initialBrief, onBack }) {
@@ -124,35 +121,43 @@ export default function Board({ brief: initialBrief, onBack }) {
           <div className="canvas-bg" />
           <div className="canvas-layer" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
 
-            <FloatCard {...CARDS[0]} pos={positions.cd} onDrag={onDrag} active={activeCard === 'cd'} onClick={() => setActiveCard('cd')}>
+            <FloatCard {...CARDS[0]} pos={positions.cd} onDrag={onDrag} active={activeCard==='cd'} onClick={() => setActiveCard('cd')}>
               <CreativeDirection data={brief.creativeDirection} update={update} />
             </FloatCard>
 
-            <FloatCard {...CARDS[1]} pos={positions.bi} onDrag={onDrag} active={activeCard === 'bi'} onClick={() => setActiveCard('bi')}>
+            <FloatCard {...CARDS[1]} pos={positions.bi} onDrag={onDrag} active={activeCard==='bi'} onClick={() => setActiveCard('bi')}>
               <BrandInfo data={brief.brandInfo} update={update} />
             </FloatCard>
 
-            <FloatCard {...CARDS[2]} pos={positions.env} onDrag={onDrag} active={activeCard === 'env'} onClick={() => setActiveCard('env')}>
-              <Environment data={brief.environment} update={update} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[3]} pos={positions.mb} onDrag={onDrag} active={activeCard === 'mb'} onClick={() => setActiveCard('mb')}>
-              <MoodBoard data={brief.creativeDirection} />
-            </FloatCard>
-
-            <FloatCard {...CARDS[4]} pos={positions.lm} onDrag={onDrag} active={activeCard === 'lm'} onClick={() => setActiveCard('lm')}>
+            <FloatCard {...CARDS[2]} pos={positions.lm} onDrag={onDrag} active={activeCard==='lm'} onClick={() => setActiveCard('lm')}>
               <LightingMood data={brief.lightingMood} imagePrompts={brief.imagePrompts} updateMood={updateMood} />
             </FloatCard>
 
-            <FloatCard {...CARDS[5]} pos={positions.ch} onDrag={onDrag} active={activeCard === 'ch'} onClick={() => setActiveCard('ch')}>
+            <FloatCard {...CARDS[3]} pos={positions.mb} onDrag={onDrag} active={activeCard==='mb'} onClick={() => setActiveCard('mb')}>
+              <MoodBoard data={brief.creativeDirection} />
+            </FloatCard>
+
+            <FloatCard {...CARDS[4]} pos={positions.loc} onDrag={onDrag} active={activeCard==='loc'} onClick={() => setActiveCard('loc')}>
+              <LocationsSetDesign data={brief.environment} />
+            </FloatCard>
+
+            <FloatCard {...CARDS[5]} pos={positions.cr} onDrag={onDrag} active={activeCard==='cr'} onClick={() => setActiveCard('cr')}>
+              <CharRef data={brief.character} />
+            </FloatCard>
+
+            <FloatCard {...CARDS[6]} pos={positions.cp} onDrag={onDrag} active={activeCard==='cp'} onClick={() => setActiveCard('cp')}>
+              <ClothingProps data={brief.character} />
+            </FloatCard>
+
+            <FloatCard {...CARDS[7]} pos={positions.ch} onDrag={onDrag} active={activeCard==='ch'} onClick={() => setActiveCard('ch')}>
               <Character data={brief.character} update={update} mode="fullbody" />
             </FloatCard>
 
-            <FloatCard {...CARDS[6]} pos={positions.chu} onDrag={onDrag} active={activeCard === 'chu'} onClick={() => setActiveCard('chu')}>
+            <FloatCard {...CARDS[8]} pos={positions.chu} onDrag={onDrag} active={activeCard==='chu'} onClick={() => setActiveCard('chu')}>
               <Character data={brief.character} update={update} mode="closeup" />
             </FloatCard>
 
-            <FloatCard {...CARDS[7]} pos={positions.sl} onDrag={onDrag} active={activeCard === 'sl'} onClick={() => setActiveCard('sl')}>
+            <FloatCard {...CARDS[9]} pos={positions.sl} onDrag={onDrag} active={activeCard==='sl'} onClick={() => setActiveCard('sl')}>
               <ShotList data={brief.shotList} updateShot={updateShot} />
             </FloatCard>
 
