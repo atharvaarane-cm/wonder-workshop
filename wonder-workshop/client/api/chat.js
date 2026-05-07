@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   }
 
   const KEY   = process.env.GEMINI_API_KEY
-  const MODEL = 'gemini-2.5-pro-preview-05-06'
+  const MODEL = 'gemini-2.5-flash-preview-04-17'
   const BASE  = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}`
 
   try {
