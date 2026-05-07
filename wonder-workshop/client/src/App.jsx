@@ -31,6 +31,7 @@ export default function App() {
       onGenerate={handleGenerate}
       recents={recents}
       onOpenBrief={b => setBrief(b)}
+      latestBrief={recents[0]?.brief ?? null}
     />
   )
 }
