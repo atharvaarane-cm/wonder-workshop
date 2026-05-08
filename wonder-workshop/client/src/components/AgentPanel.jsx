@@ -90,6 +90,17 @@ export default function AgentPanel({ activeSection, brief }) {
 
   return (
     <aside className="agent-panel">
+      {/* Active section header */}
+      <div className="panel-active-header" key={activeSection}>
+        <div className="panel-active-label">Talking about</div>
+        <div className="panel-active-section">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>{activeSection}</span>
+        </div>
+      </div>
+
       {/* Messages */}
       <div className="panel-messages" ref={messagesRef}>
         {messages.map((m, i) => (
@@ -124,12 +135,6 @@ export default function AgentPanel({ activeSection, brief }) {
               <path d="M8 12.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
           </button>
-          <div className="panel-section-label" key={activeSection}>
-            <span>{activeSection}</span>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
-          </div>
           <button className="panel-send-btn" onClick={send} disabled={!input.trim() || streaming}>
             {streaming
               ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2.5" strokeDasharray="28" strokeDashoffset="8"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.75s" repeatCount="indefinite"/></circle></svg>

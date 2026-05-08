@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import AgentPanel from '../components/AgentPanel.jsx'
 import SectionCard from '../components/SectionCard.jsx'
+import Boardomatic from '../components/Boardomatic.jsx'
 import CreativeDirection from '../components/sections/CreativeDirection.jsx'
 import BrandInfo from '../components/sections/BrandInfo.jsx'
 import LightingMood from '../components/sections/LightingMood.jsx'
@@ -9,6 +10,7 @@ import LocationsSetDesign from '../components/sections/LocationsSetDesign.jsx'
 import CharRef from '../components/sections/CharRef.jsx'
 import ClothingProps from '../components/sections/ClothingProps.jsx'
 import Character from '../components/sections/Character.jsx'
+import Story from '../components/sections/Story.jsx'
 import ShotList from '../components/sections/ShotList.jsx'
 
 function setIn(obj, keys, value) {
@@ -22,15 +24,20 @@ const ROWS = [
   [{ id: 'mb',  num: '4',  title: 'Mood Board / Style Ref' }, { id: 'loc', num: '5', title: 'Locations / Set Design' }],
   [{ id: 'cr',  num: '6',  title: 'Char Ref' }, { id: 'cp', num: '7', title: 'Clothing / Props' }],
   [{ id: 'ch',  num: '8',  title: 'Character — Full Body' }, { id: 'chu', num: '9', title: 'Character — Close Up' }],
-  [{ id: 'sl',  num: '10', title: 'Shot List' }],
+  [{ id: 'st',  num: '10', title: 'Story' }],
+  [{ id: 'sl',  num: '11', title: 'Shot List' }],
 ]
 
-export default function Board({ brief: initialBrief, onBack, theme, toggleTheme }) {
+export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
-const [toast, setToast] = useState(null)
+  const [toast, setToast] = useState(null)
+  const [exporting, setExporting] = useState(false)
   const rowRefs = useRef({})
   const toastTimer = useRef(null)
+  const saveRef = useRef(onSaveBrief)
+  saveRef.current = onSaveBrief
+  const isInitialBrief = useRef(true)
 
   useEffect(() => {
     function onToast(e) {
@@ -42,6 +49,13 @@ const [toast, setToast] = useState(null)
     return () => window.removeEventListener('ww-toast', onToast)
   }, [])
 
+  // Debounced auto-save of brief edits.
+  useEffect(() => {
+    if (isInitialBrief.current) { isInitialBrief.current = false; return }
+    const t = setTimeout(() => saveRef.current?.(brief), 400)
+    return () => clearTimeout(t)
+  }, [brief])
+
   function update(path, value) {
     setBrief(prev => setIn(prev, path.split('.'), value))
   }
@@ -50,6 +64,9 @@ const [toast, setToast] = useState(null)
   }
   function updateMood(i, field, value) {
     setBrief(prev => ({ ...prev, lightingMood: prev.lightingMood.map((m, idx) => idx === i ? { ...m, [field]: value } : m) }))
+  }
+  function updateBeat(i, field, value) {
+    setBrief(prev => ({ ...prev, story: { ...prev.story, beats: (prev.story?.beats || []).map((b, idx) => idx === i ? { ...b, [field]: value } : b) } }))
   }
 
   function scrollToRow(rowIdx) {
@@ -66,15 +83,20 @@ const [toast, setToast] = useState(null)
       case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'lm':  return <LightingMood data={brief.lightingMood} imagePrompts={brief.imagePrompts} updateMood={updateMood} />
-      case 'mb':  return <MoodBoard data={brief.creativeDirection} />
-      case 'loc': return <LocationsSetDesign data={brief.environment} />
+      case 'mb':  return <MoodBoard data={brief.creativeDirection} ratio={brief.ratio} />
+      case 'loc': return <LocationsSetDesign data={brief.environment} ratio={brief.ratio} />
       case 'cr':  return <CharRef data={brief.character} />
       case 'cp':  return <ClothingProps data={brief.character} />
       case 'ch':  return <Character data={brief.character} update={update} mode="fullbody" />
       case 'chu': return <Character data={brief.character} update={update} mode="closeup" />
-      case 'sl':  return <ShotList data={brief.shotList} updateShot={updateShot} />
+      case 'st':  return <Story data={brief.story} update={update} updateBeat={updateBeat} />
+      case 'sl':  return <ShotList data={brief.shotList} updateShot={updateShot} ratio={brief.ratio} />
       default:    return null
     }
+  }
+
+  if (exporting) {
+    return <Boardomatic brief={brief} onBack={() => setExporting(false)} />
   }
 
   return (
@@ -107,12 +129,19 @@ const [toast, setToast] = useState(null)
               : <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
             }
           </button>
+          <button className="btn-outline" onClick={() => {
+            window.dispatchEvent(new CustomEvent('ww-generate', { detail: { scope: 'all' } }))
+            window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg: 'Generating all images…', type: 'success' } }))
+          }} title="Generate every empty image slot on the board">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="currentColor"/></svg>
+            Generate All
+          </button>
           <button className="btn-outline">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
             Share
           </button>
-          <button className="btn-dark">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 13h10" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/></svg>
+          <button className="btn-dark" onClick={() => setExporting(true)}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 13h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
             Export PDF
           </button>
         </div>
@@ -134,6 +163,8 @@ const [toast, setToast] = useState(null)
                       key={sec.id}
                       num={sec.num}
                       name={sec.title}
+                      sectionId={sec.id}
+                      hasImages={sec.id !== 'st'}
                       active={activeId === sec.id}
                       onClick={() => setActiveId(sec.id)}
                     >

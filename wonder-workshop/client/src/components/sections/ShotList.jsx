@@ -1,14 +1,17 @@
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
+import { ratioDimensions } from '../../hooks/useBrief.js'
 
-export default function ShotList({ data, updateShot }) {
+export default function ShotList({ data, updateShot, ratio }) {
+  const aspect = ratioDimensions(ratio).css
   return (
     <div className="shot-grid">
       {(data || []).map((shot, i) => (
         <div className="shot-cell" key={shot.num}>
           <ImageSlot
             prompt={`${shot.description}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`}
-            style={{ width: '100%', height: 80, borderRadius: 7, marginBottom: 8 }}
+            ratio={ratio}
+            style={{ width: '100%', aspectRatio: aspect, borderRadius: 7, marginBottom: 8 }}
           />
           <div className="shot-top">
             <EditableText className="shot-framing" value={shot.framing} onChange={v => updateShot(i, 'framing', v)} />

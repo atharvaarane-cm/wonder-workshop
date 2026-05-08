@@ -10,23 +10,32 @@ function Skeleton() {
   )
 }
 
-export default function SectionCard({ num, name, loading, children, active, onClick }) {
+export default function SectionCard({ num, name, loading, children, active, onClick, sectionId, hasImages }) {
   const [collapsed, setCollapsed] = useState(false)
+
+  function generateImages(e) {
+    e.stopPropagation()
+    window.dispatchEvent(new CustomEvent('ww-generate', { detail: { scope: sectionId } }))
+    window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg: `Generating ${name} images…`, type: 'success' } }))
+  }
 
   return (
     <div className={`section-card${active ? ' active' : ''}${collapsed ? ' collapsed' : ''}`} onClick={onClick}>
       <div className="section-header">
         <div className="section-num">{num}</div>
         <div className="section-name">{name}</div>
-        <button
-          className="section-refresh"
-          onClick={e => e.stopPropagation()}
-          title="Refresh section"
-        >
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-            <path d="M13.5 8A5.5 5.5 0 112.8 4.8M2.5 2v3h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
+        {hasImages && (
+          <button
+            className="section-gen-images"
+            onClick={generateImages}
+            title="Generate images for this section"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="currentColor"/>
+            </svg>
+            Images
+          </button>
+        )}
         <div className={`status-dot ${loading ? 'amber' : 'green'}`} />
         <button
           className={`section-collapse-btn${collapsed ? ' collapsed' : ''}`}
@@ -38,11 +47,13 @@ export default function SectionCard({ num, name, loading, children, active, onCl
           </svg>
         </button>
       </div>
-      {!collapsed && (
-        <div className="section-body">
-          {loading ? <Skeleton /> : children}
-        </div>
-      )}
+      <div
+        className="section-body"
+        data-section-id={sectionId}
+        style={collapsed ? { display: 'none' } : undefined}
+      >
+        {loading ? <Skeleton /> : children}
+      </div>
     </div>
   )
 }
