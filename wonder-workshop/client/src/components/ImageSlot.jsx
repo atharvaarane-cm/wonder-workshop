@@ -34,6 +34,7 @@ export default function ImageSlot({ label, prompt, style, className, ratio }) {
   }, [lightboxOpen])
 
   useEffect(() => {
+    let timer
     function onBatchGenerate(e) {
       const { src, loading, prompt } = stateRef.current
       if (src || loading || !prompt) return
@@ -43,10 +44,14 @@ export default function ImageSlot({ label, prompt, style, className, ratio }) {
       const sectionEl = containerRef.current?.closest('[data-section-id]')
       const ownSection = sectionEl?.dataset.sectionId
       if (scope !== 'all' && scope !== ownSection) return
-      generateRef.current?.()
+      const jitter = scope === 'all' ? Math.random() * 4500 : Math.random() * 1200
+      timer = setTimeout(() => generateRef.current?.(), jitter)
     }
     window.addEventListener('ww-generate', onBatchGenerate)
-    return () => window.removeEventListener('ww-generate', onBatchGenerate)
+    return () => {
+      window.removeEventListener('ww-generate', onBatchGenerate)
+      if (timer) clearTimeout(timer)
+    }
   }, [])
 
   function handleFile(e) {
