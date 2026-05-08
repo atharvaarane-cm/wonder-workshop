@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import AgentPanel from '../components/AgentPanel.jsx'
 import SectionCard from '../components/SectionCard.jsx'
+import Boardomatic from '../components/Boardomatic.jsx'
 import CreativeDirection from '../components/sections/CreativeDirection.jsx'
 import BrandInfo from '../components/sections/BrandInfo.jsx'
 import LightingMood from '../components/sections/LightingMood.jsx'
@@ -30,7 +31,8 @@ const ROWS = [
 export default function Board({ brief: initialBrief, onBack, theme, toggleTheme }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
-const [toast, setToast] = useState(null)
+  const [toast, setToast] = useState(null)
+  const [exporting, setExporting] = useState(false)
   const rowRefs = useRef({})
   const toastTimer = useRef(null)
 
@@ -83,6 +85,10 @@ const [toast, setToast] = useState(null)
     }
   }
 
+  if (exporting) {
+    return <Boardomatic brief={brief} onBack={() => setExporting(false)} />
+  }
+
   return (
     <div className="board-screen">
       {toast && (
@@ -117,8 +123,8 @@ const [toast, setToast] = useState(null)
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
             Share
           </button>
-          <button className="btn-dark">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 13h10" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/></svg>
+          <button className="btn-dark" onClick={() => setExporting(true)}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 13h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
             Export PDF
           </button>
         </div>
