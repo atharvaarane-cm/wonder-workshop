@@ -32,6 +32,13 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "shotRoute": "<location progression>",
     "keyElements": ["<element1>", "<element2>", "<element3>"]
   },
+  "story": {
+    "treatment": "<1-2 paragraph cinematic treatment, present tense, evocative — what the audience sees and feels>",
+    "beats": [
+      { "num": 1, "summary": "<4-8 word story beat>" }
+    ],
+    "source": "synthesized"
+  },
   "shotList": [
     { "num": "01", "framing": "<EWS|WS|MS|CU|ECU|OTS|POV>", "description": "<shot description>", "camera": "<Drone|Steadicam|Handheld|Tripod|Gimbal>", "duration": "<Xs>" }
   ],
@@ -45,9 +52,10 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
 }
 
 Rules:
-- shotList must have exactly 9 items
+- shotList must have exactly 9 items — they should follow the story beats in order
 - lightingMood must have exactly 4 items
 - imagePrompts must have exactly 4 items — make them vivid, cinematographic descriptions
+- story.beats must have 5-8 items mapping to story arc; story.source is always "synthesized" unless the user provided their own treatment
 - brandInfo.colors must have 3-5 colors appropriate for the brand. If verified brand research is provided, use those exact colors first.
 - If verified brand research is provided, preserve brandInfo.logoUrl and brandInfo.sourceUrl exactly.
 - Return ONLY the JSON object, nothing else`

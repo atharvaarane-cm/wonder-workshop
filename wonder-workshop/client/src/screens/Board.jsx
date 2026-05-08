@@ -9,6 +9,7 @@ import LocationsSetDesign from '../components/sections/LocationsSetDesign.jsx'
 import CharRef from '../components/sections/CharRef.jsx'
 import ClothingProps from '../components/sections/ClothingProps.jsx'
 import Character from '../components/sections/Character.jsx'
+import Story from '../components/sections/Story.jsx'
 import ShotList from '../components/sections/ShotList.jsx'
 
 function setIn(obj, keys, value) {
@@ -22,7 +23,8 @@ const ROWS = [
   [{ id: 'mb',  num: '4',  title: 'Mood Board / Style Ref' }, { id: 'loc', num: '5', title: 'Locations / Set Design' }],
   [{ id: 'cr',  num: '6',  title: 'Char Ref' }, { id: 'cp', num: '7', title: 'Clothing / Props' }],
   [{ id: 'ch',  num: '8',  title: 'Character — Full Body' }, { id: 'chu', num: '9', title: 'Character — Close Up' }],
-  [{ id: 'sl',  num: '10', title: 'Shot List' }],
+  [{ id: 'st',  num: '10', title: 'Story' }],
+  [{ id: 'sl',  num: '11', title: 'Shot List' }],
 ]
 
 export default function Board({ brief: initialBrief, onBack, theme, toggleTheme }) {
@@ -51,6 +53,9 @@ const [toast, setToast] = useState(null)
   function updateMood(i, field, value) {
     setBrief(prev => ({ ...prev, lightingMood: prev.lightingMood.map((m, idx) => idx === i ? { ...m, [field]: value } : m) }))
   }
+  function updateBeat(i, field, value) {
+    setBrief(prev => ({ ...prev, story: { ...prev.story, beats: (prev.story?.beats || []).map((b, idx) => idx === i ? { ...b, [field]: value } : b) } }))
+  }
 
   function scrollToRow(rowIdx) {
     const firstId = ROWS[rowIdx][0].id
@@ -72,6 +77,7 @@ const [toast, setToast] = useState(null)
       case 'cp':  return <ClothingProps data={brief.character} />
       case 'ch':  return <Character data={brief.character} update={update} mode="fullbody" />
       case 'chu': return <Character data={brief.character} update={update} mode="closeup" />
+      case 'st':  return <Story data={brief.story} update={update} updateBeat={updateBeat} />
       case 'sl':  return <ShotList data={brief.shotList} updateShot={updateShot} />
       default:    return null
     }

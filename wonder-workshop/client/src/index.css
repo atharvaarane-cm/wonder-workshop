@@ -940,3 +940,63 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .img-slot-btn { background: #2A2A2A; border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7); }
 [data-theme="dark"] .img-slot-btn:hover { background: #333; }
 [data-theme="dark"] .img-slot-btn.generate { background: #7C5CFC; color: #fff; border-color: transparent; }
+
+/* ===== Story section ===== */
+.story-section { padding: 4px 2px; }
+.story-meta { margin-bottom: 10px; }
+.story-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(0,0,0,0.04);
+  color: rgba(0,0,0,0.55);
+}
+.story-badge.user {
+  background: rgba(45,154,78,0.10);
+  border-color: rgba(45,154,78,0.30);
+  color: #1f6c37;
+}
+.story-treatment {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(0,0,0,0.78);
+  white-space: pre-wrap;
+  margin: 0 0 14px;
+}
+.story-beats { padding-top: 4px; }
+.story-beats-label {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.18em;
+  color: rgba(0,0,0,0.4);
+  margin-bottom: 6px;
+}
+.story-beat {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 0 4px 8px;
+  border-left: 2px solid rgba(0,0,0,0.08);
+  margin-bottom: 2px;
+}
+.story-beat-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: rgba(0,0,0,0.4);
+  min-width: 22px;
+}
+.story-beat-text { color: rgba(0,0,0,0.7); flex: 1; }
+.story-empty { padding: 12px; color: rgba(0,0,0,0.45); font-size: 12px; }
+
+[data-theme="dark"] .story-badge { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.10); color: rgba(255,255,255,0.55); }
+[data-theme="dark"] .story-badge.user { background: rgba(74,222,128,0.10); border-color: rgba(74,222,128,0.25); color: #6ee7a4; }
+[data-theme="dark"] .story-treatment { color: rgba(255,255,255,0.78); }
+[data-theme="dark"] .story-beats-label { color: rgba(255,255,255,0.4); }
+[data-theme="dark"] .story-beat { border-left-color: rgba(255,255,255,0.10); }
+[data-theme="dark"] .story-beat-num { color: rgba(255,255,255,0.42); }
+[data-theme="dark"] .story-beat-text { color: rgba(255,255,255,0.72); }
+[data-theme="dark"] .story-empty { color: rgba(255,255,255,0.45); }
