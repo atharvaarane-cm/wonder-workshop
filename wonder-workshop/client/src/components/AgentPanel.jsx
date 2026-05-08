@@ -90,6 +90,17 @@ export default function AgentPanel({ activeSection, brief }) {
 
   return (
     <aside className="agent-panel">
+      {/* Active section header */}
+      <div className="panel-active-header" key={activeSection}>
+        <div className="panel-active-label">Talking about</div>
+        <div className="panel-active-section">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>{activeSection}</span>
+        </div>
+      </div>
+
       {/* Messages */}
       <div className="panel-messages" ref={messagesRef}>
         {messages.map((m, i) => (
