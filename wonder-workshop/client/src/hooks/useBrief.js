@@ -15,6 +15,8 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "description": "<2-3 sentence cinematic creative direction>"
   },
   "brandInfo": {
+    "logoUrl": "<public logo image URL if known, otherwise empty string>",
+    "sourceUrl": "<official brand source URL if known, otherwise empty string>",
     "colors": [
       { "hex": "#000000", "name": "<name>" }
     ],
@@ -46,10 +48,85 @@ Rules:
 - shotList must have exactly 9 items
 - lightingMood must have exactly 4 items
 - imagePrompts must have exactly 4 items — make them vivid, cinematographic descriptions
-- brandInfo.colors must have 3-5 colors appropriate for the brand
+- brandInfo.colors must have 3-5 colors appropriate for the brand. If verified brand research is provided, use those exact colors first.
+- If verified brand research is provided, preserve brandInfo.logoUrl and brandInfo.sourceUrl exactly.
 - Return ONLY the JSON object, nothing else`
 
+function inferBrandName(userPrompt) {
+  const cleaned = userPrompt
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/^(brand identity shoot for|full production brief for|detailed shot list for|marketing campaign for)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const forMatch = cleaned.match(/\bfor\s+([A-Z][\w&'.-]*(?:\s+[A-Z][\w&'.-]*){0,3})/)
+  if (forMatch) return forMatch[1].trim()
+
+  const firstWords = cleaned.match(/^([A-Z][\w&'.-]*(?:\s+[A-Z][\w&'.-]*){0,3})/)
+  if (firstWords) return firstWords[1].trim()
+
+  const lowerKnown = cleaned.match(/\b(starbucks|nike|apple)\b/i)
+  if (lowerKnown) return lowerKnown[1]
+
+  return ''
+}
+
+async function fetchBrandResearch(userPrompt) {
+  const brand = inferBrandName(userPrompt)
+  if (!brand) return null
+
+  try {
+    const res = await fetch('/api/brand', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brand }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data?.brand) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+function mergeBrandResearch(brief, brandResearch) {
+  if (!brandResearch) return brief
+
+  const colors = Array.isArray(brandResearch.colors) && brandResearch.colors.length > 0
+    ? brandResearch.colors
+    : brief.brandInfo?.colors
+
+  return {
+    ...brief,
+    creativeDirection: {
+      ...brief.creativeDirection,
+      brand: brief.creativeDirection?.brand || brandResearch.brand,
+    },
+    brandInfo: {
+      ...brief.brandInfo,
+      logoUrl: brandResearch.logoUrl || brief.brandInfo?.logoUrl || '',
+      sourceUrl: brandResearch.sourceUrl || brief.brandInfo?.sourceUrl || '',
+      colors,
+      rules: brandResearch.rules || brief.brandInfo?.rules || '',
+    },
+    brandResearch,
+  }
+}
+
 export async function generateBrief(userPrompt) {
+  const brandResearch = await fetchBrandResearch(userPrompt)
+  const researchContext = brandResearch
+    ? `\n\nVerified brand research:\n${JSON.stringify({
+        brand: brandResearch.brand,
+        domain: brandResearch.domain,
+        sourceUrl: brandResearch.sourceUrl,
+        logoUrl: brandResearch.logoUrl,
+        colors: brandResearch.colors,
+        rules: brandResearch.rules,
+      })}`
+    : ''
+
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -58,7 +135,7 @@ export async function generateBrief(userPrompt) {
       stream: false,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
+        { role: 'user', content: `${userPrompt}${researchContext}` },
       ],
     }),
   })
@@ -72,7 +149,7 @@ export async function generateBrief(userPrompt) {
   if (!jsonMatch) throw new Error('Model did not return valid JSON')
 
   const repaired = jsonrepair(jsonMatch[0])
-  return { ...JSON.parse(repaired), originalPrompt: userPrompt }
+  return mergeBrandResearch({ ...JSON.parse(repaired), originalPrompt: userPrompt }, brandResearch)
 }
 
 export async function streamChat(messages, onToken, signal) {

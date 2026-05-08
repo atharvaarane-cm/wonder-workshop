@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import AgentPanel from '../components/AgentPanel.jsx'
 import SectionCard from '../components/SectionCard.jsx'
 import CreativeDirection from '../components/sections/CreativeDirection.jsx'
@@ -25,10 +25,22 @@ const ROWS = [
   [{ id: 'sl',  num: '10', title: 'Shot List' }],
 ]
 
-export default function Board({ brief: initialBrief, onBack }) {
+export default function Board({ brief: initialBrief, onBack, theme, toggleTheme }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
+const [toast, setToast] = useState(null)
   const rowRefs = useRef({})
+  const toastTimer = useRef(null)
+
+  useEffect(() => {
+    function onToast(e) {
+      clearTimeout(toastTimer.current)
+      setToast(e.detail)
+      toastTimer.current = setTimeout(() => setToast(null), 3000)
+    }
+    window.addEventListener('ww-toast', onToast)
+    return () => window.removeEventListener('ww-toast', onToast)
+  }, [])
 
   function update(path, value) {
     setBrief(prev => setIn(prev, path.split('.'), value))
@@ -67,11 +79,21 @@ export default function Board({ brief: initialBrief, onBack }) {
 
   return (
     <div className="board-screen">
+      {toast && (
+        <div className={`ww-toast ww-toast-${toast.type}`}>
+          {toast.type === 'success'
+            ? <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            : <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 4v4M7 10v.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+          }
+          {toast.msg}
+        </div>
+      )}
+
       <div className="topbar">
         <span className="topbar-back" onClick={onBack}>← Back</span>
         <span className="topbar-brand">WONDER WORKSHOP</span>
         <span className="topbar-sep">|</span>
-        <span className="topbar-meta">{brief.meta ?? brief.title}</span>
+        <span className="topbar-meta">{brief.creativeDirection?.brand ?? brief.title}</span>
         <button className="topbar-desc-btn">
           Description
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -79,6 +101,12 @@ export default function Board({ brief: initialBrief, onBack }) {
           </svg>
         </button>
         <div className="topbar-right">
+          <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
+            {theme === 'dark'
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1.7"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            }
+          </button>
           <button className="btn-outline">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
             Share
@@ -89,6 +117,7 @@ export default function Board({ brief: initialBrief, onBack }) {
           </button>
         </div>
       </div>
+
 
       <div className="board-body">
         <div className="board-content">

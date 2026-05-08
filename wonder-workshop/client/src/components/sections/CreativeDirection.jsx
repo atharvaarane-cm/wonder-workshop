@@ -2,7 +2,7 @@ import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
 
 const FIELDS = [
-  { label: 'Brand',    key: 'brand' },
+  { label: 'Client',   key: 'brand' },
   { label: 'Format',   key: 'format' },
   { label: 'Duration', key: 'duration' },
   { label: 'Shots',    key: 'shots' },

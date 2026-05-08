@@ -90,35 +90,10 @@ export default function AgentPanel({ activeSection, brief }) {
 
   return (
     <aside className="agent-panel">
-      {/* Header */}
-      <div className="panel-section-header">
-        <div className="panel-section-title-row">
-          <span className="panel-section-title">{activeSection}</span>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
-        <div className="panel-header-actions">
-          <button className="panel-icon-btn">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-            </svg>
-          </button>
-          <button className="panel-icon-btn" onClick={() => setCollapsed(true)}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M10 4l4 4-4 4M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
       {/* Messages */}
       <div className="panel-messages" ref={messagesRef}>
         {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}>
+          <div key={i} className={`msg ${m.role}`} style={{ animationDelay: `${i * 60}ms` }}>
             <div className="msg-bubble">{m.text || <span style={{ opacity: 0.4 }}>•••</span>}</div>
             <div className="msg-time">{timeAgo(m.ts)}</div>
           </div>
@@ -149,6 +124,12 @@ export default function AgentPanel({ activeSection, brief }) {
               <path d="M8 12.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
           </button>
+          <div className="panel-section-label" key={activeSection}>
+            <span>{activeSection}</span>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </div>
           <button className="panel-send-btn" onClick={send} disabled={!input.trim() || streaming}>
             {streaming
               ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2.5" strokeDasharray="28" strokeDashoffset="8"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.75s" repeatCount="indefinite"/></circle></svg>

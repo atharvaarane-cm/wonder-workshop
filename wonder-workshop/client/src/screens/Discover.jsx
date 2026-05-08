@@ -1,22 +1,23 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { generateBrief } from '../hooks/useBrief.js'
+import LiquidEther from '../components/LiquidEther.jsx'
 
 const CATEGORIES = [
   {
-    id: 'branding', label: 'Branding', desc: 'Visualize brand concepts', color: '#7C5CFC',
-    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l1.5 5.5H17l-4.5 3.5 1.5 5.5L10 13.5 6 16.5l1.5-5.5L3 7.5h5.5L10 2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>,
+    id: 'social', label: 'Social', desc: 'Content for social platforms', color: '#7C5CFC',
+    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.4"/><circle cx="15.5" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="4.5" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="15.5" cy="15.5" r="1.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="4.5" cy="15.5" r="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M7.3 8.5L6 6M12.7 8.5L14 6M12.7 11.5L14 14M7.3 11.5L6 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>,
   },
   {
     id: 'production', label: 'Production', desc: 'Plan your production', color: '#F59E0B',
     icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M13 10.5l-5 3V7.5l5 3z" fill="currentColor"/></svg>,
   },
   {
-    id: 'filming', label: 'Filming', desc: 'Plan shots and scenes', color: '#3B82F6',
-    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="6" width="11" height="9" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M13 9l5-2.5v7L13 11V9z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>,
+    id: 'brand', label: 'Brand', desc: 'Visualize brand identity', color: '#3B82F6',
+    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l1.5 5.5H17l-4.5 3.5 1.5 5.5L10 13.5 6 16.5l1.5-5.5L3 7.5h5.5L10 2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>,
   },
   {
-    id: 'marketing', label: 'Marketing', desc: 'Campaigns and promotional visuals', color: '#10B981',
-    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M3 10c0-3.866 3.134-7 7-7s7 3.134 7 7-3.134 7-7 7-7-3.134-7-7z" stroke="currentColor" strokeWidth="1.4"/><path d="M7 10h6M10 7v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
+    id: 'stills', label: 'Stills', desc: 'Photo & still campaigns', color: '#10B981',
+    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/><circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.4"/><path d="M7 4l1-2h4l1 2" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>,
   },
 ]
 
@@ -44,13 +45,25 @@ const CARD_GRADIENTS = [
   'linear-gradient(135deg,#0a1a2e,#1a4060)',
 ]
 
-export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
+export default function Discover({ onGenerate, recents = [], onOpenBrief, theme, toggleTheme }) {
   const [prompt, setPrompt]         = useState('')
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
   const [ratio, setRatio]           = useState('16:9')
+  const [ratioOpen, setRatioOpen]   = useState(false)
   const [category, setCategory]     = useState(null)
+  const [inputFocused, setInputFocused] = useState(false)
   const textRef = useRef(null)
+  const ratioRef = useRef(null)
+  const inputCardRef = useRef(null)
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ratioRef.current && !ratioRef.current.contains(e.target)) setRatioOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   async function handleSend() {
     const text = prompt.trim()
@@ -86,6 +99,20 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
 
   return (
     <div className="discover-layout">
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+        <LiquidEther
+          colors={['#5227FF', '#FF9FFC', '#B497CF']}
+          mouseForce={20}
+          cursorSize={100}
+          resolution={0.5}
+          autoDemo={true}
+          autoSpeed={0.5}
+          autoIntensity={2.2}
+          autoResumeDelay={3000}
+          autoRampDuration={0.6}
+          takeoverDuration={0.25}
+        />
+      </div>
 
       {/* ── Sidebar ───────────────────────────────────────────── */}
       <aside className="sidebar">
@@ -102,17 +129,18 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
           ))}
         </nav>
 
-        {recents.length > 0 && (
-          <div className="sidebar-recents">
-            <div className="sidebar-recents-label">Recent Briefs</div>
-            {recents.slice(0, 5).map(r => (
-              <div key={r.id} className="sidebar-recent-item" onClick={() => onOpenBrief(r.brief)}>
-                <span className="sidebar-recent-dot" />
-                <span className="sidebar-recent-name">{r.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="sidebar-recents">
+          <div className="sidebar-recents-label">Recent Briefs</div>
+          {recents.length === 0 && (
+            <div className="sidebar-recent-empty">No briefs yet</div>
+          )}
+          {recents.slice(0, 5).map((r, i) => (
+            <div key={r.id} className="sidebar-recent-item" onClick={() => onOpenBrief(r.brief)}>
+              <span className="sidebar-recent-dot" style={{ background: ['#2D9A4E','#0891B2','#D97706','#9CA3AF','#7C5CFC'][i % 5] }} />
+              <span className="sidebar-recent-name">{r.name}</span>
+            </div>
+          ))}
+        </div>
 
         <div className="sidebar-user">
           <div className="user-avatar">A</div>
@@ -125,16 +153,18 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
 
         {/* Topbar */}
         <header className="discover-topbar">
-          <span className="topbar-ww-brand">
-            <img className="topbar-wonder-wordmark" src="/brand-assets/wonder-wordmark-transparent.png" alt="Wonder" />
-            <span>workshop</span>
-          </span>
           <div className="discover-topbar-right">
             <button className="new-brief-btn">
               + New brief
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
               </svg>
+            </button>
+            <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
+              {theme === 'dark'
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1.7"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              }
             </button>
             <button className="bell-btn">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -147,49 +177,12 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
         {/* ── Single-column form ───────────────────────────────── */}
         <main className="discover-form">
 
-          <div className="form-heading">
-            <p className="form-welcome">Welcome, Creative Director</p>
-            <h1 className="form-title">
-              Turn your imagination into a scene.
-            </h1>
-            <p className="form-sub">
-              Describe your idea and we'll craft a production one-pager that helps you visualize every detail.
-            </p>
-          </div>
-
           {error && <div className="discover-error">{error}</div>}
 
-          {/* Input card */}
-          <div className="input-card">
-            <textarea
-              ref={textRef}
-              className="input-card-text"
-              placeholder="Describe the scene, shot, mood, characters, styling, location…"
-              value={prompt}
-              onChange={e => setPrompt(e.target.value)}
-              onKeyDown={onKey}
-              disabled={loading}
-              autoFocus
-              rows={4}
-            />
-            <div className="input-card-footer">
-              <button className="input-icon-btn" title="Attach file">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                  <path d="M13.5 7.5l-5.5 5.5a3.5 3.5 0 01-4.95-4.95l5.5-5.5a2 2 0 012.83 2.83L5.88 11.4a.5.5 0 01-.71-.71L10.5 5.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-              <button className="input-icon-btn" title="Options">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                </svg>
-              </button>
-              <button className="generate-btn" onClick={handleSend} disabled={!prompt.trim() || loading}>
-                {loading
-                  ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2.5" strokeDasharray="28" strokeDashoffset="8"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.75s" repeatCount="indefinite"/></circle></svg>
-                  : <>Generate <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 14L14 8 2 2v4.5l8 1.5-8 1.5V14z" fill="#fff"/></svg></>
-                }
-              </button>
-            </div>
+          {/* Greeting */}
+          <div className="discover-greeting">
+            <span className="greeting-hi">Hi Atharvaa,</span>
+            <span className="greeting-sub">what's on your mind?</span>
           </div>
 
           {/* Categories */}
@@ -212,56 +205,80 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief }) {
             </div>
           </div>
 
-          {/* Aspect ratio */}
-          <div className="form-section">
-            <h3 className="form-section-label">Choose aspect ratio</h3>
-            <div className="ratio-row">
-              {RATIOS.map(r => (
-                <button
-                  key={r.id}
-                  className={`ratio-card-h${ratio === r.id ? ' active' : ''}`}
-                  onClick={() => setRatio(r.id)}
-                >
-                  {ratio === r.id && <span className="ratio-check">✓</span>}
-                  <div
-                    className="ratio-icon-box"
-                    style={{
-                      width: r.w, height: r.h,
-                      border: r.dashed ? '1.5px dashed currentColor' : '1.5px solid currentColor',
-                      borderRadius: 3,
-                    }}
-                  />
-                  <span className="ratio-label">{r.label}</span>
-                  <span className="ratio-sub">{r.sub}</span>
+          {/* Input card */}
+          {inputFocused && (
+            <div className="input-overlay" onClick={() => setInputFocused(false)} />
+          )}
+          <div
+            ref={inputCardRef}
+            className={`input-card${inputFocused ? ' input-card-focused' : ''}`}
+            onClick={() => !inputFocused && setInputFocused(true)}
+          >
+            <textarea
+              ref={textRef}
+              className="input-card-text"
+              placeholder="Describe the scene, shot, mood, characters, styling, location…"
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              onKeyDown={onKey}
+              disabled={loading}
+              autoFocus
+              rows={4}
+            />
+            <div className="input-card-footer">
+              <button className="attach-pill" title="Attach file">
+                <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
+                  <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+              <div className="ratio-dropdown" ref={ratioRef}>
+                <button className="ratio-pill" onClick={() => setRatioOpen(o => !o)}>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M1.5 6h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                  </svg>
+                  Aspect Ratio
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  </svg>
                 </button>
-              ))}
+                {ratioOpen && (
+                  <div className="ratio-dropdown-menu">
+                    {RATIOS.map(r => (
+                      <button
+                        key={r.id}
+                        className={`ratio-dropdown-item${ratio === r.id ? ' active' : ''}`}
+                        onClick={() => { setRatio(r.id); setRatioOpen(false) }}
+                      >
+                        <div
+                          className="ratio-dropdown-icon"
+                          style={{
+                            width: r.w * 0.55, height: r.h * 0.55,
+                            border: r.dashed ? '1.4px dashed currentColor' : '1.4px solid currentColor',
+                            borderRadius: 2, flexShrink: 0,
+                          }}
+                        />
+                        <span className="ratio-dropdown-label">{r.label}</span>
+                        <span className="ratio-dropdown-sub">{r.sub}</span>
+                        {ratio === r.id && (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginLeft:'auto'}}>
+                            <path d="M2 6l3 3 5-5" stroke="#7C5CFC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button className="generate-btn" onClick={handleSend} disabled={!prompt.trim() || loading}>
+                {loading
+                  ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2.5" strokeDasharray="28" strokeDashoffset="8"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.75s" repeatCount="indefinite"/></circle></svg>
+                  : <>Generate <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 14L14 8 2 2v4.5l8 1.5-8 1.5V14z" fill="#fff"/></svg></>
+                }
+              </button>
             </div>
           </div>
 
-          <div className="briefs-section">
-            <h3 className="form-section-label">Recent briefs</h3>
-            {recents.length > 0 && (
-              <div className="brief-grid">
-                {recents.map((r, i) => (
-                  <div key={r.id} className="brief-card" onClick={() => onOpenBrief(r.brief)}>
-                    <div className="brief-card-top">
-                      <span className="brief-card-meta">{(r.brand || r.name.split('—')[0]).trim().toUpperCase()} · {r.format}</span>
-                    </div>
-                    <div className="brief-card-hero" style={{ background: CARD_GRADIENTS[i % CARD_GRADIENTS.length] }} />
-                    <div className="brief-card-footer">
-                      <div className="brief-card-title">
-                        {r.name}
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                          <path d="M6 12l4-4-4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </div>
-                      <div className="brief-card-sub">{r.shots} shots · {r.duration} · {r.format}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
         </main>
       </div>

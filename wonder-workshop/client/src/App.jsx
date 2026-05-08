@@ -1,12 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Discover from './screens/Discover.jsx'
 import Board from './screens/Board.jsx'
 
 export default function App() {
   const [brief, setBrief] = useState(null)
+  const [theme, setTheme] = useState(() => localStorage.getItem('ww_theme') || 'light')
   const [recents, setRecents] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ww_recents') || '[]') } catch { return [] }
   })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('ww_theme', theme)
+  }, [theme])
+
+  function toggleTheme() {
+    setTheme(t => t === 'light' ? 'dark' : 'light')
+  }
 
   function handleGenerate(b) {
     const entry = {
@@ -24,7 +34,7 @@ export default function App() {
     setBrief(b)
   }
 
-  if (brief) return <Board brief={brief} onBack={() => setBrief(null)} />
+  if (brief) return <Board brief={brief} onBack={() => setBrief(null)} theme={theme} toggleTheme={toggleTheme} />
 
   return (
     <Discover
@@ -32,6 +42,8 @@ export default function App() {
       recents={recents}
       onOpenBrief={b => setBrief(b)}
       latestBrief={recents[0]?.brief ?? null}
+      theme={theme}
+      toggleTheme={toggleTheme}
     />
   )
 }
