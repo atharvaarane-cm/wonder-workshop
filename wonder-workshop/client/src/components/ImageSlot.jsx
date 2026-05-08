@@ -64,33 +64,31 @@ export default function ImageSlot({ label, prompt, style, className, ratio }) {
     setCustomPrompt(null)
   }
 
-  async function generate(overridePrompt) {
+  function generate(overridePrompt) {
     const promptToUse = typeof overridePrompt === 'string' ? overridePrompt : effectivePrompt
     if (!promptToUse) return
     setLoading(true)
     setMenuOpen(false)
     setError(null)
     const dims = ratioDimensions(ratio)
-    try {
-      const res = await fetch('/api/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptToUse, width: dims.width, height: dims.height }),
-      })
-      const data = await res.json()
-      if (data.image) {
-        setSrc(data.image)
-        setUsedPrompt(promptToUse)
-        if (typeof overridePrompt === 'string') setCustomPrompt(overridePrompt)
-        toast('Image generated')
-      }
-      else { setError(data.error || 'Failed'); toast(data.error || 'Generation failed', 'error') }
-    } catch {
-      setError('Generation failed')
-      toast('Generation failed', 'error')
-    } finally {
+    // Load Pollinations URL directly in the browser. Pollinations can take
+    // 60–90s to respond — too long for a Vercel serverless proxy, but fine
+    // for a plain <img> load with no timeout.
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptToUse)}?width=${dims.width}&height=${dims.height}&nologo=true&enhance=true&seed=${Date.now()}`
+    const img = new Image()
+    img.onload = () => {
+      setSrc(url)
+      setUsedPrompt(promptToUse)
+      if (typeof overridePrompt === 'string') setCustomPrompt(overridePrompt)
       setLoading(false)
+      toast('Image generated')
     }
+    img.onerror = () => {
+      setError('Generation failed')
+      setLoading(false)
+      toast('Generation failed', 'error')
+    }
+    img.src = url
   }
   generateRef.current = generate
 
