@@ -11,6 +11,10 @@ export default function ImageSlot({ label, prompt, style, className }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const inputRef = useRef()
+  const containerRef = useRef()
+  const stateRef = useRef({ src, loading, prompt })
+  const generateRef = useRef()
+  stateRef.current = { src, loading, prompt }
 
   useEffect(() => {
     if (!lightboxOpen) return
@@ -22,6 +26,22 @@ export default function ImageSlot({ label, prompt, style, className }) {
       window.removeEventListener('keydown', onKey)
     }
   }, [lightboxOpen])
+
+  useEffect(() => {
+    function onBatchGenerate(e) {
+      const { src, loading, prompt } = stateRef.current
+      if (src || loading || !prompt) return
+      const scope = e.detail?.scope
+      const force = !!e.detail?.force
+      if (!force && src) return
+      const sectionEl = containerRef.current?.closest('[data-section-id]')
+      const ownSection = sectionEl?.dataset.sectionId
+      if (scope !== 'all' && scope !== ownSection) return
+      generateRef.current?.()
+    }
+    window.addEventListener('ww-generate', onBatchGenerate)
+    return () => window.removeEventListener('ww-generate', onBatchGenerate)
+  }, [])
 
   function handleFile(e) {
     const file = e.target.files[0]
@@ -53,10 +73,11 @@ export default function ImageSlot({ label, prompt, style, className }) {
       setLoading(false)
     }
   }
+  generateRef.current = generate
 
   return (
     <>
-      <div className={`img-slot ${className || ''}`} style={style}>
+      <div ref={containerRef} className={`img-slot ${className || ''}`} style={style}>
         {src
           ? <>
               <img

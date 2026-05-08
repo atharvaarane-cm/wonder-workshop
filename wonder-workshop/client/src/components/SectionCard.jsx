@@ -10,14 +10,32 @@ function Skeleton() {
   )
 }
 
-export default function SectionCard({ num, name, loading, children, active, onClick }) {
+export default function SectionCard({ num, name, loading, children, active, onClick, sectionId, hasImages }) {
   const [collapsed, setCollapsed] = useState(false)
+
+  function generateImages(e) {
+    e.stopPropagation()
+    window.dispatchEvent(new CustomEvent('ww-generate', { detail: { scope: sectionId } }))
+    window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg: `Generating ${name} images…`, type: 'success' } }))
+  }
 
   return (
     <div className={`section-card${active ? ' active' : ''}${collapsed ? ' collapsed' : ''}`} onClick={onClick}>
       <div className="section-header">
         <div className="section-num">{num}</div>
         <div className="section-name">{name}</div>
+        {hasImages && (
+          <button
+            className="section-gen-images"
+            onClick={generateImages}
+            title="Generate images for this section"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="currentColor"/>
+            </svg>
+            Images
+          </button>
+        )}
         <button
           className="section-refresh"
           onClick={e => e.stopPropagation()}
@@ -39,7 +57,7 @@ export default function SectionCard({ num, name, loading, children, active, onCl
         </button>
       </div>
       {!collapsed && (
-        <div className="section-body">
+        <div className="section-body" data-section-id={sectionId}>
           {loading ? <Skeleton /> : children}
         </div>
       )}

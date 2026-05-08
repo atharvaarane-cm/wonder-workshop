@@ -858,6 +858,17 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot-empty.menu-open .img-slot-plus { opacity: 0; }
 .img-slot-error { font-size: 10px; color: rgba(200,60,60,0.8); margin-top: 2px; }
 
+/* ── Section: Generate Images button ─────────────────────────── */
+.section-gen-images {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 9px; border-radius: 6px;
+  border: 1px solid var(--border); background: none; color: var(--muted);
+  font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  flex-shrink: 0;
+}
+.section-gen-images:hover { background: var(--bg); color: var(--text); border-color: var(--text); }
+.section-gen-images svg { opacity: 0.7; }
+
 /* ── Section collapse ────────────────────────────────────────── */
 .section-collapse-btn {
   width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border);

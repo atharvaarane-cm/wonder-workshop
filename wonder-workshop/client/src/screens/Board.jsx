@@ -119,6 +119,13 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme 
               : <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
             }
           </button>
+          <button className="btn-outline" onClick={() => {
+            window.dispatchEvent(new CustomEvent('ww-generate', { detail: { scope: 'all' } }))
+            window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg: 'Generating all images…', type: 'success' } }))
+          }} title="Generate every empty image slot on the board">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="currentColor"/></svg>
+            Generate All
+          </button>
           <button className="btn-outline">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
             Share
@@ -146,6 +153,8 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme 
                       key={sec.id}
                       num={sec.num}
                       name={sec.title}
+                      sectionId={sec.id}
+                      hasImages={sec.id !== 'st'}
                       active={activeId === sec.id}
                       onClick={() => setActiveId(sec.id)}
                     >
