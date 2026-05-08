@@ -45,7 +45,7 @@ const CARD_GRADIENTS = [
   'linear-gradient(135deg,#0a1a2e,#1a4060)',
 ]
 
-export default function Discover({ onGenerate, recents = [], onOpenBrief, theme, toggleTheme }) {
+export default function Discover({ onGenerate, projects = [], onOpenProject, onDeleteProject, theme, toggleTheme }) {
   const [prompt, setPrompt]         = useState('')
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
@@ -130,14 +130,23 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief, theme,
         </nav>
 
         <div className="sidebar-recents">
-          <div className="sidebar-recents-label">Recent Briefs</div>
-          {recents.length === 0 && (
-            <div className="sidebar-recent-empty">No briefs yet</div>
+          <div className="sidebar-recents-label">Projects</div>
+          {projects.length === 0 && (
+            <div className="sidebar-recent-empty">No projects yet</div>
           )}
-          {recents.slice(0, 5).map((r, i) => (
-            <div key={r.id} className="sidebar-recent-item" onClick={() => onOpenBrief(r.brief)}>
+          {projects.slice(0, 8).map((p, i) => (
+            <div key={p.id} className="sidebar-recent-item" onClick={() => onOpenProject(p)}>
               <span className="sidebar-recent-dot" style={{ background: ['#2D9A4E','#0891B2','#D97706','#9CA3AF','#7C5CFC'][i % 5] }} />
-              <span className="sidebar-recent-name">{r.name}</span>
+              <span className="sidebar-recent-name">{p.name}</span>
+              <button
+                className="sidebar-recent-delete"
+                title="Delete project"
+                onClick={e => { e.stopPropagation(); onDeleteProject?.(p.id) }}
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                  <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
             </div>
           ))}
         </div>

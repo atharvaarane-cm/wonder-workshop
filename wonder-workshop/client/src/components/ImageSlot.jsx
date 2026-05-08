@@ -1,18 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { ratioDimensions } from '../hooks/useBrief.js'
+import { ProjectContext } from '../hooks/useProject.js'
 
 function toast(msg, type = 'success') {
   window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg, type } }))
 }
 
 export default function ImageSlot({ label, prompt, style, className, ratio }) {
-  const [src, setSrc] = useState(null)
+  const project = useContext(ProjectContext)
+  const slotKey = prompt || null
+  const initial = slotKey && project?.images?.[slotKey] || null
+
+  const [src, setSrc] = useState(initial?.src || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [customPrompt, setCustomPrompt] = useState(null)
-  const [usedPrompt, setUsedPrompt] = useState(null)
+  const [customPrompt, setCustomPrompt] = useState(initial?.customPrompt || null)
+  const [usedPrompt, setUsedPrompt] = useState(initial?.usedPrompt || null)
   const [editValue, setEditValue] = useState('')
   const inputRef = useRef()
   const containerRef = useRef()
@@ -20,6 +25,20 @@ export default function ImageSlot({ label, prompt, style, className, ratio }) {
   const generateRef = useRef()
   const effectivePrompt = customPrompt ?? prompt
   stateRef.current = { src, loading, prompt: effectivePrompt }
+
+  // If the project context updates this slot's saved image (e.g. user
+  // switched projects), hydrate the displayed src.
+  useEffect(() => {
+    if (!slotKey || !project?.images) return
+    const saved = project.images[slotKey]
+    if (saved?.src && saved.src !== src) {
+      setSrc(saved.src)
+      setUsedPrompt(saved.usedPrompt || null)
+      setCustomPrompt(saved.customPrompt || null)
+    }
+    // Intentionally only rerun on project id / slotKey change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, slotKey])
 
   useEffect(() => {
     if (!lightboxOpen) return
@@ -81,8 +100,12 @@ export default function ImageSlot({ label, prompt, style, className, ratio }) {
       img.onload = () => {
         setSrc(url)
         setUsedPrompt(promptToUse)
+        const nextCustom = typeof overridePrompt === 'string' ? overridePrompt : customPrompt
         if (typeof overridePrompt === 'string') setCustomPrompt(overridePrompt)
         setLoading(false)
+        if (slotKey && project?.saveImage) {
+          project.saveImage(slotKey, { src: url, usedPrompt: promptToUse, customPrompt: nextCustom || null })
+        }
         toast('Image generated')
       }
       img.onerror = () => {

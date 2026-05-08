@@ -28,13 +28,16 @@ const ROWS = [
   [{ id: 'sl',  num: '11', title: 'Shot List' }],
 ]
 
-export default function Board({ brief: initialBrief, onBack, theme, toggleTheme }) {
+export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
   const [toast, setToast] = useState(null)
   const [exporting, setExporting] = useState(false)
   const rowRefs = useRef({})
   const toastTimer = useRef(null)
+  const saveRef = useRef(onSaveBrief)
+  saveRef.current = onSaveBrief
+  const isInitialBrief = useRef(true)
 
   useEffect(() => {
     function onToast(e) {
@@ -45,6 +48,13 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme 
     window.addEventListener('ww-toast', onToast)
     return () => window.removeEventListener('ww-toast', onToast)
   }, [])
+
+  // Debounced auto-save of brief edits.
+  useEffect(() => {
+    if (isInitialBrief.current) { isInitialBrief.current = false; return }
+    const t = setTimeout(() => saveRef.current?.(brief), 400)
+    return () => clearTimeout(t)
+  }, [brief])
 
   function update(path, value) {
     setBrief(prev => setIn(prev, path.split('.'), value))

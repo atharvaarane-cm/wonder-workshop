@@ -64,9 +64,19 @@ textarea { font-family: var(--font); resize: none; }
 .sidebar-recent-item:hover { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.72); }
 .sidebar-recent-dot { width: 5px; height: 5px; border-radius: 50%; background: #7C5CFC; flex-shrink: 0; }
 .sidebar-recent-name {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 11px; font-weight: 500;
 }
+.sidebar-recent-delete {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 4px;
+  border: none; background: none; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(0,0,0,0.35); opacity: 0; transition: opacity 0.12s, background 0.12s, color 0.12s;
+}
+.sidebar-recent-item:hover .sidebar-recent-delete { opacity: 1; }
+.sidebar-recent-delete:hover { background: rgba(220,38,38,0.12); color: #DC2626; }
+[data-theme="dark"] .sidebar-recent-delete { color: rgba(255,255,255,0.4); }
+[data-theme="dark"] .sidebar-recent-delete:hover { background: rgba(248,113,113,0.18); color: #F87171; }
 .sidebar-recent-empty { font-size: 11px; color: rgba(0,0,0,0.28); padding: 4px 6px; }
 .sidebar-user {
   display: flex; align-items: center; gap: 8px;
