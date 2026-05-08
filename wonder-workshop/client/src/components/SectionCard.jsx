@@ -36,15 +36,6 @@ export default function SectionCard({ num, name, loading, children, active, onCl
             Images
           </button>
         )}
-        <button
-          className="section-refresh"
-          onClick={e => e.stopPropagation()}
-          title="Refresh section"
-        >
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-            <path d="M13.5 8A5.5 5.5 0 112.8 4.8M2.5 2v3h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
         <div className={`status-dot ${loading ? 'amber' : 'green'}`} />
         <button
           className={`section-collapse-btn${collapsed ? ' collapsed' : ''}`}
@@ -56,11 +47,13 @@ export default function SectionCard({ num, name, loading, children, active, onCl
           </svg>
         </button>
       </div>
-      {!collapsed && (
-        <div className="section-body" data-section-id={sectionId}>
-          {loading ? <Skeleton /> : children}
-        </div>
-      )}
+      <div
+        className="section-body"
+        data-section-id={sectionId}
+        style={collapsed ? { display: 'none' } : undefined}
+      >
+        {loading ? <Skeleton /> : children}
+      </div>
     </div>
   )
 }
