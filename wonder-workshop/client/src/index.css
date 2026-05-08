@@ -1049,12 +1049,21 @@ textarea { font-family: var(--font); resize: none; }
   justify-content: center;
   padding: 32px;
   cursor: zoom-out;
+  overflow-y: auto;
 }
-.img-lightbox img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+.img-lightbox-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: min(1200px, 100%);
   cursor: default;
+}
+.img-lightbox-content img {
+  max-width: 100%;
+  max-height: calc(100vh - 280px);
+  min-height: 200px;
+  object-fit: contain;
 }
 .img-lightbox-close {
   position: absolute;
@@ -1065,18 +1074,77 @@ textarea { font-family: var(--font); resize: none; }
   color: rgba(255,255,255,0.5);
 }
 .img-lightbox-caption {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 640px;
   text-align: center;
   font-size: 11px;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   letter-spacing: 0.06em;
   color: rgba(255,255,255,0.7);
   padding: 0 16px;
+  text-transform: uppercase;
 }
+.img-lightbox-prompt {
+  width: min(720px, 100%);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.img-lightbox-prompt-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+}
+.img-lightbox-prompt-input {
+  width: 100%;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  color: #fff;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.img-lightbox-prompt-input:focus {
+  outline: none;
+  border-color: rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.55);
+}
+.img-lightbox-prompt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.img-lightbox-prompt-btn {
+  background: #fff;
+  color: #111;
+  border: none;
+  border-radius: 7px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.img-lightbox-prompt-btn:hover:not(:disabled) { opacity: 0.85; }
+.img-lightbox-prompt-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.img-lightbox-prompt-reset {
+  background: none;
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.img-lightbox-prompt-reset:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
 
 @media print {
   .img-lightbox { display: none; }

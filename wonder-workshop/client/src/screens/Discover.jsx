@@ -72,7 +72,7 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief, theme,
     try {
       const full = `${text}${ratio !== 'custom' ? ` (aspect ratio: ${ratio})` : ''}${category ? ` (category: ${category})` : ''}`
       const brief = await generateBrief(full)
-      onGenerate(brief)
+      onGenerate({ ...brief, ratio: ratio === 'custom' ? '16:9' : ratio })
     } catch (e) {
       setError(e.message)
       setLoading(false)

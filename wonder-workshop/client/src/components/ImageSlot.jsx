@@ -1,23 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
+import { ratioDimensions } from '../hooks/useBrief.js'
 
 function toast(msg, type = 'success') {
   window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg, type } }))
 }
 
-export default function ImageSlot({ label, prompt, style, className }) {
+export default function ImageSlot({ label, prompt, style, className, ratio }) {
   const [src, setSrc] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [customPrompt, setCustomPrompt] = useState(null)
+  const [usedPrompt, setUsedPrompt] = useState(null)
+  const [editValue, setEditValue] = useState('')
   const inputRef = useRef()
   const containerRef = useRef()
   const stateRef = useRef({ src, loading, prompt })
   const generateRef = useRef()
-  stateRef.current = { src, loading, prompt }
+  const effectivePrompt = customPrompt ?? prompt
+  stateRef.current = { src, loading, prompt: effectivePrompt }
 
   useEffect(() => {
     if (!lightboxOpen) return
+    setEditValue(usedPrompt ?? effectivePrompt ?? '')
     function onKey(e) { if (e.key === 'Escape') setLightboxOpen(false) }
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
@@ -49,22 +55,30 @@ export default function ImageSlot({ label, prompt, style, className }) {
     setSrc(URL.createObjectURL(file))
     setError(null)
     setMenuOpen(false)
+    setUsedPrompt(null)
+    setCustomPrompt(null)
   }
 
-  async function generate(e) {
-    if (e) e.stopPropagation()
-    if (!prompt) return
+  async function generate(overridePrompt) {
+    const promptToUse = typeof overridePrompt === 'string' ? overridePrompt : effectivePrompt
+    if (!promptToUse) return
     setLoading(true)
     setMenuOpen(false)
     setError(null)
+    const dims = ratioDimensions(ratio)
     try {
       const res = await fetch('/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt: promptToUse, width: dims.width, height: dims.height }),
       })
       const data = await res.json()
-      if (data.image) { setSrc(data.image); toast('Image generated') }
+      if (data.image) {
+        setSrc(data.image)
+        setUsedPrompt(promptToUse)
+        if (typeof overridePrompt === 'string') setCustomPrompt(overridePrompt)
+        toast('Image generated')
+      }
       else { setError(data.error || 'Failed'); toast(data.error || 'Generation failed', 'error') }
     } catch {
       setError('Generation failed')
@@ -74,6 +88,13 @@ export default function ImageSlot({ label, prompt, style, className }) {
     }
   }
   generateRef.current = generate
+
+  function regenerateFromEdit() {
+    const trimmed = editValue.trim()
+    if (!trimmed) return
+    setLightboxOpen(false)
+    generate(trimmed)
+  }
 
   return (
     <>
@@ -88,7 +109,7 @@ export default function ImageSlot({ label, prompt, style, className }) {
               />
               <div className="img-slot-overlay">
                 <button className="img-slot-action" onClick={e => { e.stopPropagation(); inputRef.current.click() }}>↑ Replace</button>
-                {prompt && <button className="img-slot-action" onClick={generate} disabled={loading}>{loading ? '…' : '✦ Regen'}</button>}
+                {effectivePrompt && <button className="img-slot-action" onClick={e => { e.stopPropagation(); generate() }} disabled={loading}>{loading ? '…' : '✦ Regen'}</button>}
               </div>
             </>
           : <div
@@ -103,7 +124,7 @@ export default function ImageSlot({ label, prompt, style, className }) {
                 : error
                   ? <div className="img-slot-error-wrap" onClick={e => e.stopPropagation()}>
                       <span className="img-slot-error">{error}</span>
-                      {prompt && (
+                      {effectivePrompt && (
                         <button className="img-slot-btn generate" onClick={() => generate()}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                           Retry
@@ -116,8 +137,8 @@ export default function ImageSlot({ label, prompt, style, className }) {
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                           Upload
                         </button>
-                        {prompt && (
-                          <button className="img-slot-btn generate" onClick={generate}>
+                        {effectivePrompt && (
+                          <button className="img-slot-btn generate" onClick={() => generate()}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="currentColor"/></svg>
                             Generate
                           </button>
@@ -138,13 +159,40 @@ export default function ImageSlot({ label, prompt, style, className }) {
           className="img-lightbox"
           onClick={() => setLightboxOpen(false)}
         >
-          <img
-            src={src}
-            alt={label}
-            onClick={e => e.stopPropagation()}
-          />
+          <div className="img-lightbox-content" onClick={e => e.stopPropagation()}>
+            <img src={src} alt={label} />
+            {label && <div className="img-lightbox-caption">{label}</div>}
+            {usedPrompt && (
+              <div className="img-lightbox-prompt">
+                <div className="img-lightbox-prompt-label">Prompt</div>
+                <textarea
+                  className="img-lightbox-prompt-input"
+                  value={editValue}
+                  onChange={e => setEditValue(e.target.value)}
+                  rows={3}
+                  spellCheck={false}
+                />
+                <div className="img-lightbox-prompt-actions">
+                  <button
+                    className="img-lightbox-prompt-btn"
+                    onClick={regenerateFromEdit}
+                    disabled={loading || !editValue.trim() || editValue.trim() === usedPrompt}
+                  >
+                    {loading ? 'Generating…' : '✦ Regenerate with this prompt'}
+                  </button>
+                  {editValue !== usedPrompt && (
+                    <button
+                      className="img-lightbox-prompt-reset"
+                      onClick={() => setEditValue(usedPrompt)}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="img-lightbox-close">Click outside or press Esc to close</div>
-          {label && <div className="img-lightbox-caption">{label}</div>}
         </div>
       )}
     </>

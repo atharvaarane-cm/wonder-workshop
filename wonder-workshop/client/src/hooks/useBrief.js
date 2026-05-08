@@ -160,6 +160,17 @@ export async function generateBrief(userPrompt) {
   return mergeBrandResearch({ ...JSON.parse(repaired), originalPrompt: userPrompt }, brandResearch)
 }
 
+const RATIO_DIMENSIONS = {
+  '16:9': { width: 1024, height: 576, css: '16/9' },
+  '9:16': { width: 576,  height: 1024, css: '9/16' },
+  '1:1':  { width: 768,  height: 768,  css: '1/1' },
+  '4:5':  { width: 720,  height: 900,  css: '4/5' },
+}
+
+export function ratioDimensions(ratio) {
+  return RATIO_DIMENSIONS[ratio] ?? RATIO_DIMENSIONS['16:9']
+}
+
 export async function streamChat(messages, onToken, signal) {
   const res = await fetch('/api/chat', {
     method: 'POST',

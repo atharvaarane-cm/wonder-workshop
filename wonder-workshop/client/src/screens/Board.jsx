@@ -73,14 +73,14 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme 
       case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'lm':  return <LightingMood data={brief.lightingMood} imagePrompts={brief.imagePrompts} updateMood={updateMood} />
-      case 'mb':  return <MoodBoard data={brief.creativeDirection} />
-      case 'loc': return <LocationsSetDesign data={brief.environment} />
+      case 'mb':  return <MoodBoard data={brief.creativeDirection} ratio={brief.ratio} />
+      case 'loc': return <LocationsSetDesign data={brief.environment} ratio={brief.ratio} />
       case 'cr':  return <CharRef data={brief.character} />
       case 'cp':  return <ClothingProps data={brief.character} />
       case 'ch':  return <Character data={brief.character} update={update} mode="fullbody" />
       case 'chu': return <Character data={brief.character} update={update} mode="closeup" />
       case 'st':  return <Story data={brief.story} update={update} updateBeat={updateBeat} />
-      case 'sl':  return <ShotList data={brief.shotList} updateShot={updateShot} />
+      case 'sl':  return <ShotList data={brief.shotList} updateShot={updateShot} ratio={brief.ratio} />
       default:    return null
     }
   }

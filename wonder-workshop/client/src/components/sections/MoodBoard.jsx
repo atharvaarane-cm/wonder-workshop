@@ -1,21 +1,26 @@
 import ImageSlot from '../ImageSlot.jsx'
+import { ratioDimensions } from '../../hooks/useBrief.js'
 
-export default function MoodBoard({ data }) {
+export default function MoodBoard({ data, ratio }) {
   const base = `${data?.brand ?? ''} ${data?.description ?? ''}, mood board, cinematic aesthetic, editorial`
+  const aspect = ratioDimensions(ratio).css
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <ImageSlot
         prompt={`${base}, hero wide shot, atmospheric style reference`}
-        style={{ width: '100%', height: 200, borderRadius: 10 }}
+        ratio={ratio}
+        style={{ width: '100%', aspectRatio: aspect, borderRadius: 10 }}
       />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <ImageSlot
           prompt={`${base}, colour palette texture reference`}
-          style={{ width: '100%', height: 120, borderRadius: 8 }}
+          ratio={ratio}
+          style={{ width: '100%', aspectRatio: aspect, borderRadius: 8 }}
         />
         <ImageSlot
           prompt={`${base}, lighting reference, film still, cinematic`}
-          style={{ width: '100%', height: 120, borderRadius: 8 }}
+          ratio={ratio}
+          style={{ width: '100%', aspectRatio: aspect, borderRadius: 8 }}
         />
       </div>
     </div>
