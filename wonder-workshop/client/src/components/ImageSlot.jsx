@@ -71,24 +71,33 @@ export default function ImageSlot({ label, prompt, style, className, ratio }) {
     setMenuOpen(false)
     setError(null)
     const dims = ratioDimensions(ratio)
-    // Load Pollinations URL directly in the browser. Pollinations can take
-    // 60–90s to respond — too long for a Vercel serverless proxy, but fine
-    // for a plain <img> load with no timeout.
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptToUse)}?width=${dims.width}&height=${dims.height}&nologo=true&enhance=true&seed=${Date.now()}`
-    const img = new Image()
-    img.onload = () => {
-      setSrc(url)
-      setUsedPrompt(promptToUse)
-      if (typeof overridePrompt === 'string') setCustomPrompt(overridePrompt)
-      setLoading(false)
-      toast('Image generated')
+    // Load Pollinations URL directly in the browser — no Vercel timeout.
+    // Pollinations rate-limits under parallel load, so retry up to 3x
+    // with a fresh seed + backoff before giving up.
+    const MAX_ATTEMPTS = 3
+    function attempt(n) {
+      const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptToUse)}?width=${dims.width}&height=${dims.height}&nologo=true&enhance=true&seed=${Date.now() + n * 7919}`
+      const img = new Image()
+      img.onload = () => {
+        setSrc(url)
+        setUsedPrompt(promptToUse)
+        if (typeof overridePrompt === 'string') setCustomPrompt(overridePrompt)
+        setLoading(false)
+        toast('Image generated')
+      }
+      img.onerror = () => {
+        if (n < MAX_ATTEMPTS) {
+          const backoff = 1500 * n + Math.random() * 1500
+          setTimeout(() => attempt(n + 1), backoff)
+        } else {
+          setError('Generation failed')
+          setLoading(false)
+          toast('Generation failed', 'error')
+        }
+      }
+      img.src = url
     }
-    img.onerror = () => {
-      setError('Generation failed')
-      setLoading(false)
-      toast('Generation failed', 'error')
-    }
-    img.src = url
+    attempt(1)
   }
   generateRef.current = generate
 
