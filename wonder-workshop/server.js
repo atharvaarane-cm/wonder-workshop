@@ -28,23 +28,17 @@ app.post('/api/chat', (req, res) => {
   proxyTo('127.0.0.1', 11434, '/api/chat', req.body, res);
 });
 
-// Image generation via Pollinations.ai (free, no API key)
-app.post('/api/image', async (req, res) => {
-  const { prompt, width = 896, height = 512 } = req.body;
+// Image generation via Pollinations.ai (free, no API key).
+// Return the URL directly — Pollinations takes 60–90s, which exceeds
+// Vercel's serverless function timeout in production. Letting the browser
+// load the URL itself sidesteps the timeout entirely, and the client uses
+// data.image as <img src> regardless of whether it's an https: or data: URL.
+app.post('/api/image', (req, res) => {
+  const { prompt, width = 896, height = 512 } = req.body || {};
+  if (!prompt) { res.status(400).json({ error: 'Prompt required' }); return; }
 
-  try {
-    const encoded = encodeURIComponent(prompt);
-    const url = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&nologo=true&enhance=true&seed=${Date.now()}`;
-
-    const imgRes = await fetch(url);
-    if (!imgRes.ok) { res.status(imgRes.status).json({ error: 'Image generation failed' }); return; }
-
-    const buffer = await imgRes.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64')
-    res.json({ image: `data:image/jpeg;base64,${base64}` });
-  } catch (err) {
-    res.status(503).json({ error: err.message });
-  }
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=true&seed=${Date.now()}`;
+  res.json({ image: url });
 });
 
 const KNOWN_BRANDS = {
