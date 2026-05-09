@@ -279,6 +279,15 @@ textarea { font-family: var(--font); resize: none; }
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .ratio-pill:hover { background: #f5f5f5; color: rgba(0,0,0,0.75); }
+.ratio-pill-icon { color: rgba(0,0,0,0.55); }
+.ratio-pill:hover .ratio-pill-icon { color: rgba(0,0,0,0.8); }
+.ratio-pill-label { color: inherit; }
+.ratio-pill-value {
+  font-weight: 700; color: #1A1A1A;
+  padding: 1px 7px; border-radius: 999px;
+  background: rgba(124,92,252,0.1); border: 1px solid rgba(124,92,252,0.2);
+  font-variant-numeric: tabular-nums;
+}
 .ratio-dropdown-menu {
   position: absolute; bottom: calc(100% + 8px); left: 0;
   background: #fff; border: 1px solid rgba(0,0,0,0.09);
@@ -307,6 +316,13 @@ textarea { font-family: var(--font); resize: none; }
   border: 1px solid rgba(0,0,0,0.12); background: #fff;
   color: rgba(0,0,0,0.55); cursor: pointer; transition: all 0.12s; white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.resolution-pill-label { color: inherit; }
+.resolution-pill-value {
+  font-weight: 700; color: #1A1A1A;
+  padding: 1px 7px; border-radius: 999px;
+  background: rgba(124,92,252,0.1); border: 1px solid rgba(124,92,252,0.2);
+  font-variant-numeric: tabular-nums;
 }
 .resolution-pill:hover,
 .resolution-pill:focus-visible {
@@ -518,6 +534,14 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .ratio-dropdown-item.active .ratio-dropdown-icon { color: #9B7DFF; }
 [data-theme="dark"] .ratio-dropdown-label { color: #E8E8E8; }
 [data-theme="dark"] .ratio-dropdown-sub { color: rgba(255,255,255,0.38); }
+[data-theme="dark"] .ratio-pill-icon { color: rgba(255,255,255,0.5); }
+[data-theme="dark"] .ratio-pill:hover .ratio-pill-icon { color: rgba(255,255,255,0.8); }
+[data-theme="dark"] .ratio-pill-value,
+[data-theme="dark"] .resolution-pill-value {
+  color: #E8E8E8;
+  background: rgba(155,125,255,0.18);
+  border-color: rgba(155,125,255,0.32);
+}
 [data-theme="dark"] .resolution-pill { background: #2A2A2A; border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.5); box-shadow: none; }
 [data-theme="dark"] .resolution-pill:hover,
 [data-theme="dark"] .resolution-pill:focus-visible { background: #333; color: rgba(255,255,255,0.75); }
