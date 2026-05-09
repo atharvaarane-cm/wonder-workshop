@@ -8,7 +8,7 @@ function timeAgo(ts) {
   return `${diff} min ago`
 }
 
-export default function AgentPanel({ activeSection, brief }) {
+export default function AgentPanel({ activeSection, activeImageTarget, brief }) {
   const [messages, setMessages] = useState([
     { role: 'agent', text: `Here's the creative direction for the ${brief?.creativeDirection?.brand ?? ''} shoot. I've set ${brief?.creativeDirection?.shots ?? 9} shots across ${brief?.creativeDirection?.location ?? 'key locations'} with a strong hero narrative.`, ts: Date.now() }
   ])
@@ -41,7 +41,7 @@ export default function AgentPanel({ activeSection, brief }) {
     const history = [
       {
         role: 'system',
-        content: `You are a creative production assistant. The user is viewing the "${activeSection}" section of their brief. Brief: ${JSON.stringify(brief?.creativeDirection ?? {})}. Be concise and creative. Keep responses under 3 sentences.`
+        content: `You are a creative production assistant. The user is editing "${activeSection}" in their brief.${activeImageTarget?.prompt ? ` Image prompt: ${activeImageTarget.prompt}.` : ''} Brief: ${JSON.stringify(brief?.creativeDirection ?? {})}. Be concise and creative. Keep responses under 3 sentences.`
       },
       ...messages.map(m => ({ role: m.role === 'agent' ? 'assistant' : 'user', content: m.text })),
       { role: 'user', content: text }
@@ -117,6 +117,12 @@ export default function AgentPanel({ activeSection, brief }) {
             Edit
             <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
           </button>
+          <div className="panel-section-label" key={activeSection} title={activeSection}>
+            <span>{activeSection}</span>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </div>
           <button className="panel-mic-btn">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <rect x="5.5" y="1" width="5" height="8" rx="2.5" stroke="currentColor" strokeWidth="1.4"/>
@@ -124,12 +130,6 @@ export default function AgentPanel({ activeSection, brief }) {
               <path d="M8 12.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
           </button>
-          <div className="panel-section-label" key={activeSection}>
-            <span>{activeSection}</span>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
-          </div>
           <button className="panel-send-btn" onClick={send} disabled={!input.trim() || streaming}>
             {streaming
               ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2.5" strokeDasharray="28" strokeDashoffset="8"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.75s" repeatCount="indefinite"/></circle></svg>

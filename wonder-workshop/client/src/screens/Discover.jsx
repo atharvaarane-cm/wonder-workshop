@@ -1,23 +1,26 @@
 import { useState, useRef, useEffect } from 'react'
 import { generateBrief } from '../hooks/useBrief.js'
-import LiquidEther from '../components/LiquidEther.jsx'
 
-const CATEGORIES = [
+const QUICK_START_PROMPTS = [
   {
-    id: 'social', label: 'Social', desc: 'Content for social platforms', color: '#7C5CFC',
-    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.4"/><circle cx="15.5" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="4.5" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="15.5" cy="15.5" r="1.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="4.5" cy="15.5" r="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M7.3 8.5L6 6M12.7 8.5L14 6M12.7 11.5L14 14M7.3 11.5L6 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>,
+    id: 'fashion-shoot',
+    label: 'Fashion Shoot',
+    prompt: 'Fashion shoot for a modern editorial campaign with bold styling, expressive talent direction, cinematic lighting, and a polished shot list.',
   },
   {
-    id: 'production', label: 'Production', desc: 'Plan your production', color: '#F59E0B',
-    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M13 10.5l-5 3V7.5l5 3z" fill="currentColor"/></svg>,
+    id: 'product-ad',
+    label: 'Product Ad',
+    prompt: 'Product ad campaign with premium hero product imagery, lifestyle cutaways, tactile details, and clean brand-forward compositions.',
   },
   {
-    id: 'brand', label: 'Brand', desc: 'Visualize brand identity', color: '#3B82F6',
-    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l1.5 5.5H17l-4.5 3.5 1.5 5.5L10 13.5 6 16.5l1.5-5.5L3 7.5h5.5L10 2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>,
+    id: 'lifestyle-campaign',
+    label: 'Lifestyle Campaign',
+    prompt: 'Lifestyle campaign with natural performances, warm environments, authentic brand moments, and a flexible mix of stills and video shots.',
   },
   {
-    id: 'stills', label: 'Stills', desc: 'Photo & still campaigns', color: '#10B981',
-    icon: <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/><circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.4"/><path d="M7 4l1-2h4l1 2" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>,
+    id: 'social-launch',
+    label: 'Social Launch',
+    prompt: 'Social launch package with scroll-stopping opening frames, vertical cutdowns, creator-style details, and modular image prompts.',
   },
 ]
 
@@ -26,8 +29,11 @@ const RATIOS = [
   { id: '9:16',   label: '9 : 16', sub: 'Portrait',     w: 18, h: 30 },
   { id: '1:1',    label: '1 : 1',  sub: 'Square',       w: 26, h: 26 },
   { id: '4:5',    label: '4 : 5',  sub: 'Portrait 4:5', w: 22, h: 28 },
-  { id: 'custom', label: 'Custom', sub: 'Set custom',   w: 28, h: 20, dashed: true },
+  { id: '4:3',    label: '4 : 3',  sub: 'Classic',      w: 30, h: 22 },
+  { id: '2:1',    label: '2 : 1',  sub: 'Wide banner',  w: 34, h: 17 },
 ]
+
+const RESOLUTIONS = ['1K', '2K', '4K']
 
 const NAV_ITEMS = [
   { label: 'Home', active: true, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 12L12 4l9 8v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-8z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/><path d="M9 21V12h6v9" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg> },
@@ -50,16 +56,20 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief, theme,
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
   const [ratio, setRatio]           = useState('16:9')
+  const [resolution, setResolution] = useState('1K')
   const [ratioOpen, setRatioOpen]   = useState(false)
-  const [category, setCategory]     = useState(null)
+  const [resolutionOpen, setResolutionOpen] = useState(false)
+  const [quickStart, setQuickStart] = useState(null)
   const [inputFocused, setInputFocused] = useState(false)
   const textRef = useRef(null)
   const ratioRef = useRef(null)
+  const resolutionRef = useRef(null)
   const inputCardRef = useRef(null)
 
   useEffect(() => {
     function handleClickOutside(e) {
       if (ratioRef.current && !ratioRef.current.contains(e.target)) setRatioOpen(false)
+      if (resolutionRef.current && !resolutionRef.current.contains(e.target)) setResolutionOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -70,7 +80,7 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief, theme,
     if (!text || loading) return
     setLoading(true); setError(null)
     try {
-      const full = `${text}${ratio !== 'custom' ? ` (aspect ratio: ${ratio})` : ''}${category ? ` (category: ${category})` : ''}`
+      const full = `${text} (aspect ratio: ${ratio}) (resolution: ${resolution})${quickStart ? ` (quick start: ${quickStart})` : ''}`
       const brief = await generateBrief(full)
       onGenerate(brief)
     } catch (e) {
@@ -83,37 +93,14 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief, theme,
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  function pickCategory(id) {
-    setCategory(id === category ? null : id)
-    const prefixes = {
-      branding:   'Brand identity shoot for ',
-      production: 'Full production brief for ',
-      filming:    'Detailed shot list for ',
-      marketing:  'Marketing campaign for ',
-    }
-    if (id !== category) {
-      setPrompt(prefixes[id] || '')
-      textRef.current?.focus()
-    }
+  function pickQuickStart(item) {
+    setQuickStart(item.id)
+    setPrompt(item.prompt)
+    textRef.current?.focus()
   }
 
   return (
     <div className="discover-layout">
-      <div style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-        <LiquidEther
-          colors={['#5227FF', '#FF9FFC', '#B497CF']}
-          mouseForce={20}
-          cursorSize={100}
-          resolution={0.5}
-          autoDemo={true}
-          autoSpeed={0.5}
-          autoIntensity={2.2}
-          autoResumeDelay={3000}
-          autoRampDuration={0.6}
-          takeoverDuration={0.25}
-        />
-      </div>
-
       {/* ── Sidebar ───────────────────────────────────────────── */}
       <aside className="sidebar">
         <div className="sidebar-logo">
@@ -185,22 +172,19 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief, theme,
             <span className="greeting-sub">what's on your mind?</span>
           </div>
 
-          {/* Categories */}
+          {/* Quick starts */}
           <div className="form-section">
-            <h3 className="form-section-label">Start with a category</h3>
-            <div className="category-row">
-              {CATEGORIES.map(cat => (
-                <div
-                  key={cat.id}
-                  className={`category-card-h${category === cat.id ? ' active' : ''}`}
-                  onClick={() => pickCategory(cat.id)}
-                  style={{ '--cat-color': cat.color }}
+            <h3 className="form-section-label">Quick start prompts</h3>
+            <div className="quick-start-row">
+              {QUICK_START_PROMPTS.map(item => (
+                <button
+                  key={item.id}
+                  className={`quick-start-chip${quickStart === item.id ? ' active' : ''}`}
+                  onClick={() => pickQuickStart(item)}
+                  type="button"
                 >
-                  {category === cat.id && <span className="cat-check">✓</span>}
-                  <span className="cat-icon" style={{ color: cat.color }}>{cat.icon}</span>
-                  <span className="cat-label">{cat.label}</span>
-                  <span className="cat-desc">{cat.desc}</span>
-                </div>
+                  {item.label}
+                </button>
               ))}
             </div>
           </div>
@@ -261,6 +245,33 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief, theme,
                         <span className="ratio-dropdown-label">{r.label}</span>
                         <span className="ratio-dropdown-sub">{r.sub}</span>
                         {ratio === r.id && (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginLeft:'auto'}}>
+                            <path d="M2 6l3 3 5-5" stroke="#7C5CFC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="resolution-dropdown" ref={resolutionRef}>
+                <button className="resolution-pill" type="button" onClick={() => setResolutionOpen(o => !o)}>
+                  Resolution
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  </svg>
+                </button>
+                {resolutionOpen && (
+                  <div className="resolution-dropdown-menu">
+                    {RESOLUTIONS.map(option => (
+                      <button
+                        key={option}
+                        type="button"
+                        className={`resolution-dropdown-item${resolution === option ? ' active' : ''}`}
+                        onClick={() => { setResolution(option); setResolutionOpen(false) }}
+                      >
+                        <span>{option}</span>
+                        {resolution === option && (
                           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginLeft:'auto'}}>
                             <path d="M2 6l3 3 5-5" stroke="#7C5CFC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>

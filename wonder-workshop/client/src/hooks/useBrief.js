@@ -6,6 +6,12 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
 {
   "title": "<Brand — Campaign type>",
   "meta": "<format> · <n> shots · <aspect ratio>",
+  "projectInfo": {
+    "projectName": "<project name>",
+    "jobNumber": "<job number if provided, otherwise empty string>",
+    "clientName": "<client name>",
+    "brandCampaignName": "<brand or campaign name>"
+  },
   "creativeDirection": {
     "brand": "<brand>",
     "format": "<e.g. 16:9>",
@@ -99,6 +105,11 @@ function mergeBrandResearch(brief, brandResearch) {
 
   return {
     ...brief,
+    projectInfo: {
+      ...brief.projectInfo,
+      clientName: brief.projectInfo?.clientName || brandResearch.brand,
+      brandCampaignName: brief.projectInfo?.brandCampaignName || brandResearch.brand,
+    },
     creativeDirection: {
       ...brief.creativeDirection,
       brand: brief.creativeDirection?.brand || brandResearch.brand,
@@ -149,7 +160,19 @@ export async function generateBrief(userPrompt) {
   if (!jsonMatch) throw new Error('Model did not return valid JSON')
 
   const repaired = jsonrepair(jsonMatch[0])
-  return mergeBrandResearch({ ...JSON.parse(repaired), originalPrompt: userPrompt }, brandResearch)
+  const parsed = JSON.parse(repaired)
+  const projectInfo = parsed.projectInfo || {}
+
+  return mergeBrandResearch({
+    ...parsed,
+    projectInfo: {
+      projectName: projectInfo.projectName || parsed.title || '',
+      jobNumber: projectInfo.jobNumber || '',
+      clientName: projectInfo.clientName || parsed.creativeDirection?.brand || '',
+      brandCampaignName: projectInfo.brandCampaignName || parsed.creativeDirection?.brand || '',
+    },
+    originalPrompt: userPrompt,
+  }, brandResearch)
 }
 
 export async function streamChat(messages, onToken, signal) {

@@ -28,7 +28,8 @@ const ROWS = [
 export default function Board({ brief: initialBrief, onBack, theme, toggleTheme }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
-const [toast, setToast] = useState(null)
+  const [activeImageTarget, setActiveImageTarget] = useState(null)
+  const [toast, setToast] = useState(null)
   const rowRefs = useRef({})
   const toastTimer = useRef(null)
 
@@ -40,6 +41,18 @@ const [toast, setToast] = useState(null)
     }
     window.addEventListener('ww-toast', onToast)
     return () => window.removeEventListener('ww-toast', onToast)
+  }, [])
+
+  useEffect(() => {
+    function onActiveImage(e) {
+      const target = e.detail
+      if (!target?.label) return
+      setActiveImageTarget(target)
+      const match = ROWS.flat().find(section => section.title === target.sectionTitle)
+      if (match) setActiveId(match.id)
+    }
+    window.addEventListener('ww-active-image-target', onActiveImage)
+    return () => window.removeEventListener('ww-active-image-target', onActiveImage)
   }, [])
 
   function update(path, value) {
@@ -59,6 +72,9 @@ const [toast, setToast] = useState(null)
   }
 
   const activeTitle = ROWS.flat().find(s => s.id === activeId)?.title ?? 'Brief'
+  const activeChatTitle = activeImageTarget?.sectionTitle
+    ? `${activeImageTarget.sectionTitle} / ${activeImageTarget.label}`
+    : activeTitle
   const activeRowIdx = ROWS.findIndex(row => row.some(s => s.id === activeId))
 
   function renderContent(id) {
@@ -122,6 +138,23 @@ const [toast, setToast] = useState(null)
       <div className="board-body">
         <div className="board-content">
           <div className="board-scroll">
+            <div className="project-info-panel">
+              {[
+                ['projectName', 'Project Name'],
+                ['jobNumber', 'Job Number'],
+                ['clientName', 'Client Name'],
+                ['brandCampaignName', 'Brand / Campaign Name'],
+              ].map(([key, label]) => (
+                <label className="project-info-field" key={key}>
+                  <span>{label}</span>
+                  <input
+                    value={brief.projectInfo?.[key] || ''}
+                    onChange={e => update(`projectInfo.${key}`, e.target.value)}
+                    placeholder={label}
+                  />
+                </label>
+              ))}
+            </div>
             <div className="board-cards">
               {ROWS.map((row, ri) => (
                 <div
@@ -135,7 +168,7 @@ const [toast, setToast] = useState(null)
                       num={sec.num}
                       name={sec.title}
                       active={activeId === sec.id}
-                      onClick={() => setActiveId(sec.id)}
+                      onClick={() => { setActiveId(sec.id); setActiveImageTarget(null) }}
                     >
                       {renderContent(sec.id)}
                     </SectionCard>
@@ -156,7 +189,7 @@ const [toast, setToast] = useState(null)
           </div>
         </div>
 
-        <AgentPanel activeSection={activeTitle} brief={brief} />
+        <AgentPanel activeSection={activeChatTitle} activeImageTarget={activeImageTarget} brief={brief} />
       </div>
     </div>
   )
