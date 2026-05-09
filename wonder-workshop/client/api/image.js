@@ -1,19 +1,14 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { prompt, width = 896, height = 512 } = req.body
+  const { prompt, width = 896, height = 512 } = req.body || {}
+  if (!prompt) return res.status(400).json({ error: 'Prompt required' })
 
-  try {
-    const encoded = encodeURIComponent(prompt)
-    const url = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&nologo=true&enhance=true&seed=${Date.now()}`
-
-    const imgRes = await fetch(url)
-    if (!imgRes.ok) return res.status(imgRes.status).json({ error: 'Image generation failed' })
-
-    const buffer = await imgRes.arrayBuffer()
-    const base64 = Buffer.from(buffer).toString('base64')
-    res.json({ image: `data:image/jpeg;base64,${base64}` })
-  } catch (err) {
-    res.status(503).json({ error: err.message })
-  }
+  // Pollinations.ai takes 60–90s for a non-trivial prompt, which is past
+  // Vercel's serverless function limit (10s Hobby / 60s Pro). Returning the
+  // URL instead of fetching + base64-wrapping it lets the function exit
+  // immediately and shifts the long load to the browser, which has no
+  // timeout. The client treats data.image as <img src> either way.
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=true&seed=${Date.now()}`
+  res.json({ image: url })
 }
