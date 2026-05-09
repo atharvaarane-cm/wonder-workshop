@@ -232,12 +232,25 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
                 </svg>
               </button>
               <div className="ratio-dropdown" ref={ratioRef}>
-                <button className="ratio-pill" onClick={() => setRatioOpen(o => !o)}>
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-                    <path d="M1.5 6h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                  </svg>
-                  Aspect Ratio
+                <button className="ratio-pill" onClick={() => setRatioOpen(o => !o)} title="Aspect Ratio">
+                  {(() => {
+                    const active = RATIOS.find(r => r.id === ratio) || RATIOS[0]
+                    return (
+                      <span
+                        className="ratio-pill-icon"
+                        style={{
+                          width: active.w * 0.42,
+                          height: active.h * 0.42,
+                          border: '1.3px solid currentColor',
+                          borderRadius: 2,
+                          display: 'inline-block',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )
+                  })()}
+                  <span className="ratio-pill-label">Aspect Ratio</span>
+                  <span className="ratio-pill-value">{ratio}</span>
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                     <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                   </svg>
@@ -271,8 +284,9 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
                 )}
               </div>
               <div className="resolution-dropdown" ref={resolutionRef}>
-                <button className="resolution-pill" type="button" onClick={() => setResolutionOpen(o => !o)}>
-                  Resolution
+                <button className="resolution-pill" type="button" onClick={() => setResolutionOpen(o => !o)} title="Resolution">
+                  <span className="resolution-pill-label">Resolution</span>
+                  <span className="resolution-pill-value">{resolution}</span>
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                     <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                   </svg>
