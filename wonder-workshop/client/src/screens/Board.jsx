@@ -27,13 +27,23 @@ const ROWS = [
 
 const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'lm', 'mb', 'loc', 'cr', 'cp', 'ch', 'chu', 'sl'])
 
-export default function Board({ brief: initialBrief, onBack, theme, toggleTheme }) {
+export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
   const [activeImageTarget, setActiveImageTarget] = useState(null)
   const [toast, setToast] = useState(null)
   const rowRefs = useRef({})
   const toastTimer = useRef(null)
+  const saveBriefRef = useRef(onSaveBrief)
+  saveBriefRef.current = onSaveBrief
+  const isInitialBrief = useRef(true)
+
+  // Debounced auto-save of brief edits.
+  useEffect(() => {
+    if (isInitialBrief.current) { isInitialBrief.current = false; return }
+    const t = setTimeout(() => saveBriefRef.current?.(brief), 400)
+    return () => clearTimeout(t)
+  }, [brief])
 
   useEffect(() => {
     function onToast(e) {

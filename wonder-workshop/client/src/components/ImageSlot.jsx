@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { ProjectContext } from '../hooks/useProject.js'
 
 function toast(msg, type = 'success') {
   window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg, type } }))
 }
 
 export default function ImageSlot({ label, prompt, style, className }) {
-  const [versions, setVersions] = useState([])
-  const [activeVersion, setActiveVersion] = useState(0)
+  const project = useContext(ProjectContext)
+  const slotKey = prompt || null
+  const initial = slotKey && project?.images?.[slotKey]
+
+  const [versions, setVersions] = useState(() => initial?.versions || [])
+  const [activeVersion, setActiveVersion] = useState(() => initial?.activeVersion ?? 0)
   const [editablePrompt, setEditablePrompt] = useState(prompt || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -18,6 +23,26 @@ export default function ImageSlot({ label, prompt, style, className }) {
   useEffect(() => {
     if (!versions.length) setEditablePrompt(prompt || '')
   }, [prompt, versions.length])
+
+  // Re-hydrate when the active project changes (e.g. user opened a different
+  // project from the sidebar without unmounting).
+  useEffect(() => {
+    if (!slotKey || !project?.images) return
+    const saved = project.images[slotKey]
+    setVersions(saved?.versions || [])
+    setActiveVersion(saved?.activeVersion ?? 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id])
+
+  // Persist generated versions to the project store. Uploaded blob URLs
+  // would not survive a refresh, so they're filtered out.
+  useEffect(() => {
+    if (!slotKey || !project?.saveImage) return
+    const persistable = versions.filter(v => v.source !== 'upload')
+    if (!persistable.length && !project.images?.[slotKey]) return
+    project.saveImage(slotKey, { versions: persistable, activeVersion })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versions, activeVersion])
 
   function handleFile(e) {
     const file = e.target.files[0]
