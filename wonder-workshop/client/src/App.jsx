@@ -1,13 +1,21 @@
 import { useState, useEffect } from 'react'
 import Discover from './screens/Discover.jsx'
 import Board from './screens/Board.jsx'
+import {
+  ProjectContext,
+  listProjects,
+  createProject,
+  deleteProject as removeProject,
+  getActiveProject,
+  setActiveProject,
+  updateProjectBrief,
+  saveImageForProject,
+} from './hooks/useProject.js'
 
 export default function App() {
-  const [brief, setBrief] = useState(null)
+  const [project, setProject] = useState(() => getActiveProject())
+  const [projects, setProjects] = useState(() => listProjects())
   const [theme, setTheme] = useState(() => localStorage.getItem('ww_theme') || 'light')
-  const [recents, setRecents] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('ww_recents') || '[]') } catch { return [] }
-  })
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -18,30 +26,73 @@ export default function App() {
     setTheme(t => t === 'light' ? 'dark' : 'light')
   }
 
-  function handleGenerate(b) {
-    const entry = {
-      id: Date.now(),
-      brief: b,
-      name: b.title ?? `${b.creativeDirection?.brand ?? 'Brief'}`,
-      format: b.creativeDirection?.format ?? '16:9',
-      shots: b.creativeDirection?.shots ?? b.shotList?.length ?? 0,
-      duration: b.creativeDirection?.duration ?? '30s',
-      brand: b.creativeDirection?.brand ?? '',
-    }
-    const updated = [entry, ...recents].slice(0, 8)
-    setRecents(updated)
-    localStorage.setItem('ww_recents', JSON.stringify(updated))
-    setBrief(b)
+  function refreshList() { setProjects(listProjects()) }
+
+  function handleGenerate(brief) {
+    const p = createProject(brief)
+    setProject(p)
+    refreshList()
   }
 
-  if (brief) return <Board brief={brief} onBack={() => setBrief(null)} theme={theme} toggleTheme={toggleTheme} />
+  function handleOpenProject(p) {
+    setActiveProject(p.id)
+    setProject(p)
+  }
+
+  function handleBack() {
+    setActiveProject(null)
+    setProject(null)
+    refreshList()
+  }
+
+  function handleDeleteProject(id) {
+    removeProject(id)
+    if (project?.id === id) setProject(null)
+    refreshList()
+  }
+
+  function handleSaveBrief(nextBrief) {
+    if (!project) return
+    const updated = updateProjectBrief(project.id, nextBrief)
+    if (updated) {
+      setProject(updated)
+      refreshList()
+    }
+  }
+
+  function handleSaveImage(slotKey, data) {
+    if (!project) return
+    const updated = saveImageForProject(project.id, slotKey, data)
+    if (updated) {
+      setProject(updated)
+      refreshList()
+    }
+  }
+
+  if (project) {
+    return (
+      <ProjectContext.Provider value={{
+        id: project.id,
+        images: project.images || {},
+        saveImage: handleSaveImage,
+      }}>
+        <Board
+          brief={project.brief}
+          onBack={handleBack}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          onSaveBrief={handleSaveBrief}
+        />
+      </ProjectContext.Provider>
+    )
+  }
 
   return (
     <Discover
       onGenerate={handleGenerate}
-      recents={recents}
-      onOpenBrief={b => setBrief(b)}
-      latestBrief={recents[0]?.brief ?? null}
+      projects={projects}
+      onOpenProject={handleOpenProject}
+      onDeleteProject={handleDeleteProject}
       theme={theme}
       toggleTheme={toggleTheme}
     />
