@@ -82,7 +82,14 @@ export default function Discover({ onGenerate, recents = [], onOpenBrief, theme,
     try {
       const full = `${text} (aspect ratio: ${ratio}) (resolution: ${resolution})${quickStart ? ` (quick start: ${quickStart})` : ''}`
       const brief = await generateBrief(full)
-      onGenerate(brief)
+      onGenerate({
+        ...brief,
+        generationSettings: {
+          ...(brief.generationSettings || {}),
+          ratio,
+          resolution,
+        },
+      })
     } catch (e) {
       setError(e.message)
       setLoading(false)

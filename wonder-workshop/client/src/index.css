@@ -638,6 +638,13 @@ textarea { font-family: var(--font); resize: none; }
 .status-dot.green { background: var(--green); }
 .status-dot.amber { background: var(--amber); }
 .status-dot.gray  { background: rgba(0,0,0,0.15); }
+.section-resolution-badge {
+  height: 20px; display: flex; align-items: center; justify-content: center;
+  padding: 0 7px; border-radius: 999px;
+  background: rgba(45,154,78,0.1); border: 1px solid rgba(45,154,78,0.22);
+  color: var(--green); font-size: 10px; font-weight: 800; letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
 .section-body { padding: 18px; min-height: 80px; }
 
 /* ── Shimmer skeleton ──────────────────────────────────────────── */
@@ -1067,6 +1074,11 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .section-header { border-color: rgba(255,255,255,0.07); }
 [data-theme="dark"] .section-num { background: rgba(255,255,255,0.08); color: #E8E8E8; }
 [data-theme="dark"] .section-name { color: #E8E8E8; }
+[data-theme="dark"] .section-resolution-badge {
+  background: rgba(45,154,78,0.16);
+  border-color: rgba(45,154,78,0.3);
+  color: #5BCB7A;
+}
 [data-theme="dark"] .section-collapse-btn { border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.45); }
 [data-theme="dark"] .section-collapse-btn:hover { background: rgba(255,255,255,0.07); color: #E8E8E8; }
 [data-theme="dark"] .skeleton-line { background: linear-gradient(90deg,#2a2a2a 25%,#333 50%,#2a2a2a 75%); background-size: 600px 100%; }

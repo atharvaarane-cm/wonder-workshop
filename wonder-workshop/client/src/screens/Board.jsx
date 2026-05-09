@@ -25,6 +25,8 @@ const ROWS = [
   [{ id: 'sl',  num: '10', title: 'Shot List' }],
 ]
 
+const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'lm', 'mb', 'loc', 'cr', 'cp', 'ch', 'chu', 'sl'])
+
 export default function Board({ brief: initialBrief, onBack, theme, toggleTheme }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
@@ -76,6 +78,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme 
     ? `${activeImageTarget.sectionTitle} / ${activeImageTarget.label}`
     : activeTitle
   const activeRowIdx = ROWS.findIndex(row => row.some(s => s.id === activeId))
+  const imageResolution = brief.generationSettings?.resolution || '1K'
 
   function renderContent(id) {
     switch (id) {
@@ -168,6 +171,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme 
                       num={sec.num}
                       name={sec.title}
                       active={activeId === sec.id}
+                      imageResolution={IMAGE_SECTION_IDS.has(sec.id) ? imageResolution : null}
                       onClick={() => { setActiveId(sec.id); setActiveImageTarget(null) }}
                     >
                       {renderContent(sec.id)}
