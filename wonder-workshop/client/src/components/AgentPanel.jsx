@@ -90,6 +90,17 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief }) 
 
   return (
     <aside className="agent-panel">
+      {/* Active section / image header */}
+      <div className="panel-active-header" key={activeSection}>
+        <div className="panel-active-label">Talking about</div>
+        <div className="panel-active-section">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>{activeSection}</span>
+        </div>
+      </div>
+
       {/* Messages */}
       <div className="panel-messages" ref={messagesRef}>
         {messages.map((m, i) => (
@@ -117,12 +128,6 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief }) 
             Edit
             <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
           </button>
-          <div className="panel-section-label" key={activeSection} title={activeSection}>
-            <span>{activeSection}</span>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
-          </div>
           <button className="panel-mic-btn">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <rect x="5.5" y="1" width="5" height="8" rx="2.5" stroke="currentColor" strokeWidth="1.4"/>

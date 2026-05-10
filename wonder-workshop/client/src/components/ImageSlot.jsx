@@ -17,8 +17,32 @@ export default function ImageSlot({ label, prompt, style, className }) {
   const [error, setError] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [editingPrompt, setEditingPrompt] = useState(false)
+  const [isActive, setIsActive] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const inputRef = useRef()
+  const slotRef = useRef()
   const activeImage = versions[activeVersion] || null
+
+  // Reflect agent-panel selection: outline whichever slot the chat is targeting.
+  useEffect(() => {
+    function onTarget(e) {
+      setIsActive(!!e.detail?.prompt && e.detail.prompt === editablePrompt)
+    }
+    window.addEventListener('ww-active-image-target', onTarget)
+    return () => window.removeEventListener('ww-active-image-target', onTarget)
+  }, [editablePrompt])
+
+  // Lightbox: lock body scroll + Esc to close.
+  useEffect(() => {
+    if (!lightboxOpen) return
+    function onKey(e) { if (e.key === 'Escape') setLightboxOpen(false) }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [lightboxOpen])
 
   useEffect(() => {
     if (!versions.length) setEditablePrompt(prompt || '')
@@ -117,22 +141,52 @@ export default function ImageSlot({ label, prompt, style, className }) {
   }
 
   function activateChatTarget(e) {
-    const sectionTitle = e.currentTarget.closest('[data-section-title]')?.dataset.sectionTitle || ''
+    const sectionEl = e.currentTarget.closest('[data-section-title]')
+    const sectionTitle = sectionEl?.dataset.sectionTitle || ''
+    let slotNumber = 1
+    if (sectionEl) {
+      const peers = Array.from(sectionEl.querySelectorAll('.img-slot'))
+      const idx = peers.indexOf(e.currentTarget)
+      if (idx >= 0) slotNumber = idx + 1
+    }
     window.dispatchEvent(new CustomEvent('ww-active-image-target', {
       detail: {
-        label: label || 'Image',
+        label: label || `Image ${slotNumber}`,
         prompt: editablePrompt,
         sectionTitle,
+        slotNumber,
       },
     }))
   }
 
+  function openLightbox(e) {
+    e?.stopPropagation()
+    setLightboxOpen(true)
+  }
+
   return (
-    <div className={`img-slot ${className || ''}`} style={style} onMouseDownCapture={activateChatTarget}>
+    <>
+    <div ref={slotRef} className={`img-slot${isActive ? ' active' : ''} ${className || ''}`} style={style} onMouseDownCapture={activateChatTarget}>
       {activeImage
         ? <>
-            <img src={activeImage.src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <img
+              src={activeImage.src}
+              alt={label}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }}
+              onClick={openLightbox}
+            />
             <div className="img-version-badge">{activeVersion + 1} of {versions.length}</div>
+            <button
+              className="img-magnify-btn"
+              title="View larger"
+              onClick={openLightbox}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.6"/>
+                <path d="M10.5 10.5l3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                <path d="M7 5v4M5 7h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </button>
             <div className="img-slot-overlay">
               <button className="img-slot-action" onClick={generate} disabled={loading}>{loading ? '…' : 'Refresh'}</button>
               <button className="img-slot-action" onClick={e => { e.stopPropagation(); setEditingPrompt(v => !v) }}>Edit Prompt</button>
@@ -193,5 +247,29 @@ export default function ImageSlot({ label, prompt, style, className }) {
       }
       <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
     </div>
+
+    {lightboxOpen && activeImage && (
+      <div className="img-lightbox" onClick={() => setLightboxOpen(false)}>
+        <div className="img-lightbox-content" onClick={e => e.stopPropagation()}>
+          <img src={activeImage.src} alt={label} />
+          {(label || activeImage.prompt) && (
+            <div className="img-lightbox-caption">
+              {label && <strong>{label}</strong>}
+              {activeImage.prompt && <span>{activeImage.prompt}</span>}
+            </div>
+          )}
+        </div>
+        <button
+          className="img-lightbox-close-btn"
+          onClick={() => setLightboxOpen(false)}
+          title="Close (Esc)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+    )}
+    </>
   )
 }
