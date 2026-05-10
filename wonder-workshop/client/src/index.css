@@ -1072,10 +1072,31 @@ textarea { font-family: var(--font); resize: none; }
 }
 .img-version-badge {
   position: absolute; top: 8px; left: 8px; z-index: 2;
-  padding: 3px 8px; border-radius: 999px;
+  padding: 2px 4px; border-radius: 999px;
   background: rgba(0,0,0,0.62); color: #fff;
   font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
   backdrop-filter: blur(6px);
+  display: flex; align-items: center; gap: 2px;
+}
+.img-version-badge span { padding: 0 4px; }
+.img-version-arrow {
+  width: 18px; height: 18px; border-radius: 999px;
+  border: none; background: rgba(255,255,255,0.1); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 0;
+  transition: background 0.12s;
+}
+.img-version-arrow:hover { background: rgba(255,255,255,0.28); }
+
+/* Drop-target visual feedback while another slot's version is dragged over */
+.img-slot.drop-target {
+  border-style: solid;
+  border-color: #2D9A4E;
+  box-shadow: 0 0 0 3px rgba(45,154,78,0.25), inset 0 0 0 9999px rgba(45,154,78,0.06);
+}
+[data-theme="dark"] .img-slot.drop-target {
+  border-color: #5BCB7A;
+  box-shadow: 0 0 0 3px rgba(91,203,122,0.3), inset 0 0 0 9999px rgba(91,203,122,0.07);
 }
 .img-prompt-editor {
   position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3;
