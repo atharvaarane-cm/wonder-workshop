@@ -37,7 +37,7 @@ app.post('/api/image', (req, res) => {
   const { prompt, width = 896, height = 512 } = req.body || {};
   if (!prompt) { res.status(400).json({ error: 'Prompt required' }); return; }
 
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=true&seed=${Date.now()}`;
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=false&seed=${Date.now()}`;
   res.json({ image: url });
 });
 

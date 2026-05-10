@@ -9,6 +9,12 @@ export default async function handler(req, res) {
   // URL instead of fetching + base64-wrapping it lets the function exit
   // immediately and shifts the long load to the browser, which has no
   // timeout. The client treats data.image as <img src> either way.
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=true&seed=${Date.now()}`
+  //
+  // enhance=false is intentional: with enhance=true Pollinations runs the
+  // prompt through its own enhancer LLM, which paraphrases the prompt and
+  // often drops user-specific details. Our brief prompts are already detailed
+  // (and users editing per-image prompts expect literal adherence), so we
+  // skip the enhancer.
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=false&seed=${Date.now()}`
   res.json({ image: url })
 }
