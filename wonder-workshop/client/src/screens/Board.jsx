@@ -182,7 +182,11 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       name={sec.title}
                       active={activeId === sec.id}
                       imageResolution={IMAGE_SECTION_IDS.has(sec.id) ? imageResolution : null}
-                      onClick={() => { setActiveId(sec.id); setActiveImageTarget(null) }}
+                      onClick={() => {
+                        setActiveId(sec.id)
+                        setActiveImageTarget(null)
+                        window.dispatchEvent(new CustomEvent('ww-active-image-target', { detail: null }))
+                      }}
                     >
                       {renderContent(sec.id)}
                     </SectionCard>
