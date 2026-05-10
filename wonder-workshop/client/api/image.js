@@ -9,6 +9,6 @@ export default async function handler(req, res) {
   // URL instead of fetching + base64-wrapping it lets the function exit
   // immediately and shifts the long load to the browser, which has no
   // timeout. The client treats data.image as <img src> either way.
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=true&seed=${Date.now()}`
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=false&seed=${Date.now()}`
   res.json({ image: url })
 }
