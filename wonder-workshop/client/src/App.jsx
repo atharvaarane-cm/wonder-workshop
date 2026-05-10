@@ -10,6 +10,7 @@ import {
   setActiveProject,
   updateProjectBrief,
   saveImageForProject,
+  moveImageBetweenSlots,
 } from './hooks/useProject.js'
 
 export default function App() {
@@ -69,12 +70,22 @@ export default function App() {
     }
   }
 
+  function handleMoveImage(fromSlotKey, toSlotKey, version) {
+    if (!project) return
+    const updated = moveImageBetweenSlots(project.id, fromSlotKey, toSlotKey, version)
+    if (updated) {
+      setProject(updated)
+      refreshList()
+    }
+  }
+
   if (project) {
     return (
       <ProjectContext.Provider value={{
         id: project.id,
         images: project.images || {},
         saveImage: handleSaveImage,
+        moveImage: handleMoveImage,
       }}>
         <Board
           brief={project.brief}

@@ -19,6 +19,7 @@ export default function ImageSlot({ label, prompt, style, className }) {
   const [editingPrompt, setEditingPrompt] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [dropActive, setDropActive] = useState(false)
   const inputRef = useRef()
   const slotRef = useRef()
   const activeImage = versions[activeVersion] || null
@@ -48,15 +49,26 @@ export default function ImageSlot({ label, prompt, style, className }) {
     if (!versions.length) setEditablePrompt(prompt || '')
   }, [prompt, versions.length])
 
-  // Re-hydrate when the active project changes (e.g. user opened a different
-  // project from the sidebar without unmounting).
+  // Re-hydrate when this slot's saved data changes externally — e.g. when
+  // the user opens a different project, or when another slot dragged a
+  // version *into* this slot. We compare structurally to avoid the loop
+  // between this effect and the save-on-change effect below: if our local
+  // state already matches what's in the store, do nothing.
   useEffect(() => {
     if (!slotKey || !project?.images) return
     const saved = project.images[slotKey]
-    setVersions(saved?.versions || [])
-    setActiveVersion(saved?.activeVersion ?? 0)
+    const savedVersions = saved?.versions || []
+    const savedActive = saved?.activeVersion ?? 0
+    const sameLength = savedVersions.length === versions.length
+    const sameOrder = sameLength && savedVersions.every((v, i) =>
+      v.src === versions[i]?.src && v.createdAt === versions[i]?.createdAt,
+    )
+    const sameActive = savedActive === activeVersion
+    if (sameOrder && sameActive) return
+    setVersions(savedVersions)
+    setActiveVersion(savedActive)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id])
+  }, [project?.id, project?.images?.[slotKey]])
 
   // Persist generated versions to the project store. Uploaded blob URLs
   // would not survive a refresh, so they're filtered out.
@@ -164,9 +176,54 @@ export default function ImageSlot({ label, prompt, style, className }) {
     setLightboxOpen(true)
   }
 
+  function prevVersion(e) {
+    e?.stopPropagation()
+    if (versions.length < 2) return
+    setActiveVersion(v => (v - 1 + versions.length) % versions.length)
+  }
+  function nextVersion(e) {
+    e?.stopPropagation()
+    if (versions.length < 2) return
+    setActiveVersion(v => (v + 1) % versions.length)
+  }
+
+  // Drag the currently-active version onto another slot to move it there.
+  function onImgDragStart(e) {
+    if (!activeImage || !slotKey) return
+    const payload = { fromSlotKey: slotKey, version: activeImage }
+    e.dataTransfer.setData('application/x-ww-version', JSON.stringify(payload))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  function onSlotDragOver(e) {
+    if (!e.dataTransfer.types.includes('application/x-ww-version')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropActive(true)
+  }
+  function onSlotDragLeave() { setDropActive(false) }
+  function onSlotDrop(e) {
+    setDropActive(false)
+    const raw = e.dataTransfer.getData('application/x-ww-version')
+    if (!raw || !slotKey) return
+    e.preventDefault()
+    let payload
+    try { payload = JSON.parse(raw) } catch { return }
+    if (!payload?.version || !payload.fromSlotKey || payload.fromSlotKey === slotKey) return
+    project?.moveImage?.(payload.fromSlotKey, slotKey, payload.version)
+    toast('Image moved')
+  }
+
   return (
     <>
-    <div ref={slotRef} className={`img-slot${isActive ? ' active' : ''} ${className || ''}`} style={style} onMouseDownCapture={activateChatTarget}>
+    <div
+      ref={slotRef}
+      className={`img-slot${isActive ? ' active' : ''}${dropActive ? ' drop-target' : ''} ${className || ''}`}
+      style={style}
+      onMouseDownCapture={activateChatTarget}
+      onDragOver={onSlotDragOver}
+      onDragLeave={onSlotDragLeave}
+      onDrop={onSlotDrop}
+    >
       {activeImage
         ? <>
             <img
@@ -174,8 +231,36 @@ export default function ImageSlot({ label, prompt, style, className }) {
               alt={label}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }}
               onClick={openLightbox}
+              draggable={!!slotKey}
+              onDragStart={onImgDragStart}
             />
-            <div className="img-version-badge">{activeVersion + 1} of {versions.length}</div>
+            <div className="img-version-badge">
+              {versions.length > 1 && (
+                <button
+                  className="img-version-arrow"
+                  onClick={prevVersion}
+                  title="Previous version"
+                  aria-label="Previous version"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M6.5 2L3 5l3.5 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              )}
+              <span>{activeVersion + 1} of {versions.length}</span>
+              {versions.length > 1 && (
+                <button
+                  className="img-version-arrow"
+                  onClick={nextVersion}
+                  title="Next version"
+                  aria-label="Next version"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M3.5 2L7 5l-3.5 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              )}
+            </div>
             <button
               className="img-magnify-btn"
               title="View larger"

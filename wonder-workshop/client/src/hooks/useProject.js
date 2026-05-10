@@ -110,4 +110,39 @@ export function saveImageForProject(id, slotKey, data) {
   return all[id]
 }
 
+// Move a generated version from one slot to another. The version is removed
+// from the source slot's versions array and appended to the target slot's,
+// becoming the target's new active version. Versions are identified by
+// (src + createdAt) so duplicates with the same prompt are handled correctly.
+export function moveImageBetweenSlots(id, fromSlotKey, toSlotKey, version) {
+  if (fromSlotKey === toSlotKey) return null
+  const all = loadAll()
+  const project = all[id]
+  if (!project) return null
+  const images = { ...(project.images || {}) }
+
+  const fromEntry = images[fromSlotKey]
+  if (fromEntry?.versions?.length) {
+    const idx = fromEntry.versions.findIndex(
+      v => v.src === version.src && v.createdAt === version.createdAt,
+    )
+    if (idx >= 0) {
+      const nextVersions = fromEntry.versions.filter((_, i) => i !== idx)
+      const nextActive = Math.max(0, Math.min(fromEntry.activeVersion ?? 0, nextVersions.length - 1))
+      images[fromSlotKey] = { versions: nextVersions, activeVersion: nextActive }
+    }
+  }
+
+  const toEntry = images[toSlotKey] || { versions: [], activeVersion: 0 }
+  const nextToVersions = [...(toEntry.versions || []), version]
+  images[toSlotKey] = {
+    versions: nextToVersions,
+    activeVersion: nextToVersions.length - 1,
+  }
+
+  all[id] = { ...project, images, updatedAt: Date.now() }
+  saveAll(all)
+  return all[id]
+}
+
 export const ProjectContext = createContext(null)
