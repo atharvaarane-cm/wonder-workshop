@@ -31,6 +31,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
   const [activeImageTarget, setActiveImageTarget] = useState(null)
+  const [loadingBySection, setLoadingBySection] = useState({})
   const [toast, setToast] = useState(null)
   const rowRefs = useRef({})
   const toastTimer = useRef(null)
@@ -65,6 +66,21 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     }
     window.addEventListener('ww-active-image-target', onActiveImage)
     return () => window.removeEventListener('ww-active-image-target', onActiveImage)
+  }, [])
+
+  // Track how many ImageSlots in each section are currently generating, so
+  // section cards can flip their status dot to amber while work is in flight.
+  useEffect(() => {
+    function onLoadingChange(e) {
+      const { sectionTitle, delta } = e.detail || {}
+      if (!sectionTitle || !delta) return
+      setLoadingBySection(prev => {
+        const next = Math.max(0, (prev[sectionTitle] || 0) + delta)
+        return { ...prev, [sectionTitle]: next }
+      })
+    }
+    window.addEventListener('ww-loading-change', onLoadingChange)
+    return () => window.removeEventListener('ww-loading-change', onLoadingChange)
   }, [])
 
   function update(path, value) {
@@ -182,6 +198,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       name={sec.title}
                       active={activeId === sec.id}
                       imageResolution={IMAGE_SECTION_IDS.has(sec.id) ? imageResolution : null}
+                      imageLoading={(loadingBySection[sec.title] || 0) > 0}
                       onClick={() => {
                         setActiveId(sec.id)
                         setActiveImageTarget(null)

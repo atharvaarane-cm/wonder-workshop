@@ -10,8 +10,10 @@ function Skeleton() {
   )
 }
 
-export default function SectionCard({ num, name, loading, children, active, onClick, imageResolution }) {
+export default function SectionCard({ num, name, loading, children, active, onClick, imageResolution, imageLoading }) {
   const [collapsed, setCollapsed] = useState(false)
+
+  const dotState = loading || imageLoading ? 'amber' : 'green'
 
   return (
     <div
@@ -22,7 +24,7 @@ export default function SectionCard({ num, name, loading, children, active, onCl
       <div className="section-header">
         <div className="section-num">{num}</div>
         <div className="section-name">{name}</div>
-        <div className={`status-dot ${loading ? 'amber' : 'green'}`} />
+        <div className={`status-dot ${dotState}${imageLoading ? ' pulse' : ''}`} title={imageLoading ? 'Generating images…' : undefined} />
         {imageResolution && <div className="section-resolution-badge">{imageResolution}</div>}
         <button
           className={`section-collapse-btn${collapsed ? ' collapsed' : ''}`}

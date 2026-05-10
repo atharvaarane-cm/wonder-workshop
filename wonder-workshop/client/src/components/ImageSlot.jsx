@@ -45,6 +45,19 @@ export default function ImageSlot({ label, prompt, style, className }) {
     }
   }, [lightboxOpen])
 
+  // Notify Board so it can turn the section-card dot amber while any image
+  // in that section is generating. Cleanup decrements on unmount or when
+  // loading flips back to false.
+  useEffect(() => {
+    if (!loading) return
+    const sectionTitle = slotRef.current?.closest('[data-section-title]')?.dataset.sectionTitle
+    if (!sectionTitle) return
+    window.dispatchEvent(new CustomEvent('ww-loading-change', { detail: { sectionTitle, delta: 1 } }))
+    return () => {
+      window.dispatchEvent(new CustomEvent('ww-loading-change', { detail: { sectionTitle, delta: -1 } }))
+    }
+  }, [loading])
+
   useEffect(() => {
     if (!versions.length) setEditablePrompt(prompt || '')
   }, [prompt, versions.length])
@@ -296,9 +309,11 @@ export default function ImageSlot({ label, prompt, style, className }) {
             onClick={e => { e.stopPropagation(); if (!loading) setMenuOpen(o => !o) }}
           >
             {loading
-              ? <div className="img-slot-spinner">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" strokeDasharray="31.4" strokeDashoffset="10"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/></circle></svg>
-                  <span>Generating…</span>
+              ? <div className="img-slot-loading">
+                  <div className="loading-dots" aria-hidden="true">
+                    <span /><span /><span />
+                  </div>
+                  <span className="loading-label">Generating…</span>
                 </div>
               : menuOpen
                 ? <div className="img-slot-actions" onClick={e => e.stopPropagation()}>
