@@ -15,6 +15,7 @@ export default function Character({ data, update, mode = 'fullbody' }) {
           <div className="character-view" key={v}>
             <ImageSlot
               label={v}
+              view={v}
               prompt={`${base}, ${v.toLowerCase()} view, ${suffix}`}
               style={{ width: '100%', height: '100%', borderRadius: 10 }}
             />

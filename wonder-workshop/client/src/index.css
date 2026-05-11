@@ -1152,6 +1152,17 @@ textarea { font-family: var(--font); resize: none; }
 }
 .img-slot-broken-btn:hover { background: #7C5CFC; color: #fff; border-color: #7C5CFC; }
 
+/* View-pair chip: shows FRONT/3-4/SIDE in matching colors across CharRef
+   and Character sections so you can visually trace which slot corresponds
+   to which view. */
+.img-slot-view-chip {
+  position: absolute; bottom: 6px; left: 6px; z-index: 4;
+  padding: 2px 8px; border-radius: 999px;
+  color: #fff; font-size: 9px; font-weight: 900; letter-spacing: 0.1em;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  pointer-events: none;
+}
+
 /* Undo-delete banner that fades in at the bottom of the slot for 5s */
 .img-slot-undo {
   position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 5;
