@@ -88,10 +88,29 @@ export function deleteProject(id) {
 export function updateProjectBrief(id, brief) {
   const all = loadAll()
   if (!all[id]) return null
+  // Preserve a user-set name (any name that diverges from the brief-derived
+  // default) so brief edits don't overwrite a manual rename.
+  const derived = deriveName(brief)
+  const hasManualName = all[id].nameOverride === true
   all[id] = {
     ...all[id],
     brief,
-    name: deriveName(brief),
+    name: hasManualName ? all[id].name : derived,
+    updatedAt: Date.now(),
+  }
+  saveAll(all)
+  return all[id]
+}
+
+export function renameProject(id, name) {
+  const all = loadAll()
+  if (!all[id]) return null
+  const trimmed = (name || '').trim()
+  if (!trimmed) return all[id]
+  all[id] = {
+    ...all[id],
+    name: trimmed,
+    nameOverride: true,
     updatedAt: Date.now(),
   }
   saveAll(all)
