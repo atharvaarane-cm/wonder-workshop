@@ -146,7 +146,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
 
   function renderContent(id) {
     switch (id) {
-      case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} />
+      case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} onGoToShotList={() => scrollToRow(5)} />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'lm':  return <LightingMood data={brief.lightingMood} imagePrompts={brief.imagePrompts} updateMood={updateMood} />
       case 'mb':  return <MoodBoard data={brief.creativeDirection} />
