@@ -20,6 +20,7 @@ export default function ImageSlot({ label, prompt, style, className }) {
   const [isActive, setIsActive] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [dropActive, setDropActive] = useState(false)
+  const [brokenSrc, setBrokenSrc] = useState(null)
   const inputRef = useRef()
   const slotRef = useRef()
   const activeImage = versions[activeVersion] || null
@@ -118,35 +119,59 @@ export default function ImageSlot({ label, prompt, style, className }) {
     setLoading(true)
     setMenuOpen(false)
     setError(null)
+
+    // /api/image returns the Pollinations URL immediately (it doesn't fetch
+    // the image server-side). The actual generation happens when the browser
+    // requests that URL, which takes 60-90s. We need to preload the URL here
+    // — only declare success once the image truly loads, so we don't store
+    // dead URLs as versions and end the loading state before the work is done.
+    let res
     try {
-      const res = await fetch('/api/image', {
+      res = await fetch('/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text }),
       })
-      const data = await res.json()
-      if (data.image) {
-        const next = {
-          src: data.image,
-          prompt: text,
-          source: 'generated',
-          createdAt: new Date().toISOString(),
-        }
-        setVersions(prev => {
-          const updated = [...prev, next]
-          setActiveVersion(updated.length - 1)
-          return updated
-        })
-        setEditingPrompt(false)
-        toast(versions.length ? 'New image version created' : 'Image generated')
-      }
-      else { setError(data.error || 'Failed'); toast(data.error || 'Generation failed', 'error') }
     } catch {
-      setError('SD not running')
-      toast('Generation failed', 'error')
-    } finally {
+      setError('Generation failed')
       setLoading(false)
+      toast('Generation failed', 'error')
+      return
     }
+
+    const data = await res.json().catch(() => ({}))
+    if (!data.image) {
+      setError(data.error || 'Failed')
+      setLoading(false)
+      toast(data.error || 'Generation failed', 'error')
+      return
+    }
+
+    const url = data.image
+    const wasFirst = versions.length === 0
+    const probe = new Image()
+    probe.onload = () => {
+      const next = {
+        src: url,
+        prompt: text,
+        source: 'generated',
+        createdAt: new Date().toISOString(),
+      }
+      setVersions(prev => {
+        const updated = [...prev, next]
+        setActiveVersion(updated.length - 1)
+        return updated
+      })
+      setEditingPrompt(false)
+      setLoading(false)
+      toast(wasFirst ? 'Image generated' : 'New image version created')
+    }
+    probe.onerror = () => {
+      setError('Image generator unreachable')
+      setLoading(false)
+      toast('Generation failed', 'error')
+    }
+    probe.src = url
   }
 
   function deleteImage(e) {
@@ -242,11 +267,24 @@ export default function ImageSlot({ label, prompt, style, className }) {
             <img
               src={activeImage.src}
               alt={label}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }}
-              onClick={openLightbox}
-              draggable={!!slotKey}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: brokenSrc === activeImage.src ? 'default' : 'zoom-in' }}
+              onClick={brokenSrc === activeImage.src ? undefined : openLightbox}
+              onLoad={() => brokenSrc === activeImage.src && setBrokenSrc(null)}
+              onError={() => setBrokenSrc(activeImage.src)}
+              draggable={!!slotKey && brokenSrc !== activeImage.src}
               onDragStart={onImgDragStart}
             />
+            {brokenSrc === activeImage.src && (
+              <div className="img-slot-broken" onClick={e => e.stopPropagation()}>
+                <div className="img-slot-broken-label">This image didn’t load</div>
+                <button
+                  className="img-slot-broken-btn"
+                  onClick={e => { e.stopPropagation(); deleteImage(e); generate() }}
+                >
+                  ✦ Regenerate
+                </button>
+              </div>
+            )}
             <div className="img-version-badge">
               {versions.length > 1 && (
                 <button
