@@ -34,17 +34,21 @@ export default function ImageSlot({ label, prompt, style, className }) {
     return () => window.removeEventListener('ww-active-image-target', onTarget)
   }, [editablePrompt])
 
-  // Lightbox: lock body scroll + Esc to close.
+  // Lightbox + prompt-edit modal: lock body scroll + Esc to close.
   useEffect(() => {
-    if (!lightboxOpen) return
-    function onKey(e) { if (e.key === 'Escape') setLightboxOpen(false) }
+    if (!lightboxOpen && !editingPrompt) return
+    function onKey(e) {
+      if (e.key !== 'Escape') return
+      if (lightboxOpen) setLightboxOpen(false)
+      else if (editingPrompt) setEditingPrompt(false)
+    }
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
     return () => {
       document.body.style.overflow = ''
       window.removeEventListener('keydown', onKey)
     }
-  }, [lightboxOpen])
+  }, [lightboxOpen, editingPrompt])
 
   // Notify Board so it can turn the section-card dot amber while any image
   // in that section is generating. Cleanup decrements on unmount or when
@@ -329,18 +333,6 @@ export default function ImageSlot({ label, prompt, style, className }) {
               <button className="img-slot-action" onClick={deleteImage}>Delete</button>
               <button className="img-slot-action" onClick={upscale}>Upscale</button>
             </div>
-            {editingPrompt && (
-              <div className="img-prompt-editor" onClick={e => e.stopPropagation()}>
-                <textarea
-                  value={editablePrompt}
-                  onChange={e => setEditablePrompt(e.target.value)}
-                  placeholder="Edit this image prompt..."
-                />
-                <button onClick={generate} disabled={loading || !editablePrompt.trim()}>
-                  {loading ? '…' : 'Regenerate'}
-                </button>
-              </div>
-            )}
           </>
         : <div
             className={`img-slot-empty${menuOpen ? ' menu-open' : ''}`}
@@ -406,6 +398,53 @@ export default function ImageSlot({ label, prompt, style, className }) {
             <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
           </svg>
         </button>
+      </div>
+    )}
+
+    {editingPrompt && (
+      <div className="img-prompt-modal" onClick={() => setEditingPrompt(false)}>
+        <div className="img-prompt-modal-content" onClick={e => e.stopPropagation()}>
+          <div className="img-prompt-modal-header">
+            <div className="img-prompt-modal-title">
+              <span className="img-prompt-modal-eyebrow">Edit image prompt</span>
+              {label && <span className="img-prompt-modal-sub">{label}</span>}
+            </div>
+            <button
+              className="img-prompt-modal-close"
+              onClick={() => setEditingPrompt(false)}
+              title="Close (Esc)"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <textarea
+            className="img-prompt-modal-textarea"
+            value={editablePrompt}
+            onChange={e => setEditablePrompt(e.target.value)}
+            placeholder="Describe the image in detail — subject, environment, lighting, framing, mood…"
+            autoFocus
+            rows={10}
+            spellCheck
+          />
+          <div className="img-prompt-modal-actions">
+            <button
+              className="img-prompt-modal-cancel"
+              onClick={() => setEditingPrompt(false)}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              className="img-prompt-modal-regen"
+              onClick={() => generate()}
+              disabled={loading || !editablePrompt.trim()}
+            >
+              {loading ? 'Generating…' : '✦ Regenerate'}
+            </button>
+          </div>
+        </div>
       </div>
     )}
     </>
