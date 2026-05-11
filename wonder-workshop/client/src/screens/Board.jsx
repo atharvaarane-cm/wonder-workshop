@@ -43,6 +43,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [agentPanelOpen, setAgentPanelOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [descOpen, setDescOpen] = useState(false)
   const project = useContext(ProjectContext)
   const rowRefs = useRef({})
   const scrollContainerRef = useRef(null)
@@ -191,12 +192,21 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
         <span className="topbar-brand">WONDER WORKSHOP</span>
         <span className="topbar-sep">|</span>
         <span className="topbar-meta">{brief.creativeDirection?.brand ?? brief.title}</span>
-        <button className="topbar-desc-btn">
-          Description
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button className="topbar-desc-btn" onClick={() => setDescOpen(o => !o)}>
+            Description
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </button>
+          {descOpen && (
+            <div className="topbar-desc-dropdown" onClick={() => setDescOpen(false)}>
+              <div className="topbar-desc-label">Original prompt</div>
+              <p className="topbar-desc-text">{brief.creativeDirection?.description || brief.title || '—'}</p>
+              {brief.creativeDirection?.format && <div className="topbar-desc-meta">{brief.creativeDirection.format} · {brief.creativeDirection.shots} shots · {brief.creativeDirection.location}</div>}
+            </div>
+          )}
+        </div>
         <div className="topbar-right">
           <button className="topbar-icon-btn" onClick={() => setAgentPanelOpen(o => !o)} title={agentPanelOpen ? 'Hide panel' : 'Show panel'}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

@@ -835,18 +835,32 @@ textarea { font-family: var(--font); resize: none; }
   padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-md);
   color: var(--muted); background: var(--card); cursor: pointer;
 }
-.topbar-right { margin-left: auto; display: flex; gap: 8px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .btn-outline {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 12px; padding: 6px 14px; border-radius: 8px;
+  display: flex; align-items: center; gap: 5px; height: 34px;
+  font-size: 12.5px; padding: 0 13px; border-radius: 8px;
   border: 1px solid var(--border-md); color: var(--text); background: var(--card);
-  font-family: var(--font); cursor: pointer;
+  font-family: var(--font); cursor: pointer; white-space: nowrap;
 }
+.btn-outline:hover { background: rgba(0,0,0,0.03); }
 .btn-dark {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 12px; padding: 6px 14px; border-radius: 8px;
-  background: var(--dark); color: #fff; font-family: var(--font); cursor: pointer;
+  display: flex; align-items: center; gap: 5px; height: 34px;
+  font-size: 12.5px; padding: 0 13px; border-radius: 8px;
+  background: var(--dark); color: #fff; font-family: var(--font); cursor: pointer; white-space: nowrap;
 }
+.btn-dark:hover { opacity: 0.88; }
+
+/* Description dropdown */
+.topbar-desc-dropdown {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 300;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; width: 280px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+.topbar-desc-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.topbar-desc-text { font-size: 13px; color: var(--text); line-height: 1.55; margin: 0 0 8px; }
+.topbar-desc-meta { font-size: 11px; color: var(--muted); }
+[data-theme="dark"] .topbar-desc-dropdown { box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
 
 .board-body { flex: 1; display: flex; overflow: hidden; }
 
