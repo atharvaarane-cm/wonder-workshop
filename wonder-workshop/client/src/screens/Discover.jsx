@@ -51,7 +51,29 @@ const CARD_GRADIENTS = [
   'linear-gradient(135deg,#0a1a2e,#1a4060)',
 ]
 
-export default function Discover({ onGenerate, projects = [], onOpenProject, onDeleteProject, theme, toggleTheme }) {
+export default function Discover({ onGenerate, projects = [], onOpenProject, onDeleteProject, onRenameProject, theme, toggleTheme }) {
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef(null)
+
+  useEffect(() => {
+    if (renamingId != null) renameInputRef.current?.select()
+  }, [renamingId])
+
+  function startRename(p, e) {
+    e?.stopPropagation()
+    setRenamingId(p.id)
+    setRenameValue(p.name || '')
+  }
+  function commitRename() {
+    if (renamingId == null) return
+    onRenameProject?.(renamingId, renameValue)
+    setRenamingId(null)
+  }
+  function cancelRename() {
+    setRenamingId(null)
+  }
+
   const [prompt, setPrompt]         = useState('')
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
@@ -129,18 +151,52 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
             <div className="sidebar-recent-empty">No projects yet</div>
           )}
           {projects.slice(0, 8).map((p, i) => (
-            <div key={p.id} className="sidebar-recent-item" onClick={() => onOpenProject(p)}>
+            <div key={p.id} className="sidebar-recent-item" onClick={() => renamingId === p.id ? null : onOpenProject(p)}>
               <span className="sidebar-recent-dot" style={{ background: ['#2D9A4E','#0891B2','#D97706','#9CA3AF','#7C5CFC'][i % 5] }} />
-              <span className="sidebar-recent-name">{p.name}</span>
-              <button
-                className="sidebar-recent-delete"
-                title="Delete project"
-                onClick={e => { e.stopPropagation(); onDeleteProject?.(p.id) }}
-              >
-                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                  <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </button>
+              {renamingId === p.id ? (
+                <input
+                  ref={renameInputRef}
+                  className="sidebar-recent-rename-input"
+                  value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  onBlur={commitRename}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); commitRename() }
+                    if (e.key === 'Escape') { e.preventDefault(); cancelRename() }
+                  }}
+                />
+              ) : (
+                <span
+                  className="sidebar-recent-name"
+                  title="Double-click to rename"
+                  onDoubleClick={e => startRename(p, e)}
+                >
+                  {p.name}
+                </span>
+              )}
+              {renamingId !== p.id && (
+                <>
+                  <button
+                    className="sidebar-recent-rename"
+                    title="Rename project"
+                    onClick={e => startRename(p, e)}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 8.5V10h1.5l5-5L7 3.5l-5 5zM7.7 2.8l1.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                  <button
+                    className="sidebar-recent-delete"
+                    title="Delete project"
+                    onClick={e => { e.stopPropagation(); onDeleteProject?.(p.id) }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                      <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>

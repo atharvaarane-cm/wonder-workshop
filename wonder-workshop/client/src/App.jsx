@@ -11,6 +11,7 @@ import {
   updateProjectBrief,
   saveImageForProject,
   moveImageBetweenSlots,
+  renameProject,
 } from './hooks/useProject.js'
 
 export default function App() {
@@ -49,6 +50,13 @@ export default function App() {
   function handleDeleteProject(id) {
     removeProject(id)
     if (project?.id === id) setProject(null)
+    refreshList()
+  }
+
+  function handleRenameProject(id, name) {
+    const updated = renameProject(id, name)
+    if (!updated) return
+    if (project?.id === id) setProject(updated)
     refreshList()
   }
 
@@ -104,6 +112,7 @@ export default function App() {
       projects={projects}
       onOpenProject={handleOpenProject}
       onDeleteProject={handleDeleteProject}
+      onRenameProject={handleRenameProject}
       theme={theme}
       toggleTheme={toggleTheme}
     />
