@@ -21,9 +21,21 @@ export default function ImageSlot({ label, prompt, style, className }) {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [dropActive, setDropActive] = useState(false)
   const [brokenSrc, setBrokenSrc] = useState(null)
+  const [pendingUndo, setPendingUndo] = useState(null)
+  const [copyState, setCopyState] = useState(null)
   const inputRef = useRef()
   const slotRef = useRef()
+  const pendingRef = useRef(0) // in-flight generations (for Variations)
+  const undoTimerRef = useRef(null)
   const activeImage = versions[activeVersion] || null
+
+  // Loading is true while ANY generation is in flight. The counter lets
+  // Variations launch 3 parallel generations and still show the correct
+  // loading state until the last one finishes.
+  function bumpLoading(delta) {
+    pendingRef.current = Math.max(0, pendingRef.current + delta)
+    setLoading(pendingRef.current > 0)
+  }
 
   // Reflect agent-panel selection: outline whichever slot the chat is targeting.
   useEffect(() => {
@@ -116,11 +128,11 @@ export default function ImageSlot({ label, prompt, style, className }) {
     setMenuOpen(false)
   }
 
-  async function generate(e) {
-    e?.stopPropagation()
-    const text = editablePrompt.trim()
+  async function generate(e, opts = {}) {
+    e?.stopPropagation?.()
+    const text = (opts.promptOverride ?? editablePrompt).trim()
     if (!text) return
-    setLoading(true)
+    bumpLoading(+1)
     setMenuOpen(false)
     setError(null)
 
@@ -138,7 +150,7 @@ export default function ImageSlot({ label, prompt, style, className }) {
       })
     } catch {
       setError('Generation failed')
-      setLoading(false)
+      bumpLoading(-1)
       toast('Generation failed', 'error')
       return
     }
@@ -146,7 +158,7 @@ export default function ImageSlot({ label, prompt, style, className }) {
     const data = await res.json().catch(() => ({}))
     if (!data.image) {
       setError(data.error || 'Failed')
-      setLoading(false)
+      bumpLoading(-1)
       toast(data.error || 'Generation failed', 'error')
       return
     }
@@ -167,31 +179,107 @@ export default function ImageSlot({ label, prompt, style, className }) {
         return updated
       })
       setEditingPrompt(false)
-      setLoading(false)
-      toast(wasFirst ? 'Image generated' : 'New image version created')
+      bumpLoading(-1)
+      if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New image version created')
     }
     probe.onerror = () => {
       setError('Image generator unreachable')
-      setLoading(false)
-      toast('Generation failed', 'error')
+      bumpLoading(-1)
+      if (!opts.silent) toast('Generation failed', 'error')
     }
     probe.src = url
   }
 
+  // Generate 3 parallel variations of the active prompt. Staggered slightly
+  // to avoid hammering Pollinations all at once.
+  function generateVariations(e) {
+    e?.stopPropagation?.()
+    if (!editablePrompt.trim()) return
+    toast('Generating 3 variations…')
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => generate(null, { silent: true }), i * 600)
+    }
+  }
+
+  async function downloadImage(e) {
+    e?.stopPropagation?.()
+    if (!activeImage) return
+    const url = activeImage.src
+    const safeLabel = (label || 'image').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    const filename = `wonder-${safeLabel || 'image'}-${Date.now()}.jpg`
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('fetch failed')
+      const blob = await res.blob()
+      const objUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(objUrl)
+      toast('Image downloaded')
+    } catch {
+      // CORS/network — fall back to opening in a new tab so the user can save manually
+      window.open(url, '_blank', 'noopener')
+      toast('Opened in new tab — right-click to save', 'success')
+    }
+  }
+
   function deleteImage(e) {
-    e.stopPropagation()
+    e?.stopPropagation?.()
+    if (!activeImage) return
+    const removed = activeImage
+    const removedIndex = activeVersion
     setVersions(prev => {
-      const updated = prev.filter((_, idx) => idx !== activeVersion)
-      setActiveVersion(Math.max(0, Math.min(activeVersion, updated.length - 1)))
+      const updated = prev.filter((_, idx) => idx !== removedIndex)
+      setActiveVersion(Math.max(0, Math.min(removedIndex, updated.length - 1)))
       return updated
     })
     setEditingPrompt(false)
-    toast('Image deleted')
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+    undoTimerRef.current = setTimeout(() => {
+      setPendingUndo(null)
+      undoTimerRef.current = null
+    }, 5000)
+    setPendingUndo({ version: removed, index: removedIndex })
+  }
+
+  function undoDelete(e) {
+    e?.stopPropagation?.()
+    if (!pendingUndo) return
+    const { version, index } = pendingUndo
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+    undoTimerRef.current = null
+    setVersions(prev => {
+      const updated = [...prev]
+      const insertAt = Math.min(Math.max(index, 0), updated.length)
+      updated.splice(insertAt, 0, version)
+      setActiveVersion(insertAt)
+      return updated
+    })
+    setPendingUndo(null)
+    toast('Restored')
   }
 
   function upscale(e) {
     e.stopPropagation()
     toast('Upscale queued')
+  }
+
+  async function copyPromptToClipboard(e) {
+    e?.stopPropagation?.()
+    const text = (activeImage?.prompt || editablePrompt || '').trim()
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyState('copied')
+      setTimeout(() => setCopyState(null), 1500)
+    } catch {
+      setCopyState('failed')
+      setTimeout(() => setCopyState(null), 1500)
+    }
   }
 
   function activateChatTarget(e) {
@@ -329,10 +417,18 @@ export default function ImageSlot({ label, prompt, style, className }) {
             </button>
             <div className="img-slot-overlay">
               <button className="img-slot-action" onClick={generate} disabled={loading}>{loading ? '…' : 'Refresh'}</button>
+              <button className="img-slot-action" onClick={generateVariations} disabled={loading} title="Generate 3 variations of this prompt">Variations</button>
               <button className="img-slot-action" onClick={e => { e.stopPropagation(); setEditingPrompt(v => !v) }}>Edit Prompt</button>
+              <button className="img-slot-action" onClick={downloadImage} title="Download image">Download</button>
               <button className="img-slot-action" onClick={deleteImage}>Delete</button>
               <button className="img-slot-action" onClick={upscale}>Upscale</button>
             </div>
+            {pendingUndo && (
+              <div className="img-slot-undo" onClick={e => e.stopPropagation()}>
+                <span>Deleted</span>
+                <button onClick={undoDelete}>Undo</button>
+              </div>
+            )}
           </>
         : <div
             className={`img-slot-empty${menuOpen ? ' menu-open' : ''}`}
@@ -429,6 +525,15 @@ export default function ImageSlot({ label, prompt, style, className }) {
             spellCheck
           />
           <div className="img-prompt-modal-actions">
+            <button
+              className="img-prompt-modal-cancel"
+              onClick={copyPromptToClipboard}
+              disabled={!editablePrompt.trim()}
+              title="Copy this prompt to the clipboard"
+              style={{ marginRight: 'auto' }}
+            >
+              {copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy'}
+            </button>
             <button
               className="img-prompt-modal-cancel"
               onClick={() => setEditingPrompt(false)}
