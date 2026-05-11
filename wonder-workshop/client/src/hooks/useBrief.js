@@ -18,7 +18,10 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "duration": "<e.g. 30s>",
     "shots": <number>,
     "location": "<location1, location2>",
-    "description": "<2-3 sentence cinematic creative direction>"
+    "description": "<2-3 sentence cinematic creative direction>",
+    "keyMessage": "<single punchy sentence — the one feeling or idea the viewer should walk away with>",
+    "toneKeywords": ["<adjective1>", "<adjective2>", "<adjective3>", "<adjective4>"],
+    "productionType": "<Video | Stills | Video + Stills>"
   },
   "brandInfo": {
     "logoUrl": "<public logo image URL if known, otherwise empty string>",
