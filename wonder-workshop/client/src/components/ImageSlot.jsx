@@ -5,7 +5,13 @@ function toast(msg, type = 'success') {
   window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg, type } }))
 }
 
-export default function ImageSlot({ label, prompt, style, className }) {
+const VIEW_COLORS = {
+  'FRONT': '#0891B2',
+  '3/4':   '#D97706',
+  'SIDE':  '#7C5CFC',
+}
+
+export default function ImageSlot({ label, prompt, style, className, view }) {
   const project = useContext(ProjectContext)
   const slotKey = prompt || null
   const initial = slotKey && project?.images?.[slotKey]
@@ -354,6 +360,15 @@ export default function ImageSlot({ label, prompt, style, className }) {
       onDragLeave={onSlotDragLeave}
       onDrop={onSlotDrop}
     >
+      {view && VIEW_COLORS[view] && (
+        <div
+          className="img-slot-view-chip"
+          title={`View: ${view}`}
+          style={{ background: VIEW_COLORS[view] }}
+        >
+          {view}
+        </div>
+      )}
       {activeImage
         ? <>
             <img
