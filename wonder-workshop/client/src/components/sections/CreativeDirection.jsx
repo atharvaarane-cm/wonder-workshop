@@ -19,7 +19,6 @@ export default function CreativeDirection({ data, update, onGoToShotList }) {
         {/* Brand + production type */}
         <div className="cd-header-row">
           <EditableText tag="h2" className="cd-brand" value={data.brand ?? ''} onChange={v => update('creativeDirection.brand', v)} placeholder="Brand" />
-          <EditableText tag="span" className="cd-prod-type" value={data.productionType ?? 'Video'} onChange={v => update('creativeDirection.productionType', v)} />
         </div>
 
         {/* Key message */}
