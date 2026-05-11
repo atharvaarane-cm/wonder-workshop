@@ -14,6 +14,7 @@ import ShareModal from '../components/ShareModal.jsx'
 import ExportDropdown from '../components/ExportDropdown.jsx'
 import OnePager from '../components/OnePager.jsx'
 import { ProjectContext } from '../hooks/useProject.js'
+import { generateBrief } from '../hooks/useBrief.js'
 
 function setIn(obj, keys, value) {
   if (keys.length === 1) return { ...obj, [keys[0]]: value }
@@ -44,6 +45,8 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [descOpen, setDescOpen] = useState(false)
+  const [descPrompt, setDescPrompt] = useState('')
+  const [descRegenerating, setDescRegenerating] = useState(false)
   const project = useContext(ProjectContext)
   const rowRefs = useRef({})
   const scrollContainerRef = useRef(null)
@@ -193,17 +196,51 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
         <span className="topbar-sep">|</span>
         <span className="topbar-meta">{brief.creativeDirection?.brand ?? brief.title}</span>
         <div style={{ position: 'relative' }}>
-          <button className="topbar-desc-btn" onClick={() => setDescOpen(o => !o)}>
+          <button className="topbar-desc-btn" onClick={() => {
+            setDescPrompt(brief.originalPrompt || brief.creativeDirection?.description || '')
+            setDescOpen(o => !o)
+          }}>
             Description
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
           </button>
           {descOpen && (
-            <div className="topbar-desc-dropdown" onClick={() => setDescOpen(false)}>
+            <div className="topbar-desc-dropdown" onClick={e => e.stopPropagation()}>
               <div className="topbar-desc-label">Original prompt</div>
-              <p className="topbar-desc-text">{brief.creativeDirection?.description || brief.title || '—'}</p>
-              {brief.creativeDirection?.format && <div className="topbar-desc-meta">{brief.creativeDirection.format} · {brief.creativeDirection.shots} shots · {brief.creativeDirection.location}</div>}
+              <textarea
+                className="topbar-desc-textarea"
+                value={descPrompt}
+                onChange={e => setDescPrompt(e.target.value)}
+                rows={4}
+                placeholder="Describe the shoot…"
+              />
+              {brief.creativeDirection?.format && (
+                <div className="topbar-desc-meta">{brief.creativeDirection.format} · {brief.creativeDirection.shots} shots · {brief.creativeDirection.location}</div>
+              )}
+              <div className="topbar-desc-actions">
+                <button className="topbar-desc-cancel" onClick={() => setDescOpen(false)}>Cancel</button>
+                <button
+                  className="topbar-desc-regen"
+                  disabled={descRegenerating || !descPrompt.trim()}
+                  onClick={async () => {
+                    setDescRegenerating(true)
+                    try {
+                      const newBrief = await generateBrief(descPrompt.trim())
+                      setBrief(newBrief)
+                      onSaveBrief?.(newBrief)
+                      setDescOpen(false)
+                      window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: 'Brief regenerated' } }))
+                    } catch {
+                      window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'error', msg: 'Regeneration failed' } }))
+                    } finally {
+                      setDescRegenerating(false)
+                    }
+                  }}
+                >
+                  {descRegenerating ? 'Regenerating…' : 'Regenerate brief'}
+                </button>
+              </div>
             </div>
           )}
         </div>
