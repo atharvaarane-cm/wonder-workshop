@@ -66,12 +66,12 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
   const [activePage, setActivePage] = useState('home')
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [sidebarExpanded, setSidebarExpanded] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(148)
+  const [sidebarWidth, setSidebarWidth] = useState(220)
   const [discoverSearch, setDiscoverSearch] = useState('')
   const [discoverSearchOpen, setDiscoverSearchOpen] = useState(false)
   const isDragging = useRef(false)
   const dragStartX = useRef(0)
-  const dragStartWidth = useRef(148)
+  const dragStartWidth = useRef(220)
   const sidebarRef = useRef(null)
   const [renamingId, setRenamingId] = useState(null)
 
@@ -85,7 +85,7 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
     function onMouseMove(e) {
       if (!isDragging.current) return
       const delta = e.clientX - dragStartX.current
-      const next = Math.min(320, Math.max(148, dragStartWidth.current + delta))
+      const next = Math.min(380, Math.max(180, dragStartWidth.current + delta))
       setSidebarWidth(next)
       setSidebarExpanded(next > 160)
     }
@@ -179,7 +179,20 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
       {/* ── Sidebar ───────────────────────────────────────────── */}
       <aside ref={sidebarRef} className={`sidebar${sidebarExpanded ? ' sidebar-expanded' : ''}${!sidebarVisible ? ' sidebar-hidden' : ''}`} style={sidebarVisible ? { width: sidebarWidth } : {}}>
         <div className="sidebar-logo">
-          <img className="sidebar-w-mark" src="/brand-assets/wonder-w-mark-transparent.png" alt="Wonder" />
+          <div className="sidebar-logo-icons">
+            <button className={`sidebar-icon-btn${!sidebarVisible ? ' active' : ''}`} onClick={() => setSidebarVisible(v => !v)} title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M5.5 2.5v11" stroke="currentColor" strokeWidth="1.3"/>
+              </svg>
+            </button>
+            <button className={`sidebar-icon-btn${discoverSearchOpen ? ' active' : ''}`} onClick={() => { setDiscoverSearchOpen(v => !v); setDiscoverSearch('') }} title="Search projects">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <nav className="sidebar-nav">
@@ -197,6 +210,18 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
 
         <div className="sidebar-recents">
           <div className="sidebar-recents-label">Projects</div>
+          {discoverSearchOpen && (
+            <div className="sidebar-search-row">
+              <input
+                autoFocus
+                className="sidebar-search-input"
+                placeholder="Search…"
+                value={discoverSearch}
+                onChange={e => setDiscoverSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') { setDiscoverSearchOpen(false); setDiscoverSearch('') } }}
+              />
+            </div>
+          )}
           {projects.length === 0 && (
             <div className="sidebar-recent-empty">No projects yet</div>
           )}
@@ -264,20 +289,14 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
 
         {/* Topbar */}
         <header className="discover-topbar">
-          <div className="discover-topbar-left">
-            <button className={`topbar-icon-btn${!sidebarVisible ? ' topbar-icon-btn-active' : ''}`} onClick={() => setSidebarVisible(v => !v)} title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}>
+          {!sidebarVisible && (
+            <button className="topbar-icon-btn topbar-show-sidebar" onClick={() => setSidebarVisible(true)} title="Show sidebar">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
                 <path d="M5.5 2.5v11" stroke="currentColor" strokeWidth="1.3"/>
               </svg>
             </button>
-            <button className={`topbar-icon-btn${discoverSearchOpen ? ' topbar-icon-btn-active' : ''}`} onClick={() => setDiscoverSearchOpen(v => !v)} title="Search projects">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
+          )}
           <div className="discover-topbar-right">
             <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
               {theme === 'dark'
@@ -292,26 +311,6 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
             </button>
           </div>
         </header>
-
-        {/* ── Search bar ── */}
-        {discoverSearchOpen && (
-          <div className="discover-search-bar">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.3"/><path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
-            <input
-              autoFocus
-              className="discover-search-input"
-              placeholder="Search projects…"
-              value={discoverSearch}
-              onChange={e => setDiscoverSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') { setDiscoverSearchOpen(false); setDiscoverSearch('') } }}
-            />
-            {discoverSearch && (
-              <button className="discover-search-clear" onClick={() => setDiscoverSearch('')}>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-              </button>
-            )}
-          </div>
-        )}
 
         {/* ── Projects page ── */}
         {activePage === 'projects' && (
