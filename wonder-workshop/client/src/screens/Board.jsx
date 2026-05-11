@@ -23,10 +23,11 @@ function setIn(obj, keys, value) {
 
 const ROWS = [
   [{ id: 'cd',  num: '1',  title: 'Creative Direction' }],
-  [{ id: 'bi',  num: '2',  title: 'Brand Info' }, { id: 'lm', num: '3', title: 'Lighting & Mood' }],
-  [{ id: 'mb',  num: '4',  title: 'Mood Board / Style Ref' }, { id: 'loc', num: '5', title: 'Locations / Set Design' }],
-  [{ id: 'cr',  num: '6',  title: 'Char Ref' }, { id: 'cp', num: '7', title: 'Clothing / Props' }],
-  [{ id: 'ch',  num: '8',  title: 'Character — Full Body' }, { id: 'chu', num: '9', title: 'Character — Close Up' }],
+  [{ id: 'bi',  num: '2',  title: 'Brand Info' }],
+  [{ id: 'lm',  num: '3',  title: 'Lighting & Mood' }, { id: 'mb', num: '4', title: 'Mood Board / Style Ref' }],
+  [{ id: 'loc', num: '5',  title: 'Locations / Set Design' }, { id: 'cr', num: '6', title: 'Char Ref' }],
+  [{ id: 'cp',  num: '7',  title: 'Clothing / Props' }, { id: 'ch', num: '8', title: 'Character — Full Body' }],
+  [{ id: 'chu', num: '9',  title: 'Character — Close Up' }],
   [{ id: 'sl',  num: '10', title: 'Shot List' }],
 ]
 
@@ -146,7 +147,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
 
   function renderContent(id) {
     switch (id) {
-      case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} onGoToShotList={() => scrollToRow(5)} />
+      case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} onGoToShotList={() => scrollToRow(6)} />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'lm':  return <LightingMood data={brief.lightingMood} imagePrompts={brief.imagePrompts} updateMood={updateMood} />
       case 'mb':  return <MoodBoard data={brief.creativeDirection} />

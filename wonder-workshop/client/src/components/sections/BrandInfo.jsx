@@ -19,43 +19,56 @@ export default function BrandInfo({ data, update }) {
   const [logoFailed, setLogoFailed] = useState(false)
 
   function handleError() {
-    if (srcIdx + 1 < fallbacks.length) {
-      setSrcIdx(srcIdx + 1)
-    } else {
-      setLogoFailed(true)
-    }
+    if (srcIdx + 1 < fallbacks.length) setSrcIdx(srcIdx + 1)
+    else setLogoFailed(true)
   }
 
   return (
-    <div>
-      {fallbacks.length > 0 && !logoFailed ? (
-        <div className="brand-logo-resolved">
-          <img src={fallbacks[srcIdx]} alt="Brand logo" onError={handleError} />
-          {sourceUrl && (
-            <a href={sourceUrl} target="_blank" rel="noreferrer" className="brand-source-link">
-              Source
-            </a>
-          )}
+    <div className="bi-layout">
+
+      {/* Logo + source */}
+      <div className="bi-logo-col">
+        <div className="bi-logo-wrap">
+          {fallbacks.length > 0 && !logoFailed
+            ? <img src={fallbacks[srcIdx]} alt="Brand logo" onError={handleError} className="bi-logo-img" />
+            : <ImageSlot label="Logo" style={{ width: '100%', height: '100%', borderRadius: 10 }} />
+          }
         </div>
-      ) : (
-        <ImageSlot className="brand-logo-slot" label="Logo" style={{ height: 56, marginBottom: 14, borderRadius: 8 }} />
-      )}
-      <div className="brand-colors">
-        {(data.colors || []).map((c, i) => (
-          <div className="color-swatch" key={i}>
-            <div className="swatch-block" style={{ background: c.hex }} />
-            <div className="swatch-hex">{c.hex}</div>
-            <div className="swatch-name">{c.name}</div>
-          </div>
-        ))}
+        {sourceUrl && (
+          <a href={sourceUrl} target="_blank" rel="noreferrer" className="bi-source-link">
+            {domain || 'Visit site'} ↗
+          </a>
+        )}
       </div>
-      <EditableText
-        tag="p"
-        className="brand-rules"
-        value={data.rules}
-        onChange={v => update('brandInfo.rules', v)}
-        placeholder="Brand rules…"
-      />
+
+      {/* Color palette */}
+      <div className="bi-colors-col">
+        <div className="bi-section-label">Color Palette</div>
+        <div className="bi-swatches">
+          {(data.colors || []).map((c, i) => (
+            <div className="bi-swatch-row" key={i}>
+              <div className="bi-swatch-block" style={{ background: c.hex }} />
+              <div className="bi-swatch-info">
+                <span className="bi-swatch-name">{c.name}</span>
+                <span className="bi-swatch-hex">{c.hex}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Brand guidelines */}
+      <div className="bi-rules-col">
+        <div className="bi-section-label">Brand Guidelines</div>
+        <EditableText
+          tag="p"
+          className="bi-rules-text"
+          value={data.rules ?? ''}
+          onChange={v => update('brandInfo.rules', v)}
+          placeholder="Brand guidelines and rules…"
+        />
+      </div>
+
     </div>
   )
 }
