@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useContext } from 'react'
 import AgentPanel from '../components/AgentPanel.jsx'
 import SectionCard from '../components/SectionCard.jsx'
 import CreativeDirection from '../components/sections/CreativeDirection.jsx'
@@ -10,6 +10,10 @@ import CharRef from '../components/sections/CharRef.jsx'
 import ClothingProps from '../components/sections/ClothingProps.jsx'
 import Character from '../components/sections/Character.jsx'
 import ShotList from '../components/sections/ShotList.jsx'
+import ShareModal from '../components/ShareModal.jsx'
+import ExportDropdown from '../components/ExportDropdown.jsx'
+import OnePager from '../components/OnePager.jsx'
+import { ProjectContext } from '../hooks/useProject.js'
 
 function setIn(obj, keys, value) {
   if (keys.length === 1) return { ...obj, [keys[0]]: value }
@@ -27,13 +31,22 @@ const ROWS = [
 
 const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'lm', 'mb', 'loc', 'cr', 'cp', 'ch', 'chu', 'sl'])
 
-export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief }) {
+export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
   const [activeImageTarget, setActiveImageTarget] = useState(null)
   const [loadingBySection, setLoadingBySection] = useState({})
   const [toast, setToast] = useState(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [onePagerOpen, setOnePagerOpen] = useState(false)
+  const [agentPanelOpen, setAgentPanelOpen] = useState(true)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const project = useContext(ProjectContext)
   const rowRefs = useRef({})
+  const scrollContainerRef = useRef(null)
+  const isProgrammaticScroll = useRef(false)
   const toastTimer = useRef(null)
   const saveBriefRef = useRef(onSaveBrief)
   saveBriefRef.current = onSaveBrief
@@ -93,10 +106,31 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     setBrief(prev => ({ ...prev, lightingMood: prev.lightingMood.map((m, idx) => idx === i ? { ...m, [field]: value } : m) }))
   }
 
+  // Sync nav dots to scroll position
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    function handleScroll() {
+      if (isProgrammaticScroll.current) return
+      const containerTop = container.getBoundingClientRect().top
+      let closestIdx = 0
+      let closestDist = Infinity
+      Object.entries(rowRefs.current).forEach(([idx, el]) => {
+        if (!el) return
+        const dist = Math.abs(el.getBoundingClientRect().top - containerTop)
+        if (dist < closestDist) { closestDist = dist; closestIdx = parseInt(idx) }
+      })
+      setActiveId(ROWS[closestIdx][0].id)
+    }
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
+
   function scrollToRow(rowIdx) {
-    const firstId = ROWS[rowIdx][0].id
+    isProgrammaticScroll.current = true
     rowRefs.current[rowIdx]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    setActiveId(firstId)
+    setActiveId(ROWS[rowIdx][0].id)
+    setTimeout(() => { isProgrammaticScroll.current = false }, 700)
   }
 
   const activeTitle = ROWS.flat().find(s => s.id === activeId)?.title ?? 'Brief'
@@ -134,6 +168,24 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
         </div>
       )}
 
+      {readOnly && (
+        <div className="readonly-banner">
+          <span>Viewing a shared brief — read only</span>
+          <button className="readonly-copy-btn" onClick={() => {
+            const p = { id: `proj_${Date.now()}`, brief, images: project?.images || {}, createdAt: new Date().toISOString() }
+            try {
+              const all = JSON.parse(localStorage.getItem('ww_projects') || '[]')
+              all.unshift(p)
+              localStorage.setItem('ww_projects', JSON.stringify(all))
+              window.location.hash = ''
+              window.location.reload()
+            } catch { alert('Could not save copy') }
+          }}>
+            Make a copy
+          </button>
+        </div>
+      )}
+
       <div className="topbar">
         <span className="topbar-back" onClick={onBack}>← Back</span>
         <span className="topbar-brand">WONDER WORKSHOP</span>
@@ -146,27 +198,83 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
           </svg>
         </button>
         <div className="topbar-right">
+          <button className="topbar-icon-btn" onClick={() => setAgentPanelOpen(o => !o)} title={agentPanelOpen ? 'Hide panel' : 'Show panel'}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M10.5 2.5v11" stroke="currentColor" strokeWidth="1.3"/>
+            </svg>
+          </button>
+          <button className="topbar-icon-btn" onClick={() => setSearchOpen(o => !o)} title="Search sections">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </button>
+          <div className="topbar-sep-v" />
           <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
             {theme === 'dark'
               ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1.7"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
               : <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
             }
           </button>
-          <button className="btn-outline">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/><path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-            Share
-          </button>
-          <button className="btn-dark">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 13h10" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/></svg>
-            Export PDF
-          </button>
+          {!readOnly && (
+            <button className="btn-outline" onClick={() => setShareOpen(true)}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M10.5 3.8L5.5 7.2M5.5 8.8l5 3.4" stroke="currentColor" strokeWidth="1.3"/></svg>
+              Share
+            </button>
+          )}
+          <div style={{ position: 'relative' }}>
+            <button className="btn-dark" onClick={() => setExportOpen(o => !o)}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 13h10" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/></svg>
+              Export
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }}><path d="M2 3.5l3 3 3-3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round"/></svg>
+            </button>
+            {exportOpen && (
+              <ExportDropdown
+                brief={brief}
+                onClose={() => setExportOpen(false)}
+                onOnePager={() => setOnePagerOpen(true)}
+              />
+            )}
+          </div>
         </div>
       </div>
 
 
+      {searchOpen && (
+        <div className="search-overlay" onClick={() => { setSearchOpen(false); setSearchQuery('') }}>
+          <div className="search-modal" onClick={e => e.stopPropagation()}>
+            <div className="search-input-row">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.3"/><path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              <input
+                autoFocus
+                className="search-input"
+                placeholder="Jump to section…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery('') } }}
+              />
+            </div>
+            <div className="search-results">
+              {ROWS.flat()
+                .filter(s => !searchQuery || s.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(s => {
+                  const ri = ROWS.findIndex(row => row.some(r => r.id === s.id))
+                  return (
+                    <button key={s.id} className="search-result-item" onClick={() => { scrollToRow(ri); setSearchOpen(false); setSearchQuery('') }}>
+                      <span className="search-result-num">{s.num}</span>
+                      <span className="search-result-title">{s.title}</span>
+                    </button>
+                  )
+                })}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="board-body">
         <div className="board-content">
-          <div className="board-scroll">
+          <div className="board-scroll" ref={scrollContainerRef}>
             <div className="project-info-panel">
               {[
                 ['projectName', 'Project Name'],
@@ -224,8 +332,19 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
           </div>
         </div>
 
-        <AgentPanel activeSection={activeChatTitle} activeImageTarget={activeImageTarget} brief={brief} />
+        {!readOnly && agentPanelOpen && <AgentPanel activeSection={activeChatTitle} activeImageTarget={activeImageTarget} brief={brief} />}
       </div>
+
+      {shareOpen && (
+        <ShareModal
+          brief={brief}
+          images={project?.images}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
+      {onePagerOpen && (
+        <OnePager brief={brief} images={project?.images || {}} onClose={() => setOnePagerOpen(false)} />
+      )}
     </div>
   )
 }

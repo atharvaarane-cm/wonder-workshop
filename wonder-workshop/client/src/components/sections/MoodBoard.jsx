@@ -6,16 +6,16 @@ export default function MoodBoard({ data }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <ImageSlot
         prompt={`${base}, hero wide shot, atmospheric style reference`}
-        style={{ width: '100%', height: 200, borderRadius: 10 }}
+        style={{ width: '100%', borderRadius: 10 }}
       />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <ImageSlot
           prompt={`${base}, colour palette texture reference`}
-          style={{ width: '100%', height: 120, borderRadius: 8 }}
+          style={{ width: '100%', borderRadius: 8 }}
         />
         <ImageSlot
           prompt={`${base}, lighting reference, film still, cinematic`}
-          style={{ width: '100%', height: 120, borderRadius: 8 }}
+          style={{ width: '100%', borderRadius: 8 }}
         />
       </div>
     </div>

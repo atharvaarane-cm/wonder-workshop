@@ -14,8 +14,21 @@ import {
   renameProject,
 } from './hooks/useProject.js'
 
+function parseShareHash() {
+  try {
+    const hash = window.location.hash
+    if (!hash.startsWith('#share=')) return null
+    const encoded = hash.slice('#share='.length)
+    const json = decodeURIComponent(escape(atob(encoded)))
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
 export default function App() {
-  const [project, setProject] = useState(() => getActiveProject())
+  const [shareData] = useState(() => parseShareHash())
+  const [project, setProject] = useState(() => shareData ? null : getActiveProject())
   const [projects, setProjects] = useState(() => listProjects())
   const [theme, setTheme] = useState(() => localStorage.getItem('ww_theme') || 'light')
 
@@ -87,6 +100,27 @@ export default function App() {
     }
   }
 
+  if (shareData) {
+    return (
+      <ProjectContext.Provider value={{
+        id: null,
+        images: shareData.images || {},
+        saveImage: () => {},
+        moveImage: () => {},
+        ratio: shareData.brief?.generationSettings?.ratio || '16:9',
+      }}>
+        <Board
+          brief={shareData.brief}
+          onBack={() => { window.location.hash = ''; window.location.reload() }}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          onSaveBrief={() => {}}
+          readOnly
+        />
+      </ProjectContext.Provider>
+    )
+  }
+
   if (project) {
     return (
       <ProjectContext.Provider value={{
@@ -94,6 +128,7 @@ export default function App() {
         images: project.images || {},
         saveImage: handleSaveImage,
         moveImage: handleMoveImage,
+        ratio: project.brief?.generationSettings?.ratio || '16:9',
       }}>
         <Board
           brief={project.brief}

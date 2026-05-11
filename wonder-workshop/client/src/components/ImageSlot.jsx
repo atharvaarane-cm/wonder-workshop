@@ -11,7 +11,25 @@ const VIEW_COLORS = {
   'SIDE':  '#7C5CFC',
 }
 
-export default function ImageSlot({ label, prompt, style, className, view }) {
+const RATIO_DIMS = {
+  '16:9': { width: 896, height: 504 },
+  '9:16': { width: 504, height: 896 },
+  '1:1':  { width: 768, height: 768 },
+  '4:5':  { width: 640, height: 800 },
+  '4:3':  { width: 896, height: 672 },
+  '2:1':  { width: 896, height: 448 },
+}
+
+const RATIO_CSS = {
+  '16:9': '16/9',
+  '9:16': '9/16',
+  '1:1':  '1/1',
+  '4:5':  '4/5',
+  '4:3':  '4/3',
+  '2:1':  '2/1',
+}
+
+export default function ImageSlot({ label, prompt, style, className, view, seed }) {
   const project = useContext(ProjectContext)
   const slotKey = prompt || null
   const initial = slotKey && project?.images?.[slotKey]
@@ -149,10 +167,11 @@ export default function ImageSlot({ label, prompt, style, className, view }) {
     // dead URLs as versions and end the loading state before the work is done.
     let res
     try {
+      const dims = RATIO_DIMS[project?.ratio] || RATIO_DIMS['16:9']
       res = await fetch('/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text }),
+        body: JSON.stringify({ prompt: text, ...dims, ...(seed != null ? { seed } : {}) }),
       })
     } catch {
       setError('Generation failed')
@@ -354,7 +373,24 @@ export default function ImageSlot({ label, prompt, style, className, view }) {
     <div
       ref={slotRef}
       className={`img-slot${isActive ? ' active' : ''}${dropActive ? ' drop-target' : ''} ${className || ''}`}
-      style={style}
+      style={(() => {
+        if (style?.height || style?.aspectRatio) return style
+        const r = project?.ratio || '16:9'
+        const css = RATIO_CSS[r] || '16/9'
+        const [rw, rh] = css.split('/').map(Number)
+        if (rh > rw) {
+          // Portrait: cap height, derive max-width so the box stays portrait
+          const maxH = 400
+          const maxW = Math.round(maxH * rw / rh)
+          return { ...style, aspectRatio: css, maxHeight: maxH, width: `min(100%, ${maxW}px)`, margin: '0 auto' }
+        }
+        if (rh === rw) {
+          // Square: cap at 360px
+          return { ...style, aspectRatio: css, maxHeight: 360, width: 'min(100%, 360px)', margin: '0 auto' }
+        }
+        // Landscape: full width, cap height so wide cards don't blow up
+        return { ...style, aspectRatio: css, maxHeight: 400 }
+      })()}
       onMouseDownCapture={activateChatTarget}
       onDragOver={onSlotDragOver}
       onDragLeave={onSlotDragLeave}
