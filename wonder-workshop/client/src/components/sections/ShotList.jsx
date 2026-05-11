@@ -6,19 +6,26 @@ export default function ShotList({ data, updateShot }) {
     <div className="shot-grid">
       {(data || []).map((shot, i) => (
         <div className="shot-cell" key={shot.num}>
-          <ImageSlot
-            prompt={`${shot.description}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`}
-            style={{ width: '100%', height: 80, borderRadius: 7, marginBottom: 8 }}
-          />
-          <div className="shot-top">
-            <EditableText className="shot-framing" value={shot.framing} onChange={v => updateShot(i, 'framing', v)} />
-            <span className="shot-num">{shot.num}</span>
+
+          {/* Image with overlaid badges */}
+          <div className="shot-img-wrap">
+            <ImageSlot
+              prompt={`${shot.description}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`}
+              style={{ width: '100%', height: '100%', borderRadius: 8 }}
+            />
+            <span className="shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
+            <span className="shot-badge-framing">{shot.framing}</span>
           </div>
-          <EditableText tag="p" className="shot-desc" value={shot.description} onChange={v => updateShot(i, 'description', v)} />
-          <div className="shot-bottom">
-            <EditableText className="shot-cam" value={shot.camera} onChange={v => updateShot(i, 'camera', v)} />
-            <EditableText className="shot-dur" value={shot.duration} onChange={v => updateShot(i, 'duration', v)} />
+
+          {/* Info below image */}
+          <div className="shot-info">
+            <EditableText tag="p" className="shot-desc" value={shot.description} onChange={v => updateShot(i, 'description', v)} />
+            <div className="shot-meta-row">
+              <EditableText className="shot-cam" value={shot.camera} onChange={v => updateShot(i, 'camera', v)} />
+              <EditableText className="shot-dur" value={shot.duration} onChange={v => updateShot(i, 'duration', v)} />
+            </div>
           </div>
+
         </div>
       ))}
     </div>
