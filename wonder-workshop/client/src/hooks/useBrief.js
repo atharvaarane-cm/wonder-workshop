@@ -212,3 +212,26 @@ export async function streamChat(messages, onToken, signal) {
 
   return full
 }
+
+/**
+ * Chat with tool-calling. Non-streaming. Returns { text, actions }.
+ * Each action is { name, args } where name matches one of the supplied tools.
+ */
+export async function chatWithTools(messages, tools, signal) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify({ messages, tools, stream: false }),
+  })
+
+  if (!res.ok) throw new Error(`Server error: ${res.status}`)
+
+  const data = await res.json()
+  const text = data.message?.content ?? ''
+  const actions = (data.functionCalls || []).map(c => ({
+    name: c.name,
+    args: c.args || {},
+  }))
+  return { text, actions }
+}

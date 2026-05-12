@@ -111,6 +111,17 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     setBrief(prev => ({ ...prev, lightingMood: prev.lightingMood.map((m, idx) => idx === i ? { ...m, [field]: value } : m) }))
   }
 
+  // Chat-driven regeneration: AgentPanel calls this when the model returns
+  // a regenerate_active_image function call. We just rebroadcast as a
+  // window event that the targeted ImageSlot is already listening for.
+  function regenerateActiveImage(newPrompt) {
+    if (!activeImageTarget?.slotKey || !newPrompt) return false
+    window.dispatchEvent(new CustomEvent('ww-regenerate-image', {
+      detail: { slotKey: activeImageTarget.slotKey, newPrompt },
+    }))
+    return true
+  }
+
   // Sync nav dots to scroll position
   useEffect(() => {
     const container = scrollContainerRef.current
@@ -380,7 +391,15 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
           </div>
         </div>
 
-        {!readOnly && agentPanelOpen && <AgentPanel activeSection={activeChatTitle} activeImageTarget={activeImageTarget} brief={brief} />}
+        {!readOnly && agentPanelOpen && (
+          <AgentPanel
+            activeSection={activeChatTitle}
+            activeImageTarget={activeImageTarget}
+            brief={brief}
+            onUpdate={update}
+            onRegenerateImage={regenerateActiveImage}
+          />
+        )}
       </div>
 
       {shareOpen && (

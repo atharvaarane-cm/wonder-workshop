@@ -5,7 +5,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { messages = [], stream = false } = req.body
+  const { messages = [], stream = false, tools = [] } = req.body
 
   // Separate system instruction from chat messages
   const systemMsg = messages.find(m => m.role === 'system')
@@ -18,13 +18,20 @@ export default async function handler(req, res) {
   }))
   const lastMsg = chatMsgs[chatMsgs.length - 1]?.content ?? ''
 
-  const model = genAI.getGenerativeModel({
+  const modelConfig = {
     model: 'gemini-2.0-flash',
     ...(systemMsg ? { systemInstruction: systemMsg.content } : {}),
-  })
+  }
+  // Tool calling forces non-streaming. Streaming function-call responses are
+  // more complex than the marginal UX win is worth for our use case.
+  if (tools.length > 0) {
+    modelConfig.tools = [{ functionDeclarations: tools }]
+  }
+
+  const model = genAI.getGenerativeModel(modelConfig)
 
   try {
-    if (stream) {
+    if (stream && tools.length === 0) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
       res.setHeader('Transfer-Encoding', 'chunked')
 
@@ -39,8 +46,15 @@ export default async function handler(req, res) {
     } else {
       const chat   = model.startChat({ history })
       const result = await chat.sendMessage(lastMsg)
-      const text   = result.response.text()
-      res.json({ message: { content: text } })
+      const response = result.response
+      const text   = response.text()
+      const functionCalls = (typeof response.functionCalls === 'function')
+        ? (response.functionCalls() || [])
+        : []
+      res.json({
+        message: { content: text },
+        functionCalls,
+      })
     }
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message })
