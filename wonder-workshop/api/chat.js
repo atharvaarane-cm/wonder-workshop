@@ -1,61 +1,75 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import Anthropic from '@anthropic-ai/sdk'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const MODEL = 'claude-haiku-4-5-20251001'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set on the server' })
+  }
 
   const { messages = [], stream = false, tools = [] } = req.body
 
-  // Separate system instruction from chat messages
   const systemMsg = messages.find(m => m.role === 'system')
-  const chatMsgs  = messages.filter(m => m.role !== 'system')
+  const chatMsgs = messages.filter(m => m.role !== 'system')
 
-  // Convert to Gemini history format (all but last message)
-  const history = chatMsgs.slice(0, -1).map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
+  // Map OpenAI/Gemini-style roles to Anthropic. Anthropic only has "user" and
+  // "assistant"; the system prompt is a top-level parameter.
+  const anthropicMessages = chatMsgs.map(m => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: m.content,
   }))
-  const lastMsg = chatMsgs[chatMsgs.length - 1]?.content ?? ''
 
-  const modelConfig = {
-    model: 'gemini-2.0-flash',
-    ...(systemMsg ? { systemInstruction: systemMsg.content } : {}),
-  }
-  // Tool calling forces non-streaming. Streaming function-call responses are
-  // more complex than the marginal UX win is worth for our use case.
-  if (tools.length > 0) {
-    modelConfig.tools = [{ functionDeclarations: tools }]
-  }
+  // Tool definitions arrive in Gemini's shape (parameters); Anthropic wants
+  // input_schema. Translate.
+  const anthropicTools = tools.map(t => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.parameters,
+  }))
 
-  const model = genAI.getGenerativeModel(modelConfig)
+  const params = {
+    model: MODEL,
+    max_tokens: 2048,
+    messages: anthropicMessages,
+    ...(systemMsg ? { system: systemMsg.content } : {}),
+    ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
+  }
 
   try {
-    if (stream && tools.length === 0) {
+    if (stream && anthropicTools.length === 0) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
       res.setHeader('Transfer-Encoding', 'chunked')
 
-      const chat   = model.startChat({ history })
-      const result = await chat.sendMessageStream(lastMsg)
-
-      for await (const chunk of result.stream) {
-        const token = chunk.text()
-        if (token) res.write(JSON.stringify({ message: { content: token } }) + '\n')
+      let full = ''
+      const streamObj = client.messages.stream(params)
+      for await (const event of streamObj) {
+        if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          full += event.delta.text
+          res.write(JSON.stringify({ message: { content: full } }) + '\n')
+        }
       }
       res.end()
-    } else {
-      const chat   = model.startChat({ history })
-      const result = await chat.sendMessage(lastMsg)
-      const response = result.response
-      const text   = response.text()
-      const functionCalls = (typeof response.functionCalls === 'function')
-        ? (response.functionCalls() || [])
-        : []
-      res.json({
-        message: { content: text },
-        functionCalls,
-      })
+      return
     }
+
+    const response = await client.messages.create(params)
+
+    let text = ''
+    const functionCalls = []
+    for (const block of response.content) {
+      if (block.type === 'text') text += block.text
+      else if (block.type === 'tool_use') {
+        functionCalls.push({ name: block.name, args: block.input || {} })
+      }
+    }
+
+    res.json({
+      message: { content: text },
+      functionCalls,
+    })
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message })
   }
