@@ -48,6 +48,43 @@ function describeAction(action) {
   return `Ran ${action.name}`
 }
 
+// Context-aware chip suggestions shown above the textarea when empty.
+// Adapts to whether the user has an image selected or just a section.
+function suggestionsFor(activeSection, hasImage) {
+  if (hasImage) {
+    return [
+      'Regenerate with golden-hour lighting',
+      'Make it a wider shot',
+      'Add film grain and a warm color grade',
+    ]
+  }
+  const s = (activeSection || '').toLowerCase()
+  if (s.includes('brand')) {
+    return ['Add a fourth color to the palette', 'Make the brand rules stricter']
+  }
+  if (s.includes('character')) {
+    return ['Change wardrobe to workwear', 'Make the character older', 'Add tattoos to the description']
+  }
+  if (s.includes('shot list')) {
+    return ['Make shot 3 a close-up', 'Add a drone establishing shot']
+  }
+  if (s.includes('mood')) {
+    return ['Make the mood more dramatic', 'Shift the palette cooler']
+  }
+  if (s.includes('story')) {
+    return ['Rewrite the treatment in a more cinematic voice']
+  }
+  if (s.includes('location') || s.includes('environment')) {
+    return ['Move it to a coastal setting', 'Add a sunset to the hero environment']
+  }
+  // Creative Direction / default
+  return [
+    'Make the description more cinematic',
+    'Change the brand to ',
+    'Make it feel more youthful',
+  ]
+}
+
 export default function AgentPanel({ activeSection, activeImageTarget, brief, onUpdate, onRegenerateImage }) {
   const [messages, setMessages] = useState([
     { role: 'agent', text: `Here's the creative direction for the ${brief?.creativeDirection?.brand ?? ''} shoot. I've set ${brief?.creativeDirection?.shots ?? 9} shots across ${brief?.creativeDirection?.location ?? 'key locations'} with a strong hero narrative.`, ts: Date.now() }
@@ -220,9 +257,25 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
 
       {/* Input */}
       <div className="panel-input">
+        {!input.trim() && !streaming && (
+          <div className="panel-suggestions">
+            {suggestionsFor(activeSection, !!activeImageTarget?.slotKey).map((s, i) => (
+              <button
+                key={i}
+                className="panel-suggestion-chip"
+                onClick={() => setInput(s)}
+                type="button"
+              >
+                {s.length > 38 ? s.slice(0, 38) + '…' : s}
+              </button>
+            ))}
+          </div>
+        )}
         <textarea
           className="panel-textarea"
-          placeholder="What do you want to change about this section?"
+          placeholder={activeImageTarget?.slotKey
+            ? 'Tell me how to change this image…'
+            : `What do you want to change about ${activeSection || 'this section'}?`}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={onKey}
