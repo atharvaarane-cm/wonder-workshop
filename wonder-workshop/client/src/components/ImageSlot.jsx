@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { ProjectContext } from '../hooks/useProject.js'
+import { enqueue } from '../utils/generationQueue.js'
 
 function toast(msg, type = 'success') {
   window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg, type } }))
@@ -38,6 +39,7 @@ export default function ImageSlot({ label, prompt, style, className, view, seed 
   const [activeVersion, setActiveVersion] = useState(() => initial?.activeVersion ?? 0)
   const [editablePrompt, setEditablePrompt] = useState(prompt || '')
   const [loading, setLoading] = useState(false)
+  const [queued, setQueued] = useState(false)
   const [error, setError] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [editingPrompt, setEditingPrompt] = useState(false)
@@ -156,63 +158,73 @@ export default function ImageSlot({ label, prompt, style, className, view, seed 
     e?.stopPropagation?.()
     const text = (opts.promptOverride ?? editablePrompt).trim()
     if (!text) return
-    bumpLoading(+1)
+    setQueued(true)
     setMenuOpen(false)
     setError(null)
 
-    // /api/image returns the Pollinations URL immediately (it doesn't fetch
-    // the image server-side). The actual generation happens when the browser
-    // requests that URL, which takes 60-90s. We need to preload the URL here
-    // — only declare success once the image truly loads, so we don't store
-    // dead URLs as versions and end the loading state before the work is done.
-    let res
-    try {
-      const dims = RATIO_DIMS[project?.ratio] || RATIO_DIMS['16:9']
-      res = await fetch('/api/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, ...dims, ...(seed != null ? { seed } : {}) }),
-      })
-    } catch {
-      setError('Generation failed')
-      bumpLoading(-1)
-      toast('Generation failed', 'error')
-      return
-    }
+    await enqueue(async () => {
+      setQueued(false)
+      bumpLoading(+1)
 
-    const data = await res.json().catch(() => ({}))
-    if (!data.image) {
-      setError(data.error || 'Failed')
-      bumpLoading(-1)
-      toast(data.error || 'Generation failed', 'error')
-      return
-    }
-
-    const url = data.image
-    const wasFirst = versions.length === 0
-    const probe = new Image()
-    probe.onload = () => {
-      const next = {
-        src: url,
-        prompt: text,
-        source: 'generated',
-        createdAt: new Date().toISOString(),
+      // /api/image returns the Pollinations URL immediately (it doesn't fetch
+      // the image server-side). The actual generation happens when the browser
+      // requests that URL, which takes 60-90s. We need to preload the URL here
+      // — only declare success once the image truly loads, so we don't store
+      // dead URLs as versions and end the loading state before the work is done.
+      let res
+      try {
+        const dims = RATIO_DIMS[project?.ratio] || RATIO_DIMS['16:9']
+        res = await fetch('/api/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: text, ...dims, ...(seed != null ? { seed } : {}) }),
+        })
+      } catch {
+        setError('Generation failed')
+        bumpLoading(-1)
+        toast('Generation failed', 'error')
+        return
       }
-      setVersions(prev => {
-        const updated = [...prev, next]
-        setActiveVersion(updated.length - 1)
-        return updated
+
+      const data = await res.json().catch(() => ({}))
+      if (!data.image) {
+        setError(data.error || 'Failed')
+        bumpLoading(-1)
+        toast(data.error || 'Generation failed', 'error')
+        return
+      }
+
+      const url = data.image
+      const wasFirst = versions.length === 0
+
+      await new Promise(resolve => {
+        const probe = new Image()
+        probe.onload = () => {
+          const next = {
+            src: url,
+            prompt: text,
+            source: 'generated',
+            createdAt: new Date().toISOString(),
+          }
+          setVersions(prev => {
+            const updated = [...prev, next]
+            setActiveVersion(updated.length - 1)
+            return updated
+          })
+          setEditingPrompt(false)
+          bumpLoading(-1)
+          if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New image version created')
+          resolve()
+        }
+        probe.onerror = () => {
+          setError('Image generator unreachable')
+          bumpLoading(-1)
+          if (!opts.silent) toast('Generation failed', 'error')
+          resolve()
+        }
+        probe.src = url
       })
-      setEditingPrompt(false)
-      bumpLoading(-1)
-      if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New image version created')
-    }
-    probe.onerror = () => {
-      setError('Image generator unreachable')
-      bumpLoading(-1)
-      if (!opts.silent) toast('Generation failed', 'error')
-    }
-    probe.src = url
+    })
   }
 
   // Generate 3 parallel variations of the active prompt. Staggered slightly
@@ -483,9 +495,13 @@ export default function ImageSlot({ label, prompt, style, className, view, seed 
           </>
         : <div
             className={`img-slot-empty${menuOpen ? ' menu-open' : ''}`}
-            onClick={e => { e.stopPropagation(); if (!loading) setMenuOpen(o => !o) }}
+            onClick={e => { e.stopPropagation(); if (!loading && !queued) setMenuOpen(o => !o) }}
           >
-            {loading
+            {queued && !loading
+              ? <div className="img-slot-loading">
+                  <span className="loading-label" style={{ opacity: 0.5 }}>In queue…</span>
+                </div>
+              : loading
               ? <div className="img-slot-loading">
                   <div className="loading-dots" aria-hidden="true">
                     <span /><span /><span />

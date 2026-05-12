@@ -563,18 +563,19 @@ textarea { font-family: var(--font); resize: none; }
 @media (max-width: 640px) {
   .discover-layout { flex-direction: column; }
   .sidebar {
-    width: 100%; height: 52px; padding: 0; flex-direction: row; align-items: center;
+    width: 100% !important; height: 52px; padding: 0; flex-direction: row; align-items: center;
     border-right: none; border-bottom: 1px solid rgba(0,0,0,0.07);
   }
   .sidebar-logo {
-    height: 52px; padding: 0 14px; margin: 0; border-bottom: none;
+    height: 52px; padding: 0; margin: 0; border-bottom: none;
     border-right: 1px solid rgba(0,0,0,0.08); justify-content: center;
+    width: 60px; flex-shrink: 0;
   }
   .sidebar-logo-icons { display: none; }
   .sidebar-w-mark { width: 36px; }
-  .sidebar-nav { flex: 1; flex-direction: row; justify-content: center; gap: 0; padding: 0; }
-  .nav-item { padding: 0 16px; height: 52px; justify-content: center; }
-  .sidebar-user { border-top: none; padding: 0 16px; }
+  .sidebar-nav { flex: 1; flex-direction: row; justify-content: flex-start; gap: 0; padding: 0; }
+  .nav-item { padding: 0 14px; height: 52px; justify-content: center; width: auto; }
+  .sidebar-user { border-top: none; padding: 0; width: 60px; flex-shrink: 0; justify-content: center; margin-top: 0; align-items: center; }
   .discover-topbar { display: none; }
   .discover-form { padding: 14px 16px; }
   .form-title { font-size: 24px; }
@@ -1226,6 +1227,8 @@ textarea { font-family: var(--font); resize: none; }
   cursor: pointer; transition: all 0.12s;
 }
 .panel-mic-btn:hover { background: var(--bg); }
+.panel-mic-btn.active { background: #fee2e2; border-color: #f87171; color: #dc2626; animation: mic-pulse 1s ease-in-out infinite; }
+@keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); } 50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); } }
 .panel-send-btn {
   width: 30px; height: 30px; border-radius: 8px;
   background: #1A1A1A; color: #fff; border: none;
@@ -1726,6 +1729,7 @@ textarea { font-family: var(--font); resize: none; }
   .board-scroll { padding: 12px; }
 
   /* Section content grids — 2 col on mobile */
+  .bi-layout { grid-template-columns: 1fr; gap: 16px; }
   .cd-layout { grid-template-columns: 1fr; }
   .cd-grid { grid-template-columns: repeat(2, 1fr); }
   .character-views { grid-template-columns: repeat(2, 1fr); }
