@@ -367,9 +367,12 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       imageResolution={IMAGE_SECTION_IDS.has(sec.id) ? imageResolution : null}
                       imageLoading={(loadingBySection[sec.title] || 0) > 0}
                       onClick={() => {
+                        // Tracking the active section for nav purposes doesn't
+                        // require clearing the active image — that would steal
+                        // the chat's focus every time the user clicked an empty
+                        // part of the section card. The active image only
+                        // changes when a *different* image is clicked.
                         setActiveId(sec.id)
-                        setActiveImageTarget(null)
-                        window.dispatchEvent(new CustomEvent('ww-active-image-target', { detail: null }))
                       }}
                     >
                       {renderContent(sec.id)}
