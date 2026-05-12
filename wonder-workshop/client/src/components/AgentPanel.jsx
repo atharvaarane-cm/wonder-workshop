@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { streamChat } from '../hooks/useBrief.js'
+import { chatWithTools } from '../hooks/useBrief.js'
 
 function timeAgo(ts) {
   const diff = Math.round((Date.now() - ts) / 60000)
@@ -8,7 +8,47 @@ function timeAgo(ts) {
   return `${diff} min ago`
 }
 
-export default function AgentPanel({ activeSection, activeImageTarget, brief }) {
+// Tool definitions exposed to Gemini — the model picks one when the user
+// asks to change something. Schemas use Gemini's functionDeclarations format.
+const TOOLS = [
+  {
+    name: 'update_brief_field',
+    description: 'Update any text field in the brief using dot-path notation. Examples: "creativeDirection.brand", "creativeDirection.description", "character.description", "character.wardrobe", "environment.heroEnvironment", "brandInfo.rules". Use when the user asks to change/edit/rename/set a brief field.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Dot-path to the field within the brief JSON.' },
+        value: { type: 'string', description: 'The new value as a plain string.' },
+      },
+      required: ['path', 'value'],
+    },
+  },
+  {
+    name: 'regenerate_active_image',
+    description: 'Regenerate the currently-selected image with a new prompt. Only call this when the user has an active image selected AND they ask to remake/regenerate/redo/try the image differently. Provide the FULL new prompt, not just a delta — describe subject, setting, lighting, framing, mood.',
+    parameters: {
+      type: 'object',
+      properties: {
+        new_prompt: { type: 'string', description: 'The complete new image prompt.' },
+      },
+      required: ['new_prompt'],
+    },
+  },
+]
+
+function describeAction(action) {
+  if (action.name === 'update_brief_field') {
+    const { path, value } = action.args || {}
+    const shortVal = (value || '').length > 80 ? (value.slice(0, 80) + '…') : value
+    return `Updated ${path} → "${shortVal}"`
+  }
+  if (action.name === 'regenerate_active_image') {
+    return 'Regenerating the selected image with the new prompt…'
+  }
+  return `Ran ${action.name}`
+}
+
+export default function AgentPanel({ activeSection, activeImageTarget, brief, onUpdate, onRegenerateImage }) {
   const [messages, setMessages] = useState([
     { role: 'agent', text: `Here's the creative direction for the ${brief?.creativeDirection?.brand ?? ''} shoot. I've set ${brief?.creativeDirection?.shots ?? 9} shots across ${brief?.creativeDirection?.location ?? 'key locations'} with a strong hero narrative.`, ts: Date.now() }
   ])
@@ -64,13 +104,25 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief }) 
 
     setMessages(prev => [...prev, { role: 'user', text, ts: Date.now() }])
 
+    const systemPrompt = [
+      `You are a creative production assistant working inside Wonder Workshop, a brief tool.`,
+      `When the user asks to change/edit/set/rename/update any field, CALL update_brief_field with the appropriate dot-path — do not just describe the change.`,
+      `When the user asks to regenerate/remake/redo/change the active image, CALL regenerate_active_image with the FULL new prompt.`,
+      `When the user asks a question or wants conversation, respond with plain text only (no function calls). Keep replies under 3 sentences.`,
+      ``,
+      `Currently active section: "${activeSection}"`,
+      activeImageTarget?.prompt
+        ? `Currently selected image — prompt: "${activeImageTarget.prompt}"`
+        : `No image is currently selected.`,
+      ``,
+      `Full brief JSON (for path resolution):`,
+      JSON.stringify(brief ?? {}),
+    ].join('\n')
+
     const history = [
-      {
-        role: 'system',
-        content: `You are a creative production assistant. The user is editing "${activeSection}" in their brief.${activeImageTarget?.prompt ? ` Image prompt: ${activeImageTarget.prompt}.` : ''} Brief: ${JSON.stringify(brief?.creativeDirection ?? {})}. Be concise and creative. Keep responses under 3 sentences.`
-      },
+      { role: 'system', content: systemPrompt },
       ...messages.map(m => ({ role: m.role === 'agent' ? 'assistant' : 'user', content: m.text })),
-      { role: 'user', content: text }
+      { role: 'user', content: text },
     ]
 
     setMessages(prev => [...prev, { role: 'agent', text: '', ts: Date.now() }])
@@ -78,13 +130,42 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief }) 
     try {
       const controller = new AbortController()
       abortRef.current = controller
-      await streamChat(history, fullText => {
-        setMessages(prev => {
-          const next = [...prev]
-          next[next.length - 1] = { role: 'agent', text: fullText, ts: next[next.length - 1].ts }
-          return next
-        })
-      }, controller.signal)
+      const { text: replyText, actions } = await chatWithTools(history, TOOLS, controller.signal)
+
+      // Apply each function call against the live brief.
+      const applied = []
+      for (const a of actions) {
+        if (a.name === 'update_brief_field' && onUpdate) {
+          const { path, value } = a.args || {}
+          if (path && typeof value === 'string') {
+            onUpdate(path, value)
+            applied.push(a)
+          }
+        } else if (a.name === 'regenerate_active_image' && onRegenerateImage) {
+          const { new_prompt } = a.args || {}
+          if (new_prompt && activeImageTarget?.slotKey) {
+            const ok = onRegenerateImage(new_prompt)
+            if (ok) applied.push(a)
+          }
+        }
+      }
+
+      // Assemble the agent's reply. If Gemini sent text, use it; if there
+      // were applied actions but no text, synthesise a short summary.
+      const actionSummaries = applied.map(describeAction).filter(Boolean)
+      let finalText = (replyText || '').trim()
+      if (!finalText && actionSummaries.length) {
+        finalText = actionSummaries.join(' · ')
+      } else if (actionSummaries.length && !finalText.includes(actionSummaries[0])) {
+        finalText = `${finalText}\n\n${actionSummaries.map(s => `↳ ${s}`).join('\n')}`
+      }
+      if (!finalText) finalText = '(no response)'
+
+      setMessages(prev => {
+        const next = [...prev]
+        next[next.length - 1] = { role: 'agent', text: finalText, ts: next[next.length - 1].ts }
+        return next
+      })
     } catch (e) {
       if (e.name !== 'AbortError') {
         setMessages(prev => {

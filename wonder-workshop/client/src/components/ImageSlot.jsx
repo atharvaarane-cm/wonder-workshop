@@ -72,6 +72,24 @@ export default function ImageSlot({ label, prompt, style, className, view, seed 
     return () => window.removeEventListener('ww-active-image-target', onTarget)
   }, [editablePrompt])
 
+  // Chat-driven regeneration: the agent panel can ask a specific slot to
+  // regenerate with a new prompt. Match on slotKey (original prompt prop)
+  // so user-edited prompts don't break targeting.
+  useEffect(() => {
+    function onRegenerate(e) {
+      const { slotKey: targetKey, newPrompt } = e.detail || {}
+      if (!targetKey || !slotKey || targetKey !== slotKey) return
+      if (!newPrompt) return
+      setEditablePrompt(newPrompt)
+      // generate uses opts.promptOverride if passed; this lets us regen
+      // without waiting for the editablePrompt setState to flush.
+      generate(null, { promptOverride: newPrompt })
+    }
+    window.addEventListener('ww-regenerate-image', onRegenerate)
+    return () => window.removeEventListener('ww-regenerate-image', onRegenerate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotKey])
+
   // Lightbox + prompt-edit modal: lock body scroll + Esc to close.
   useEffect(() => {
     if (!lightboxOpen && !editingPrompt) return
@@ -332,6 +350,7 @@ export default function ImageSlot({ label, prompt, style, className, view, seed 
       detail: {
         label: label || `Image ${slotNumber}`,
         prompt: editablePrompt,
+        slotKey: slotKey || editablePrompt, // stable identifier for chat-driven regen
         sectionTitle,
         slotNumber,
       },
