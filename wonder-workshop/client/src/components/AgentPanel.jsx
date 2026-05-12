@@ -104,18 +104,32 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
 
     setMessages(prev => [...prev, { role: 'user', text, ts: Date.now() }])
 
+    const hasActiveImage = !!activeImageTarget?.prompt
     const systemPrompt = [
       `You are a creative production assistant working inside Wonder Workshop, a brief tool.`,
       `When the user asks to change/edit/set/rename/update any field, CALL update_brief_field with the appropriate dot-path — do not just describe the change.`,
       `When the user asks to regenerate/remake/redo/change the active image, CALL regenerate_active_image with the FULL new prompt.`,
       `When the user asks a question or wants conversation, respond with plain text only (no function calls). Keep replies under 3 sentences.`,
       ``,
-      `Currently active section: "${activeSection}"`,
-      activeImageTarget?.prompt
-        ? `Currently selected image — prompt: "${activeImageTarget.prompt}"`
-        : `No image is currently selected.`,
+      `# Scope rules — read carefully`,
+      hasActiveImage
+        ? [
+            `The user has CURRENTLY SELECTED a specific image. That is the focus.`,
+            `When the user says "the prompt", "this prompt", "this image", "this one", or asks anything ambiguous, they mean the SELECTED IMAGE — NOT the project description.`,
+            `If asked to show/print/explain the prompt, return ONLY the selected image's prompt verbatim, in quotes.`,
+            `If asked to change/modify the image, call regenerate_active_image with the new full prompt.`,
+            ``,
+            `SELECTED IMAGE`,
+            `  Section: ${activeImageTarget?.sectionTitle || activeSection}`,
+            `  Label:   ${activeImageTarget?.label || ''}`,
+            `  Prompt:  "${activeImageTarget.prompt}"`,
+          ].join('\n')
+        : [
+            `The user has selected a SECTION (no specific image). The focus is "${activeSection}".`,
+            `When the user says "the prompt" or asks ambiguous questions, they mean fields within this section, not the project description.`,
+          ].join('\n'),
       ``,
-      `Full brief JSON (for path resolution):`,
+      `# Full brief (for path resolution and broader context — use sparingly):`,
       JSON.stringify(brief ?? {}),
     ].join('\n')
 
