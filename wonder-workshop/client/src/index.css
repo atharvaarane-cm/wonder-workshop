@@ -566,9 +566,14 @@ textarea { font-family: var(--font); resize: none; }
     width: 100%; height: 52px; padding: 0; flex-direction: row; align-items: center;
     border-right: none; border-bottom: 1px solid rgba(0,0,0,0.07);
   }
-  .sidebar-logo { height: 52px; padding: 0 16px; margin: 0; border-bottom: none; border-right: 1px solid rgba(0,0,0,0.08); }
-  .sidebar-w-mark { width: 42px; }
-  .sidebar-nav { flex: 1; flex-direction: row; justify-content: center; }
+  .sidebar-logo {
+    height: 52px; padding: 0 14px; margin: 0; border-bottom: none;
+    border-right: 1px solid rgba(0,0,0,0.08); justify-content: center;
+  }
+  .sidebar-logo-icons { display: none; }
+  .sidebar-w-mark { width: 36px; }
+  .sidebar-nav { flex: 1; flex-direction: row; justify-content: center; gap: 0; padding: 0; }
+  .nav-item { padding: 0 16px; height: 52px; justify-content: center; }
   .sidebar-user { border-top: none; padding: 0 16px; }
   .discover-topbar { display: none; }
   .discover-form { padding: 14px 16px; }
@@ -576,7 +581,8 @@ textarea { font-family: var(--font); resize: none; }
   .quick-start-row, .ratio-row { grid-template-columns: repeat(2, 1fr); }
   .input-card-footer { flex-wrap: wrap; }
   .project-info-panel { grid-template-columns: 1fr; }
-
+  /* Recents search in sidebar doesn't work in horizontal mode */
+  .sidebar-recents { display: none; }
 }
 
 /* ── Preview panel ───────────────────────────────────────────── */

@@ -179,6 +179,7 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
       {/* ── Sidebar ───────────────────────────────────────────── */}
       <aside ref={sidebarRef} className={`sidebar${sidebarExpanded ? ' sidebar-expanded' : ''}${!sidebarVisible ? ' sidebar-hidden' : ''}`} style={sidebarVisible ? { width: sidebarWidth } : {}}>
         <div className="sidebar-logo">
+          <img src="/brand-assets/wonder-w-mark-transparent.png" alt="W" className="sidebar-w-mark" />
           <div className="sidebar-logo-icons">
             <button className={`sidebar-icon-btn${!sidebarVisible ? ' active' : ''}`} onClick={() => setSidebarVisible(v => !v)} title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
