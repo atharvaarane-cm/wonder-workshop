@@ -32,6 +32,7 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "rules": "<brand guidelines in 1-2 sentences>"
   },
   "character": {
+    "name": "<short character name, e.g. 'Sarah' or 'The Runner'>",
     "description": "<talent description>",
     "wardrobe": "<wardrobe details>",
     "views": ["FRONT", "3/4", "SIDE"]
