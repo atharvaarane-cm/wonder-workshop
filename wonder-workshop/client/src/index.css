@@ -1158,9 +1158,16 @@ textarea { font-family: var(--font); resize: none; }
 .cd-field label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: block; margin-bottom: 4px; }
 .cd-field .val { font-size: 13px; font-weight: 500; }
 
-/* ── Brand Info (full-width) ───────────────────────────────────── */
-.bi-layout { display: grid; grid-template-columns: 160px 1fr 1.4fr; gap: 28px; align-items: start; }
-.bi-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
+/* ── Brand Info — top row (logo + rules), bottom row (color palette strip) */
+.bi-layout { display: flex; flex-direction: column; gap: 22px; }
+.bi-top-row { display: grid; grid-template-columns: 160px 1fr; gap: 28px; align-items: start; }
+.bi-colors-row { padding-top: 18px; border-top: 1px solid var(--border); }
+.bi-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
+.bi-swatches-horizontal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
 
 .bi-logo-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .bi-logo-wrap {
@@ -1984,7 +1991,7 @@ textarea { font-family: var(--font); resize: none; }
   .board-scroll { padding: 12px; }
 
   /* Section content grids — 2 col on mobile */
-  .bi-layout { grid-template-columns: 1fr; gap: 16px; }
+  .bi-top-row { grid-template-columns: 1fr; gap: 16px; }
   .cd-layout { grid-template-columns: 1fr; }
   .cd-grid { grid-template-columns: repeat(2, 1fr); }
   .character-views { grid-template-columns: repeat(2, 1fr); }

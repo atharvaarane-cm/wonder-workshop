@@ -54,41 +54,44 @@ export default function BrandInfo({ data, update }) {
   return (
     <div className="bi-layout">
 
-      {/* Logo + source */}
-      <div className="bi-logo-col">
-        <div className="bi-logo-wrap">
-          {fallbacks.length > 0 && !logoFailed
-            ? <img src={fallbacks[srcIdx]} alt="Brand logo" onError={handleError} className="bi-logo-img" />
-            : <ImageSlot label="Logo" style={{ width: '100%', height: '100%', borderRadius: 10 }} />
-          }
+      {/* Top row: logo on the left, brand guidelines stretching to the right. */}
+      <div className="bi-top-row">
+
+        <div className="bi-logo-col">
+          <div className="bi-logo-wrap">
+            {fallbacks.length > 0 && !logoFailed
+              ? <img src={fallbacks[srcIdx]} alt="Brand logo" onError={handleError} className="bi-logo-img" />
+              : <ImageSlot label="Logo" style={{ width: '100%', height: '100%', borderRadius: 10 }} />
+            }
+          </div>
+          {sourceUrl && (
+            <a href={sourceUrl} target="_blank" rel="noreferrer" className="bi-source-link">
+              {domain || 'Visit site'} ↗
+            </a>
+          )}
         </div>
-        {sourceUrl && (
-          <a href={sourceUrl} target="_blank" rel="noreferrer" className="bi-source-link">
-            {domain || 'Visit site'} ↗
-          </a>
-        )}
+
+        <div className="bi-rules-col">
+          <div className="bi-section-label">Brand Guidelines</div>
+          <EditableText
+            tag="p"
+            className="bi-rules-text"
+            value={data.rules ?? ''}
+            onChange={v => update('brandInfo.rules', v)}
+            placeholder="Brand guidelines and rules…"
+          />
+        </div>
+
       </div>
 
-      {/* Color palette */}
-      <div className="bi-colors-col">
+      {/* Bottom row: color palette as a horizontal strip. */}
+      <div className="bi-colors-row">
         <div className="bi-section-label">Color Palette</div>
-        <div className="bi-swatches">
+        <div className="bi-swatches-horizontal">
           {(data.colors || []).map((c, i) => (
             <Swatch color={c} key={i} />
           ))}
         </div>
-      </div>
-
-      {/* Brand guidelines */}
-      <div className="bi-rules-col">
-        <div className="bi-section-label">Brand Guidelines</div>
-        <EditableText
-          tag="p"
-          className="bi-rules-text"
-          value={data.rules ?? ''}
-          onChange={v => update('brandInfo.rules', v)}
-          placeholder="Brand guidelines and rules…"
-        />
       </div>
 
     </div>
