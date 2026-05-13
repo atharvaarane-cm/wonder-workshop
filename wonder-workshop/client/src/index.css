@@ -1103,6 +1103,22 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── Creative Direction ────────────────────────────────────────── */
 /* ── Creative Direction two-column layout ───────────────────── */
+.cd-wrap { display: flex; flex-direction: column; }
+.cd-gradient-strip {
+  /* Break out of .section-body's 18px padding so the strip touches
+     the card's left/right edges. Sit flush against the section
+     header above too. */
+  margin: -18px -18px 20px;
+  height: 6px;
+  background: linear-gradient(90deg,
+    #FF6A1A 0%,
+    #FFB300 22%,
+    #FF4F8A 46%,
+    #B454FF 68%,
+    #4DA9FF 100%
+  );
+  border-radius: 0 0 2px 2px;
+}
 .cd-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
 .cd-left { }
 .cd-right { display: flex; flex-direction: column; gap: 0; padding: 4px 0; }
