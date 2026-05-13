@@ -1807,6 +1807,27 @@ textarea { font-family: var(--font); resize: none; }
 }
 .img-slot-empty:hover .img-slot-plus { opacity: 1; }
 .img-slot-empty.menu-open .img-slot-plus { opacity: 0; }
+
+/* Sparkle affordance — signals "AI / generate" on empty slots */
+.img-slot-sparkle {
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(0,0,0,0.32);
+  opacity: 0.65;
+  transition: opacity 0.15s, color 0.15s, transform 0.18s ease-out;
+  filter: drop-shadow(0 0 6px rgba(124,92,252,0));
+}
+.img-slot-empty:hover .img-slot-sparkle {
+  opacity: 1;
+  color: #7C5CFC;
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 10px rgba(124,92,252,0.35));
+}
+.img-slot-empty.menu-open .img-slot-sparkle { opacity: 0; }
+[data-theme="dark"] .img-slot-sparkle { color: rgba(255,255,255,0.35); }
+[data-theme="dark"] .img-slot-empty:hover .img-slot-sparkle {
+  color: #9B7DFF;
+  filter: drop-shadow(0 0 10px rgba(155,125,255,0.45));
+}
 .img-slot-error { font-size: 10px; color: rgba(200,60,60,0.8); margin-top: 2px; }
 .empty-prompt-editor {
   position: absolute; left: 8px; right: 8px; bottom: 8px;
