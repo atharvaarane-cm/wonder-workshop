@@ -1,35 +1,37 @@
 import EditableText from '../EditableText.jsx'
-import ImageSlot from '../ImageSlot.jsx'
 
+// Matches the Wonder Workshop Figma mockup: a thin BLUE header bar
+// containing the "Creative" label + DURATION + ASPECT RATIO inline,
+// then a single-column dark body with the prose description and any
+// supplemental text fields. No hero image — the section is text-only
+// per the mockup.
 export default function CreativeDirection({ data, update, onGoToShotList }) {
-  const heroPrompt = `${data.brand} ${data.description} cinematic film still, professional photography, high quality`
   const toneKeywords = Array.isArray(data.toneKeywords) ? data.toneKeywords : []
+  const ratio = data.format || data.aspectRatio || '16:9'
 
   return (
     <div className="cd-wrap">
 
-      {/* Gradient strip — orange→pink→purple, sits flush against the
-          section card's edges. Visual hero of the Creative section
-          per the Figma mockup. */}
-      <div className="cd-gradient-strip" aria-hidden="true" />
-
-    <div className="cd-layout">
-
-      {/* Left — hero image */}
-      <div className="cd-left">
-        <ImageSlot className="cd-hero-img" label="Hero Image" prompt={heroPrompt} />
+      {/* Blue header strip — "Creative" label on the left,
+          metadata pills on the right. */}
+      <div className="cd-feature-bar">
+        <span className="cd-feature-label">Creative</span>
+        <div className="cd-feature-meta">
+          {data.duration && (
+            <div className="cd-feature-meta-item">
+              <span className="cd-feature-meta-label">DURATION</span>
+              <span className="cd-feature-meta-val">{data.duration}</span>
+            </div>
+          )}
+          <div className="cd-feature-meta-item">
+            <span className="cd-feature-meta-label">ASPECT RATIO</span>
+            <span className="cd-feature-meta-val">{ratio}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Right — all creative info */}
-      <div className="cd-right">
-
-        {/* "Creative" eyebrow per the mockup — the brand name already
-            lives in the hero project title at the top of the board, so
-            duplicating it here adds noise. */}
-        <div className="cd-eyebrow">CREATIVE</div>
-
-        {/* Key message — only rendered when set, to avoid the empty
-            italic placeholder cluttering the section. */}
+      {/* Dark body — prose description + metadata grid */}
+      <div className="cd-body">
         {data.keyMessage && (
           <EditableText
             tag="p"
@@ -39,7 +41,6 @@ export default function CreativeDirection({ data, update, onGoToShotList }) {
           />
         )}
 
-        {/* Description */}
         <EditableText
           tag="p"
           className="cd-desc"
@@ -48,7 +49,6 @@ export default function CreativeDirection({ data, update, onGoToShotList }) {
           placeholder="Creative description…"
         />
 
-        {/* Tone keywords */}
         {toneKeywords.length > 0 && (
           <div className="cd-tone-row">
             {toneKeywords.map((kw, i) => (
@@ -59,33 +59,24 @@ export default function CreativeDirection({ data, update, onGoToShotList }) {
 
         <div className="cd-divider" />
 
-        {/* Metadata grid */}
         <div className="cd-meta-grid">
-          {[
-            ['Format',   'format'],
-            ['Duration', 'duration'],
-          ].map(([label, key]) => (
-            <div className="cd-meta-field" key={key}>
-              <span className="cd-meta-label">{label}</span>
-              <EditableText tag="div" className="cd-meta-val" value={String(data[key] ?? '')} onChange={v => update(`creativeDirection.${key}`, v)} />
-            </div>
-          ))}
+          <div className="cd-meta-field">
+            <span className="cd-meta-label">Format</span>
+            <EditableText tag="div" className="cd-meta-val" value={String(data.format ?? '')} onChange={v => update('creativeDirection.format', v)} />
+          </div>
           <div className="cd-meta-field">
             <span className="cd-meta-label">Shots</span>
             <button className="cd-shots-link" onClick={onGoToShotList} title="Jump to Shot List">
               {data.shots ?? '—'} shots ↓
             </button>
           </div>
+          <div className="cd-meta-field">
+            <span className="cd-meta-label">Location</span>
+            <EditableText tag="div" className="cd-meta-val" value={data.location ?? ''} onChange={v => update('creativeDirection.location', v)} />
+          </div>
         </div>
-
-        {/* Location — full width */}
-        <div className="cd-location">
-          <span className="cd-meta-label">Location</span>
-          <EditableText tag="div" className="cd-meta-val" value={data.location ?? ''} onChange={v => update('creativeDirection.location', v)} />
-        </div>
-
       </div>
-    </div>
+
     </div>
   )
 }
