@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useContext } from 'react'
 import { chatWithTools } from '../hooks/useBrief.js'
+import { ProjectContext } from '../hooks/useProject.js'
 
 function timeAgo(ts) {
   const diff = Math.round((Date.now() - ts) / 60000)
@@ -49,6 +50,22 @@ function describeAction(action) {
 }
 
 export default function AgentPanel({ activeSection, activeImageTarget, brief, onUpdate, onRegenerateImage }) {
+  // Pull version history for whatever image the user has selected on the
+  // left. The chat panel becomes a contextual viewer: thumbnails of all
+  // generated versions of the active slot, click any thumbnail to swap
+  // which one shows on the left.
+  const project = useContext(ProjectContext)
+  const activeSlotKey = activeImageTarget?.slotKey
+  const slotData = activeSlotKey ? project?.images?.[activeSlotKey] : null
+  const versions = slotData?.versions || []
+  const activeVersion = slotData?.activeVersion ?? 0
+  function pickVersion(idx) {
+    if (!activeSlotKey) return
+    window.dispatchEvent(new CustomEvent('ww-set-active-version', {
+      detail: { slotKey: activeSlotKey, versionIndex: idx },
+    }))
+  }
+
   const [messages, setMessages] = useState([
     { role: 'agent', text: `Here's the creative direction for the ${brief?.creativeDirection?.brand ?? ''} shoot. I've set ${brief?.creativeDirection?.shots ?? 9} shots across ${brief?.creativeDirection?.location ?? 'key locations'} with a strong hero narrative.`, ts: Date.now() }
   ])
@@ -221,6 +238,30 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
           <span>{activeSection}</span>
         </div>
       </div>
+
+      {/* Versions tracker — only when an image is selected on the left.
+          Each generated version becomes a small thumbnail; click any
+          thumbnail to make it the active version on the source slot. */}
+      {activeSlotKey && versions.length > 0 && (
+        <div className="panel-versions">
+          <div className="panel-versions-label">
+            Versions <span className="panel-versions-count">{versions.length}</span>
+          </div>
+          <div className="panel-versions-grid">
+            {versions.map((v, i) => (
+              <button
+                key={(v.src || '') + i}
+                className={`panel-version-thumb${i === activeVersion ? ' active' : ''}`}
+                onClick={() => pickVersion(i)}
+                title={`Version ${i + 1}${i === activeVersion ? ' (active)' : ''}`}
+              >
+                <img src={v.src} alt={`Version ${i + 1}`} />
+                {i === activeVersion && <span className="panel-version-active-mark">●</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="panel-messages" ref={messagesRef}>

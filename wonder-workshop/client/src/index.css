@@ -1555,6 +1555,49 @@ textarea { font-family: var(--font); resize: none; }
 }
 .panel-icon-btn:hover { background: var(--bg); color: var(--text); }
 
+/* Versions tracker — appears in the chat panel when an image is selected
+   on the left. Each thumbnail is clickable; clicking swaps the active
+   version on the source slot. */
+.panel-versions {
+  flex-shrink: 0; padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.panel-versions-label {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted);
+  display: flex; align-items: center; gap: 6px;
+}
+.panel-versions-count {
+  padding: 1px 6px; border-radius: 999px; background: var(--bg);
+  color: var(--text); font-size: 9px; letter-spacing: 0; font-weight: 700;
+}
+.panel-versions-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px;
+}
+.panel-version-thumb {
+  position: relative; aspect-ratio: 1/1; padding: 0;
+  border-radius: 7px; overflow: hidden;
+  border: 2px solid transparent; background: var(--bg);
+  cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+}
+.panel-version-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.panel-version-thumb:hover { transform: scale(1.04); border-color: var(--border-md); }
+.panel-version-thumb.active {
+  border-color: #7C5CFC;
+  box-shadow: 0 0 0 2px rgba(124,92,252,0.18);
+}
+[data-theme="dark"] .panel-version-thumb.active {
+  border-color: #9B7DFF;
+  box-shadow: 0 0 0 2px rgba(155,125,255,0.22);
+}
+.panel-version-active-mark {
+  position: absolute; top: 2px; right: 4px; font-size: 10px;
+  color: #7C5CFC; line-height: 1; text-shadow: 0 0 4px rgba(255,255,255,0.9);
+}
+[data-theme="dark"] .panel-version-active-mark { color: #9B7DFF; text-shadow: 0 0 4px rgba(0,0,0,0.6); }
+
 .panel-messages { flex: 1; overflow-y: auto; padding: 20px 16px 14px; display: flex; flex-direction: column; gap: 10px; justify-content: flex-end; }
 .msg { display: flex; flex-direction: column; max-width: 92%; }
 .msg.user { align-self: flex-end; }
