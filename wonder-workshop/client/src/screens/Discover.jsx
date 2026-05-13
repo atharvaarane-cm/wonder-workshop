@@ -62,7 +62,7 @@ const CARD_GRADIENTS = [
   'linear-gradient(135deg,#0a1a2e,#1a4060)',
 ]
 
-export default function Discover({ onGenerate, projects = [], onOpenProject, onDeleteProject, onRenameProject, onMoveProjectToFolder, onDuplicateProject, theme, toggleTheme }) {
+export default function Discover({ onGenerate, onStartBlank, projects = [], onOpenProject, onDeleteProject, onRenameProject, onMoveProjectToFolder, onDuplicateProject, theme, toggleTheme }) {
   const [activePage, setActivePage] = useState('home')
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [sidebarExpanded, setSidebarExpanded] = useState(false)
@@ -649,6 +649,14 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
                   </div>
                 )}
               </div>
+              <button
+                className="start-blank-btn"
+                onClick={() => onStartBlank?.({ ratio, resolution })}
+                disabled={loading}
+                title="Start from a blank board — skip AI autofill"
+              >
+                Start blank
+              </button>
               <button className="generate-btn" onClick={handleSend} disabled={!prompt.trim() || loading}>
                 {loading
                   ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2.5" strokeDasharray="28" strokeDashoffset="8"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.75s" repeatCount="indefinite"/></circle></svg>

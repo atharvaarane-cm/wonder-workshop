@@ -441,6 +441,22 @@ textarea { font-family: var(--font); resize: none; }
   box-shadow: 0 6px 16px rgba(124,92,252,0.16);
   outline: none;
 }
+.start-blank-btn {
+  margin-left: auto;
+  background: transparent; color: var(--muted);
+  font-size: 12px; font-weight: 600; font-family: var(--font);
+  padding: 8px 14px; border-radius: 18px;
+  border: 1px solid var(--border-md); cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+.start-blank-btn:hover {
+  background: var(--bg); color: var(--text); border-color: var(--text);
+}
+.start-blank-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+[data-theme="dark"] .start-blank-btn { border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.6); }
+[data-theme="dark"] .start-blank-btn:hover { background: rgba(255,255,255,0.06); color: #fff; border-color: rgba(255,255,255,0.5); }
+.start-blank-btn + .generate-btn { margin-left: 8px; }
+
 .generate-btn {
   margin-left: auto; background: #7C5CFC; color: #fff;
   font-size: 13px; font-weight: 600; font-family: var(--font);

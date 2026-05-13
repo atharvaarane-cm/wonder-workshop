@@ -52,6 +52,28 @@ export default function App() {
     refreshList()
   }
 
+  // "Start blank" — skip the AI brief generation entirely, open an empty
+  // project the user can fill in manually. Ratio + resolution from the
+  // form are still preserved so the Storyboard output renders sensibly.
+  function handleStartBlank({ ratio, resolution } = {}) {
+    const stubBrief = {
+      title: 'New project',
+      projectInfo: { projectName: 'New project' },
+      creativeDirection: {},
+      brandInfo: { colors: [] },
+      character: {},
+      environment: {},
+      shotList: [],
+      generationSettings: {
+        ratio: ratio || '16:9',
+        resolution: resolution || '1K',
+      },
+    }
+    const p = createProject(stubBrief)
+    setProject(p)
+    refreshList()
+  }
+
   function handleOpenProject(p) {
     setActiveProject(p.id)
     setProject(p)
@@ -160,6 +182,7 @@ export default function App() {
   return (
     <Discover
       onGenerate={handleGenerate}
+      onStartBlank={handleStartBlank}
       projects={projects}
       onOpenProject={handleOpenProject}
       onDeleteProject={handleDeleteProject}
