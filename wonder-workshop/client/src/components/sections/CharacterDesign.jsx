@@ -28,33 +28,50 @@ function fullbodyPrompt(data, view) {
 export default function CharacterDesign({ data, update }) {
   const seed = hashStr((data?.description || '') + (data?.wardrobe || ''))
 
+  // Bio portrait: small headshot beside the name + description, per mockup.
+  // Uses the same FRONT close-up prompt as the Headshots row so the
+  // portrait stays consistent with the rest of the character refs.
+  const portraitPrompt = `${data?.description || ''}, ${data?.wardrobe || ''}, close-up portrait, head and shoulders, facing directly forward, front view, sharp face detail, studio lighting, clean white background, headshot`
+
   return (
     <div className="character-design">
       {/* Bio */}
       <div className="character-bio">
-        <div className="character-bio-label">BIO</div>
-        <EditableText
-          tag="p"
-          className="character-bio-name"
-          value={data?.name}
-          onChange={v => update('character.name', v)}
-          placeholder="Character name…"
-        />
-        <EditableText
-          tag="p"
-          className="character-bio-description"
-          value={data?.description}
-          onChange={v => update('character.description', v)}
-          placeholder="Character description…"
-        />
-        <p className="character-bio-wardrobe">
-          <strong>Wardrobe: </strong>
-          <EditableText
-            value={data?.wardrobe}
-            onChange={v => update('character.wardrobe', v)}
-            placeholder="Wardrobe details…"
+        <div className="character-bio-portrait">
+          <ImageSlot
+            label="Portrait"
+            view="FRONT"
+            seed={seed}
+            ratio="1:1"
+            prompt={portraitPrompt}
+            style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10 }}
           />
-        </p>
+        </div>
+        <div className="character-bio-text">
+          <div className="character-bio-label">BIO</div>
+          <EditableText
+            tag="p"
+            className="character-bio-name"
+            value={data?.name}
+            onChange={v => update('character.name', v)}
+            placeholder="Character name…"
+          />
+          <EditableText
+            tag="p"
+            className="character-bio-description"
+            value={data?.description}
+            onChange={v => update('character.description', v)}
+            placeholder="Character description…"
+          />
+          <p className="character-bio-wardrobe">
+            <strong>Wardrobe: </strong>
+            <EditableText
+              value={data?.wardrobe}
+              onChange={v => update('character.wardrobe', v)}
+              placeholder="Wardrobe details…"
+            />
+          </p>
+        </div>
       </div>
 
       {/* Headshots */}
