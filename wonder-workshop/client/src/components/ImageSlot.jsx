@@ -44,6 +44,7 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
   const [queued, setQueued] = useState(false)
   const [error, setError] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [editingPrompt, setEditingPrompt] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -109,6 +110,17 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
     return () => window.removeEventListener('ww-generate-section', onSectionGenerate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeImage, editablePrompt])
+
+  // Close the ··· more-menu when the user clicks anywhere outside it.
+  useEffect(() => {
+    if (!moreMenuOpen) return
+    function onDocClick(e) {
+      if (e.target.closest('.img-slot-more-wrap')) return
+      setMoreMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [moreMenuOpen])
 
   // Lightbox + prompt-edit modal: lock body scroll + Esc to close.
   useEffect(() => {
@@ -525,9 +537,27 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
               <button className="img-slot-action" onClick={generate} disabled={loading}>{loading ? '…' : 'Refresh'}</button>
               <button className="img-slot-action" onClick={generateVariations} disabled={loading} title="Generate 3 variations of this prompt">Variations</button>
               <button className="img-slot-action" onClick={e => { e.stopPropagation(); setEditingPrompt(v => !v) }}>Edit Prompt</button>
-              <button className="img-slot-action" onClick={downloadImage} title="Download image">Download</button>
-              <button className="img-slot-action" onClick={deleteImage}>Delete</button>
-              <button className="img-slot-action" onClick={upscale}>Upscale</button>
+              <div className="img-slot-more-wrap">
+                <button
+                  className="img-slot-action img-slot-more-btn"
+                  onClick={e => { e.stopPropagation(); setMoreMenuOpen(o => !o) }}
+                  title="More actions"
+                >
+                  ···
+                </button>
+                {moreMenuOpen && (
+                  <div className="img-slot-more-menu" onClick={e => e.stopPropagation()}>
+                    <button onClick={e => { setMoreMenuOpen(false); downloadImage(e) }}>Download</button>
+                    <button onClick={e => { setMoreMenuOpen(false); upscale(e) }}>Upscale</button>
+                    <button
+                      className="img-slot-more-menu-danger"
+                      onClick={e => { setMoreMenuOpen(false); deleteImage(e) }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             {pendingUndo && (
               <div className="img-slot-undo" onClick={e => e.stopPropagation()}>
