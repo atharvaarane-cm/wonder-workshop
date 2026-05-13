@@ -102,6 +102,42 @@ export function updateProjectBrief(id, brief) {
   return all[id]
 }
 
+export function moveProjectToFolder(id, folder) {
+  const all = loadAll()
+  if (!all[id]) return null
+  const cleaned = (folder || '').trim()
+  all[id] = {
+    ...all[id],
+    folder: cleaned || null,
+    updatedAt: Date.now(),
+  }
+  saveAll(all)
+  return all[id]
+}
+
+// Deep-clone a project to a new id. Brief, images, name override, and
+// folder placement all carry across. Image versions are copied by
+// reference (they're just URL strings + metadata), so duplicating doesn't
+// re-fetch anything from Pollinations.
+export function duplicateProject(id) {
+  const all = loadAll()
+  const src = all[id]
+  if (!src) return null
+  const now = Date.now()
+  const copy = {
+    ...src,
+    id: now,
+    name: `${src.name || 'Untitled brief'} (Copy)`,
+    nameOverride: true,
+    createdAt: now,
+    updatedAt: now,
+    images: JSON.parse(JSON.stringify(src.images || {})),
+  }
+  all[now] = copy
+  saveAll(all)
+  return copy
+}
+
 export function renameProject(id, name) {
   const all = loadAll()
   if (!all[id]) return null
