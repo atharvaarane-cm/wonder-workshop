@@ -1964,6 +1964,10 @@ textarea { font-family: var(--font); resize: none; }
 .section-collapse-btn.collapsed svg { transform: rotate(-90deg); }
 .section-collapse-btn:hover { background: var(--bg); color: var(--text); }
 .section-card.collapsed .section-header { border-bottom: none; }
+/* Hide the section-header's border-bottom when a feature bar (like the
+   Creative section's blue strip) sits flush below it — avoids the
+   visible double-line seam. */
+.section-card:has(.cd-wrap) .section-header { border-bottom: none; }
 
 /* ── Board prompt bar ────────────────────────────────────────── */
 .board-prompt-bar {
