@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { ProjectContext } from '../hooks/useProject.js'
 import { enqueue } from '../utils/generationQueue.js'
+import MentionInput from './MentionInput.jsx'
 
 function toast(msg, type = 'success') {
   window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg, type } }))
@@ -661,11 +662,11 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
               </svg>
             </button>
           </div>
-          <textarea
+          <MentionInput
             className="img-prompt-modal-textarea"
             value={editablePrompt}
-            onChange={e => setEditablePrompt(e.target.value)}
-            placeholder="Describe the image in detail — subject, environment, lighting, framing, mood…"
+            onChange={v => setEditablePrompt(v)}
+            placeholder="Describe the image in detail — use @Sarah / @Sunset Beach to reference brief entities…"
             autoFocus
             rows={10}
             spellCheck
