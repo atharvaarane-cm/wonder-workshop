@@ -112,6 +112,20 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeImage, editablePrompt])
 
+  // Chat panel can swap the active version by clicking a thumbnail.
+  // It fires ww-set-active-version with our slotKey + the desired index.
+  useEffect(() => {
+    function onSetActiveVersion(e) {
+      const { slotKey: targetKey, versionIndex } = e.detail || {}
+      if (!targetKey || !slotKey || targetKey !== slotKey) return
+      if (typeof versionIndex !== 'number') return
+      if (versionIndex < 0 || versionIndex >= versions.length) return
+      setActiveVersion(versionIndex)
+    }
+    window.addEventListener('ww-set-active-version', onSetActiveVersion)
+    return () => window.removeEventListener('ww-set-active-version', onSetActiveVersion)
+  }, [slotKey, versions.length])
+
   // Close the ··· more-menu when the user clicks anywhere outside it.
   useEffect(() => {
     if (!moreMenuOpen) return
