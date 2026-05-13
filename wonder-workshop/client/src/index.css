@@ -1014,8 +1014,8 @@ textarea { font-family: var(--font); resize: none; }
 
 .board-hero { max-width: 1100px; margin: 0 auto 22px; }
 .board-hero-title {
-  font: 700 44px/1.05 var(--font-serif, Georgia, 'Times New Roman', serif);
-  color: var(--text); letter-spacing: -0.015em;
+  font: 700 44px/1.05 var(--font);
+  color: var(--text); letter-spacing: -0.025em;
   margin: 0; padding: 0;
   display: block; min-height: 1.05em;
   outline: none;
@@ -1043,7 +1043,13 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .section-autogen-btn { border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.55); }
 [data-theme="dark"] .section-autogen-btn:hover { background: #9B7DFF; border-color: #9B7DFF; color: #fff; }
 
-.project-info-panel {
+/* Project-info row hidden by default — not in the Figma mockup. Fields
+   (Project Name / Job Number / Client Name / Brand / Campaign) still
+   bind through to brief.projectInfo via the rendered JSX, so the data
+   stays intact. Re-show by removing the `display: none` and restoring
+   the grid. Field is also editable inline via the chat. */
+.project-info-panel { display: none; }
+.project-info-panel-original {
   max-width: 1100px; margin: 0 auto 16px;
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
 }
@@ -1134,24 +1140,31 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Creative Direction ────────────────────────────────────────── */
 /* ── Creative Direction two-column layout ───────────────────── */
 .cd-wrap { display: flex; flex-direction: column; }
-.cd-gradient-strip {
-  /* Break out of .section-body's 18px padding so the strip touches
-     the card's left/right edges. Sit flush against the section
-     header above too. */
-  margin: -18px -18px 20px;
-  height: 6px;
-  background: linear-gradient(90deg,
-    #FF6A1A 0%,
-    #FFB300 22%,
-    #FF4F8A 46%,
-    #B454FF 68%,
-    #4DA9FF 100%
-  );
-  border-radius: 0 0 2px 2px;
-}
+/* Top accent gradient lives at the page level now (the production strip
+   above the hero title). The Creative section's signature visual is the
+   blue-tinted right column below, not a strip. */
+.cd-gradient-strip { display: none; }
 .cd-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
 .cd-left { }
-.cd-right { display: flex; flex-direction: column; gap: 0; padding: 4px 0; }
+.cd-right {
+  display: flex; flex-direction: column; gap: 0;
+  padding: 22px 24px;
+  background: #1F4FE0; /* mockup-spec featured blue */
+  border-radius: 14px;
+  color: #fff;
+}
+[data-theme="dark"] .cd-right { background: #1F4FE0; }
+/* Force readable colors inside the blue panel regardless of theme. */
+.cd-right .cd-eyebrow { color: rgba(255,255,255,0.7); }
+.cd-right .cd-desc { color: rgba(255,255,255,0.92); }
+.cd-right .cd-key-message { color: #fff; }
+.cd-right .cd-meta-label { color: rgba(255,255,255,0.65); }
+.cd-right .cd-meta-val { color: #fff; }
+.cd-right .cd-shots-link { color: #FFE4B0; }
+.cd-right .cd-divider { background: rgba(255,255,255,0.18); }
+.cd-right .cd-tone-chip {
+  background: rgba(255,255,255,0.16); color: #fff; border-color: rgba(255,255,255,0.32);
+}
 .cd-header-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .cd-brand { font-size: 22px; font-weight: 700; font-family: 'Instrument Serif', Georgia, serif; margin: 0; color: var(--text); }
 .cd-eyebrow {
