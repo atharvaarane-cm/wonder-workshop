@@ -5,9 +5,8 @@ import CreativeDirection from '../components/sections/CreativeDirection.jsx'
 import BrandInfo from '../components/sections/BrandInfo.jsx'
 import MoodBoard from '../components/sections/MoodBoard.jsx'
 import LocationsSetDesign from '../components/sections/LocationsSetDesign.jsx'
-import CharRef from '../components/sections/CharRef.jsx'
+import CharacterDesign from '../components/sections/CharacterDesign.jsx'
 import ClothingProps from '../components/sections/ClothingProps.jsx'
-import Character from '../components/sections/Character.jsx'
 import ShotList from '../components/sections/ShotList.jsx'
 import ShareModal from '../components/ShareModal.jsx'
 import ExportDropdown from '../components/ExportDropdown.jsx'
@@ -25,12 +24,12 @@ const ROWS = [
   [{ id: 'bi',  title: 'Brand Info' }],
   [{ id: 'mb',  title: 'Mood Board / Style References' }],
   [{ id: 'loc', title: 'Locations / Set Design' }],
-  [{ id: 'cp',  title: 'Product / Elements' }, { id: 'cr', title: 'Char Ref' }],
-  [{ id: 'ch',  title: 'Character — Full Body' }, { id: 'chu', title: 'Character — Close Up' }],
+  [{ id: 'cp',  title: 'Product / Elements' }],
+  [{ id: 'char', title: 'Character Design' }],
   [{ id: 'sl',  title: 'Storyboard' }],
 ]
 
-const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'mb', 'loc', 'cr', 'cp', 'ch', 'chu', 'sl'])
+const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'mb', 'loc', 'cp', 'char', 'sl'])
 
 export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false }) {
   const [brief, setBrief] = useState(initialBrief)
@@ -158,11 +157,9 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'mb':  return <MoodBoard data={brief.creativeDirection} />
       case 'loc': return <LocationsSetDesign data={brief.environment} />
-      case 'cr':  return <CharRef data={brief.character} />
-      case 'cp':  return <ClothingProps data={brief.character} />
-      case 'ch':  return <Character data={brief.character} update={update} mode="fullbody" />
-      case 'chu': return <Character data={brief.character} update={update} mode="closeup" />
-      case 'sl':  return <ShotList data={brief.shotList} updateShot={updateShot} />
+      case 'cp':   return <ClothingProps data={brief.character} />
+      case 'char': return <CharacterDesign data={brief.character} update={update} />
+      case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} />
       default:    return null
     }
   }
