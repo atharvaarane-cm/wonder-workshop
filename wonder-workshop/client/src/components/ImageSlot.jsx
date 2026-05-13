@@ -92,6 +92,24 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slotKey])
 
+  // Section-level auto-generate: fire generate() if this slot is empty and
+  // belongs to the section the event targets. The image queue (used by
+  // generate) handles fan-out across many slots without hammering Pollinations.
+  useEffect(() => {
+    function onSectionGenerate(e) {
+      const targetSection = e.detail?.sectionTitle
+      if (!targetSection) return
+      if (activeImage) return // already has a generated/uploaded version
+      if (!editablePrompt) return
+      const sectionEl = slotRef.current?.closest('[data-section-title]')
+      if (sectionEl?.dataset.sectionTitle !== targetSection) return
+      generate(null, { silent: true })
+    }
+    window.addEventListener('ww-generate-section', onSectionGenerate)
+    return () => window.removeEventListener('ww-generate-section', onSectionGenerate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeImage, editablePrompt])
+
   // Lightbox + prompt-edit modal: lock body scroll + Esc to close.
   useEffect(() => {
     if (!lightboxOpen && !editingPrompt) return

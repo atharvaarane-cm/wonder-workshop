@@ -30,7 +30,8 @@ export default function App() {
   const [shareData] = useState(() => parseShareHash())
   const [project, setProject] = useState(() => shareData ? null : getActiveProject())
   const [projects, setProjects] = useState(() => listProjects())
-  const [theme, setTheme] = useState(() => localStorage.getItem('ww_theme') || 'light')
+  // Dark by default per the new mockup direction; explicit user preference wins.
+  const [theme, setTheme] = useState(() => localStorage.getItem('ww_theme') || 'dark')
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)

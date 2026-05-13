@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useContext } from 'react'
 import AgentPanel from '../components/AgentPanel.jsx'
 import SectionCard from '../components/SectionCard.jsx'
+import EditableText from '../components/EditableText.jsx'
 import CreativeDirection from '../components/sections/CreativeDirection.jsx'
 import BrandInfo from '../components/sections/BrandInfo.jsx'
 import MoodBoard from '../components/sections/MoodBoard.jsx'
@@ -326,6 +327,16 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       <div className="board-body">
         <div className="board-content">
           <div className="board-scroll" ref={scrollContainerRef}>
+            {/* Hero title — the mockup leads with the project name in big serif. */}
+            <div className="board-hero">
+              <EditableText
+                tag="h1"
+                className="board-hero-title"
+                value={brief.projectInfo?.projectName || brief.title}
+                onChange={v => update('projectInfo.projectName', v)}
+                placeholder="Untitled project"
+              />
+            </div>
             <div className="project-info-panel">
               {[
                 ['projectName', 'Project Name'],
@@ -357,6 +368,12 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       active={activeId === sec.id}
                       imageResolution={IMAGE_SECTION_IDS.has(sec.id) ? imageResolution : null}
                       imageLoading={(loadingBySection[sec.title] || 0) > 0}
+                      canAutoGenerate={IMAGE_SECTION_IDS.has(sec.id)}
+                      onAutoGenerate={() => {
+                        window.dispatchEvent(new CustomEvent('ww-generate-section', {
+                          detail: { sectionTitle: sec.title },
+                        }))
+                      }}
                       onClick={() => {
                         // Tracking the active section for nav purposes doesn't
                         // require clearing the active image — that would steal
