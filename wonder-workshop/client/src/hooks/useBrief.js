@@ -44,9 +44,6 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
   "shotList": [
     { "num": "01", "framing": "<EWS|WS|MS|CU|ECU|OTS|POV>", "description": "<shot description>", "camera": "<Drone|Steadicam|Handheld|Tripod|Gimbal>", "duration": "<Xs>" }
   ],
-  "lightingMood": [
-    { "letter": "A", "name": "<mood name>", "description": "<lighting description>", "colors": ["<hex1>", "<hex2>"], "tags": ["<tag1>", "<tag2>"] }
-  ],
   "imagePrompts": [
     "<detailed Stable Diffusion prompt for a key visual — cinematic, specific, evocative>",
     "<another key visual prompt>"
@@ -54,8 +51,7 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
 }
 
 Rules:
-- shotList must have exactly 9 items
-- lightingMood must have exactly 4 items
+- shotList (the storyboard) must have exactly 9 items
 - imagePrompts must have exactly 4 items — make them vivid, cinematographic descriptions
 - brandInfo.colors must have 3-5 colors appropriate for the brand. If verified brand research is provided, use those exact colors first.
 - If verified brand research is provided, preserve brandInfo.logoUrl and brandInfo.sourceUrl exactly.

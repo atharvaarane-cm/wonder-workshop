@@ -3,7 +3,6 @@ import AgentPanel from '../components/AgentPanel.jsx'
 import SectionCard from '../components/SectionCard.jsx'
 import CreativeDirection from '../components/sections/CreativeDirection.jsx'
 import BrandInfo from '../components/sections/BrandInfo.jsx'
-import LightingMood from '../components/sections/LightingMood.jsx'
 import MoodBoard from '../components/sections/MoodBoard.jsx'
 import LocationsSetDesign from '../components/sections/LocationsSetDesign.jsx'
 import CharRef from '../components/sections/CharRef.jsx'
@@ -22,16 +21,16 @@ function setIn(obj, keys, value) {
 }
 
 const ROWS = [
-  [{ id: 'cd',  num: '1',  title: 'Creative Direction' }],
-  [{ id: 'bi',  num: '2',  title: 'Brand Info' }],
-  [{ id: 'lm',  num: '3',  title: 'Lighting & Mood' }, { id: 'mb', num: '4', title: 'Mood Board / Style Ref' }],
-  [{ id: 'loc', num: '5',  title: 'Locations / Set Design' }, { id: 'cr', num: '6', title: 'Char Ref' }],
-  [{ id: 'cp',  num: '7',  title: 'Clothing / Props' }, { id: 'ch', num: '8', title: 'Character — Full Body' }],
-  [{ id: 'chu', num: '9',  title: 'Character — Close Up' }],
-  [{ id: 'sl',  num: '10', title: 'Shot List' }],
+  [{ id: 'cd',  title: 'Creative Direction' }],
+  [{ id: 'bi',  title: 'Brand Info' }],
+  [{ id: 'mb',  title: 'Mood Board / Style References' }],
+  [{ id: 'loc', title: 'Locations / Set Design' }],
+  [{ id: 'cp',  title: 'Product / Elements' }, { id: 'cr', title: 'Char Ref' }],
+  [{ id: 'ch',  title: 'Character — Full Body' }, { id: 'chu', title: 'Character — Close Up' }],
+  [{ id: 'sl',  title: 'Storyboard' }],
 ]
 
-const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'lm', 'mb', 'loc', 'cr', 'cp', 'ch', 'chu', 'sl'])
+const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'mb', 'loc', 'cr', 'cp', 'ch', 'chu', 'sl'])
 
 export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false }) {
   const [brief, setBrief] = useState(initialBrief)
@@ -107,9 +106,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   function updateShot(i, field, value) {
     setBrief(prev => ({ ...prev, shotList: prev.shotList.map((s, idx) => idx === i ? { ...s, [field]: value } : s) }))
   }
-  function updateMood(i, field, value) {
-    setBrief(prev => ({ ...prev, lightingMood: prev.lightingMood.map((m, idx) => idx === i ? { ...m, [field]: value } : m) }))
-  }
 
   // Chat-driven regeneration: AgentPanel calls this when the model returns
   // a regenerate_active_image function call. We just rebroadcast as a
@@ -160,7 +156,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     switch (id) {
       case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} onGoToShotList={() => scrollToRow(6)} />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
-      case 'lm':  return <LightingMood data={brief.lightingMood} imagePrompts={brief.imagePrompts} updateMood={updateMood} />
       case 'mb':  return <MoodBoard data={brief.creativeDirection} />
       case 'loc': return <LocationsSetDesign data={brief.environment} />
       case 'cr':  return <CharRef data={brief.character} />
@@ -361,7 +356,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                   {row.map(sec => (
                     <SectionCard
                       key={sec.id}
-                      num={sec.num}
                       name={sec.title}
                       active={activeId === sec.id}
                       imageResolution={IMAGE_SECTION_IDS.has(sec.id) ? imageResolution : null}
