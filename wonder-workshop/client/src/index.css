@@ -987,6 +987,31 @@ textarea { font-family: var(--font); resize: none; }
 
 /* Big hero title at the top of the board — leads with the project name in
    serif type per the mockup. Editable in place. */
+/* Production strip — top-of-page metadata pills with a colorful
+   gradient between, per the Wonder Workshop Figma mockup. */
+.board-production-strip {
+  max-width: 1100px; margin: 0 auto 18px;
+  display: flex; align-items: center; gap: 8px;
+}
+.prod-pill {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+[data-theme="light"] .prod-pill,
+:root:not([data-theme="dark"]) .prod-pill { background: rgba(0,0,0,0.05); }
+.prod-pill-type {
+  background: #E04141; color: #fff; border-color: transparent;
+}
+.prod-gradient {
+  flex: 1; height: 4px; min-width: 60px; border-radius: 999px;
+  background: linear-gradient(90deg,
+    #FF6A1A 0%, #FFB300 22%, #FF4F8A 46%, #B454FF 68%, #4DA9FF 100%
+  );
+}
+.prod-audio-icon { color: var(--muted); flex-shrink: 0; margin-left: 2px; }
+
 .board-hero { max-width: 1100px; margin: 0 auto 22px; }
 .board-hero-title {
   font: 700 44px/1.05 var(--font-serif, Georgia, 'Times New Roman', serif);

@@ -327,6 +327,26 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       <div className="board-body">
         <div className="board-content">
           <div className="board-scroll" ref={scrollContainerRef}>
+            {/* Production strip — small metadata pills (type, duration,
+                ratio) with a thin colorful gradient between, per the
+                mockup's top-of-page treatment. */}
+            <div className="board-production-strip">
+              {brief.creativeDirection?.productionType && (
+                <span className="prod-pill prod-pill-type">{brief.creativeDirection.productionType}</span>
+              )}
+              <span className="prod-gradient" aria-hidden="true" />
+              {brief.creativeDirection?.duration && (
+                <span className="prod-pill">{brief.creativeDirection.duration}</span>
+              )}
+              {(brief.generationSettings?.ratio || brief.creativeDirection?.format) && (
+                <span className="prod-pill">{brief.generationSettings?.ratio || brief.creativeDirection.format}</span>
+              )}
+              <svg className="prod-audio-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" title="With audio">
+                <path d="M4 5h2L9 3v10L6 11H4z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                <path d="M11.5 6c0.6 0.6 1 1.4 1 2.4s-0.4 1.8-1 2.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </div>
+
             {/* Hero title — the mockup leads with the project name in big serif. */}
             <div className="board-hero">
               <EditableText
