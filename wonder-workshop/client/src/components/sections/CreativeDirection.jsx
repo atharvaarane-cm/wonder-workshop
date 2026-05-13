@@ -23,21 +23,21 @@ export default function CreativeDirection({ data, update, onGoToShotList }) {
       {/* Right — all creative info */}
       <div className="cd-right">
 
-        {/* Brand + production type */}
-        <div className="cd-header-row">
-          <EditableText tag="h2" className="cd-brand" value={data.brand ?? ''} onChange={v => update('creativeDirection.brand', v)} placeholder="Brand" />
-        </div>
+        {/* "Creative" eyebrow per the mockup — the brand name already
+            lives in the hero project title at the top of the board, so
+            duplicating it here adds noise. */}
+        <div className="cd-eyebrow">CREATIVE</div>
 
-        {/* Key message */}
-        <EditableText
-          tag="p"
-          className="cd-key-message"
-          value={data.keyMessage ?? ''}
-          onChange={v => update('creativeDirection.keyMessage', v)}
-          placeholder="Key message…"
-        />
-
-        <div className="cd-divider" />
+        {/* Key message — only rendered when set, to avoid the empty
+            italic placeholder cluttering the section. */}
+        {data.keyMessage && (
+          <EditableText
+            tag="p"
+            className="cd-key-message"
+            value={data.keyMessage}
+            onChange={v => update('creativeDirection.keyMessage', v)}
+          />
+        )}
 
         {/* Description */}
         <EditableText
