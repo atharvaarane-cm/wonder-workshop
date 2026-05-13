@@ -796,7 +796,7 @@ textarea { font-family: var(--font); resize: none; }
   font-size: 11px; color: rgba(0,0,0,0.3); width: 18px; text-align: right; flex-shrink: 0;
 }
 .search-result-title { font-size: 13.5px; color: #111; }
-[data-theme="dark"] .search-modal { background: #1a1a1a; }
+[data-theme="dark"] .search-modal { background: #171717; }
 [data-theme="dark"] .search-input-row { border-color: rgba(255,255,255,0.08); color: rgba(255,255,255,0.3); }
 [data-theme="dark"] .search-input { color: #E8E8E8; }
 [data-theme="dark"] .search-input::placeholder { color: rgba(255,255,255,0.25); }
@@ -977,7 +977,7 @@ textarea { font-family: var(--font); resize: none; }
 .topbar-desc-regen:hover:not(:disabled) { opacity: 0.85; }
 .topbar-desc-regen:disabled { opacity: 0.45; cursor: not-allowed; }
 [data-theme="dark"] .topbar-desc-dropdown { box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
-[data-theme="dark"] .topbar-desc-textarea { background: #1a1a1a; }
+[data-theme="dark"] .topbar-desc-textarea { background: #171717; }
 
 .board-body { flex: 1; display: flex; overflow: hidden; }
 
@@ -1941,7 +1941,7 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── Dark theme — Board ──────────────────────────────────────── */
 [data-theme="dark"] .board-screen { background: #111111; }
-[data-theme="dark"] .topbar { background: #1A1A1A; border-color: rgba(255,255,255,0.08); }
+[data-theme="dark"] .topbar { background: #171717; border-color: rgba(255,255,255,0.07); }
 [data-theme="dark"] .topbar-back { color: rgba(255,255,255,0.42); }
 [data-theme="dark"] .topbar-back:hover { color: #E8E8E8; }
 [data-theme="dark"] .topbar-brand { color: #E8E8E8; }
@@ -1950,7 +1950,7 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .topbar-desc-btn { background: #232323; border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.5); }
 [data-theme="dark"] .btn-outline { background: #232323; border-color: rgba(255,255,255,0.12); color: #E8E8E8; }
 [data-theme="dark"] .btn-dark { background: #E8E8E8; color: #111111; }
-[data-theme="dark"] .board-prompt-bar { background: #1A1A1A; border-color: rgba(255,255,255,0.08); }
+[data-theme="dark"] .board-prompt-bar { background: #171717; border-color: rgba(255,255,255,0.07); }
 [data-theme="dark"] .board-scroll { background: #111111; }
 [data-theme="dark"] .board-nav-dots { background: rgba(30,30,30,0.92); border-color: rgba(255,255,255,0.08); }
 [data-theme="dark"] .board-dot { background: rgba(255,255,255,0.18); }
