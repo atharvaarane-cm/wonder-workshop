@@ -38,6 +38,7 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "views": ["FRONT", "3/4", "SIDE"]
   },
   "environment": {
+    "heroName": "<short location name, e.g. 'Sunset Beach' or 'Times Square Diner'>",
     "heroEnvironment": "<main location description>",
     "shotRoute": "<location progression>",
     "keyElements": ["<element1>", "<element2>", "<element3>"]

@@ -1053,6 +1053,25 @@ textarea { font-family: var(--font); resize: none; }
 .character-wardrobe { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .character-wardrobe strong { color: var(--text); }
 
+/* Hero location image with editable name caption overlaid bottom-left. */
+.loc-hero-wrap { position: relative; }
+.loc-hero-caption {
+  position: absolute; left: 12px; bottom: 12px; z-index: 4;
+  padding: 6px 12px; border-radius: 8px;
+  background: rgba(17,17,17,0.74); backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.15);
+  max-width: calc(100% - 24px);
+}
+.loc-hero-name {
+  font-size: 14px; font-weight: 700; color: #fff; letter-spacing: -0.01em;
+  display: block;
+}
+.loc-hero-name:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(255,255,255,0.5);
+  font-weight: 500;
+}
+
 /* Combined Character Design section: bio + Headshots row + Full Body row. */
 .character-design { display: flex; flex-direction: column; gap: 18px; }
 .character-bio {
