@@ -62,7 +62,7 @@ const CARD_GRADIENTS = [
   'linear-gradient(135deg,#0a1a2e,#1a4060)',
 ]
 
-export default function Discover({ onGenerate, projects = [], onOpenProject, onDeleteProject, onRenameProject, theme, toggleTheme }) {
+export default function Discover({ onGenerate, projects = [], onOpenProject, onDeleteProject, onRenameProject, onMoveProjectToFolder, onDuplicateProject, theme, toggleTheme }) {
   const [activePage, setActivePage] = useState('home')
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [sidebarExpanded, setSidebarExpanded] = useState(false)
@@ -74,6 +74,59 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
   const dragStartWidth = useRef(220)
   const sidebarRef = useRef(null)
   const [renamingId, setRenamingId] = useState(null)
+  const [menuOpenId, setMenuOpenId] = useState(null)
+  const [collapsedFolders, setCollapsedFolders] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ww_collapsed_folders') || '[]')) } catch { return new Set() }
+  })
+
+  function toggleFolder(name) {
+    setCollapsedFolders(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name); else next.add(name)
+      try { localStorage.setItem('ww_collapsed_folders', JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
+
+  // Group projects by folder. Projects without a folder land in 'Projects'.
+  // Folder order is "Projects" first, then alphabetical for any custom ones.
+  const folders = (() => {
+    const buckets = new Map()
+    for (const p of projects) {
+      const folder = p.folder || 'Projects'
+      if (!buckets.has(folder)) buckets.set(folder, [])
+      buckets.get(folder).push(p)
+    }
+    const entries = [...buckets.entries()]
+    entries.sort((a, b) => {
+      if (a[0] === 'Projects') return -1
+      if (b[0] === 'Projects') return 1
+      return a[0].localeCompare(b[0])
+    })
+    return entries
+  })()
+
+  // Close any open action menu when the user clicks outside the sidebar.
+  useEffect(() => {
+    if (menuOpenId == null) return
+    function onDocClick(e) {
+      if (!e.target.closest('.sidebar-recent-menu') && !e.target.closest('.sidebar-recent-more')) {
+        setMenuOpenId(null)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [menuOpenId])
+
+  function promptMoveToFolder(p) {
+    setMenuOpenId(null)
+    const folder = window.prompt(
+      `Move "${p.name || 'project'}" to which folder? (leave blank to clear)`,
+      p.folder || '',
+    )
+    if (folder == null) return // cancelled
+    onMoveProjectToFolder?.(p.id, folder.trim())
+  }
 
   function onDragHandleMouseDown(e) {
     e.preventDefault()
@@ -226,55 +279,91 @@ export default function Discover({ onGenerate, projects = [], onOpenProject, onD
           {projects.length === 0 && (
             <div className="sidebar-recent-empty">No projects yet</div>
           )}
-          {projects.filter(p => !discoverSearch || p.name?.toLowerCase().includes(discoverSearch.toLowerCase()) || p.brief?.creativeDirection?.brand?.toLowerCase().includes(discoverSearch.toLowerCase())).slice(0, 8).map((p, i) => (
-            <div key={p.id} className="sidebar-recent-item" onClick={() => renamingId === p.id ? null : onOpenProject(p)}>
-              <span className="sidebar-recent-dot" style={{ background: ['#2D9A4E','#0891B2','#D97706','#9CA3AF','#7C5CFC'][i % 5] }} />
-              {renamingId === p.id ? (
-                <input
-                  ref={renameInputRef}
-                  className="sidebar-recent-rename-input"
-                  value={renameValue}
-                  onChange={e => setRenameValue(e.target.value)}
-                  onClick={e => e.stopPropagation()}
-                  onBlur={commitRename}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') { e.preventDefault(); commitRename() }
-                    if (e.key === 'Escape') { e.preventDefault(); cancelRename() }
-                  }}
-                />
-              ) : (
-                <span
-                  className="sidebar-recent-name"
-                  title="Double-click to rename"
-                  onDoubleClick={e => startRename(p, e)}
-                >
-                  {p.name}
-                </span>
-              )}
-              {renamingId !== p.id && (
-                <>
+          {folders.map(([folderName, folderProjects], folderIdx) => {
+            // Drop the folder header when there's only the default "Projects"
+            // bucket — no need to clutter the sidebar in the common case.
+            const showHeader = folders.length > 1
+            const filtered = folderProjects.filter(p => !discoverSearch
+              || p.name?.toLowerCase().includes(discoverSearch.toLowerCase())
+              || p.brief?.creativeDirection?.brand?.toLowerCase().includes(discoverSearch.toLowerCase()))
+            if (!filtered.length && discoverSearch) return null
+            const isCollapsed = collapsedFolders.has(folderName)
+            return (
+              <div className="sidebar-folder" key={folderName}>
+                {showHeader && (
                   <button
-                    className="sidebar-recent-rename"
-                    title="Rename project"
-                    onClick={e => startRename(p, e)}
+                    className={`sidebar-folder-header${isCollapsed ? ' collapsed' : ''}`}
+                    onClick={() => toggleFolder(folderName)}
                   >
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 8.5V10h1.5l5-5L7 3.5l-5 5zM7.7 2.8l1.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                    <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                      <path d="M3 2l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
+                    <span>{folderName}</span>
+                    <span className="sidebar-folder-count">{filtered.length}</span>
                   </button>
-                  <button
-                    className="sidebar-recent-delete"
-                    title="Delete project"
-                    onClick={e => { e.stopPropagation(); onDeleteProject?.(p.id) }}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                      <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                    </svg>
-                  </button>
-                </>
-              )}
-            </div>
-          ))}
+                )}
+                {(!showHeader || !isCollapsed) && filtered.map((p, i) => {
+                  const dotColor = ['#2D9A4E','#0891B2','#D97706','#9CA3AF','#7C5CFC'][(folderIdx * 7 + i) % 5]
+                  const isMenuOpen = menuOpenId === p.id
+                  return (
+                    <div key={p.id} className="sidebar-recent-item" onClick={() => renamingId === p.id ? null : onOpenProject(p)}>
+                      <span className="sidebar-recent-dot" style={{ background: dotColor }} />
+                      {renamingId === p.id ? (
+                        <input
+                          ref={renameInputRef}
+                          className="sidebar-recent-rename-input"
+                          value={renameValue}
+                          onChange={e => setRenameValue(e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          onBlur={commitRename}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); commitRename() }
+                            if (e.key === 'Escape') { e.preventDefault(); cancelRename() }
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="sidebar-recent-name"
+                          title="Double-click to rename"
+                          onDoubleClick={e => startRename(p, e)}
+                        >
+                          {p.name}
+                        </span>
+                      )}
+                      {renamingId !== p.id && (
+                        <div className="sidebar-recent-more-wrap">
+                          <button
+                            className="sidebar-recent-more"
+                            title="More actions"
+                            onClick={e => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : p.id) }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                              <circle cx="3" cy="7" r="1.2" fill="currentColor"/>
+                              <circle cx="7" cy="7" r="1.2" fill="currentColor"/>
+                              <circle cx="11" cy="7" r="1.2" fill="currentColor"/>
+                            </svg>
+                          </button>
+                          {isMenuOpen && (
+                            <div className="sidebar-recent-menu" onClick={e => e.stopPropagation()}>
+                              <button onClick={e => { setMenuOpenId(null); startRename(p, e) }}>Rename</button>
+                              <button onClick={() => { setMenuOpenId(null); onDuplicateProject?.(p.id) }}>Duplicate</button>
+                              <button onClick={() => promptMoveToFolder(p)}>Move to folder…</button>
+                              <button
+                                className="sidebar-recent-menu-danger"
+                                onClick={() => { setMenuOpenId(null); onDeleteProject?.(p.id) }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
         </div>
 
         <div className="sidebar-user">

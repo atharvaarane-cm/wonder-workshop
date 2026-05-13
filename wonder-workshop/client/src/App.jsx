@@ -12,6 +12,8 @@ import {
   saveImageForProject,
   moveImageBetweenSlots,
   renameProject,
+  moveProjectToFolder,
+  duplicateProject,
 } from './hooks/useProject.js'
 
 function parseShareHash() {
@@ -71,6 +73,19 @@ export default function App() {
     const updated = renameProject(id, name)
     if (!updated) return
     if (project?.id === id) setProject(updated)
+    refreshList()
+  }
+
+  function handleMoveProjectToFolder(id, folder) {
+    const updated = moveProjectToFolder(id, folder)
+    if (!updated) return
+    if (project?.id === id) setProject(updated)
+    refreshList()
+  }
+
+  function handleDuplicateProject(id) {
+    const copy = duplicateProject(id)
+    if (!copy) return
     refreshList()
   }
 
@@ -149,6 +164,8 @@ export default function App() {
       onOpenProject={handleOpenProject}
       onDeleteProject={handleDeleteProject}
       onRenameProject={handleRenameProject}
+      onMoveProjectToFolder={handleMoveProjectToFolder}
+      onDuplicateProject={handleDuplicateProject}
       theme={theme}
       toggleTheme={toggleTheme}
     />
