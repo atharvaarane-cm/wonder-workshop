@@ -6,6 +6,34 @@ function domainFromUrl(url) {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
 }
 
+function Swatch({ color }) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy(e) {
+    e?.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(color.hex)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    } catch {}
+  }
+
+  return (
+    <button
+      type="button"
+      className={`bi-swatch-row${copied ? ' copied' : ''}`}
+      onClick={copy}
+      title={`Click to copy ${color.hex}`}
+    >
+      <div className="bi-swatch-block" style={{ background: color.hex }} />
+      <div className="bi-swatch-info">
+        <span className="bi-swatch-name">{color.name}</span>
+        <span className="bi-swatch-hex">{copied ? '✓ Copied' : color.hex}</span>
+      </div>
+    </button>
+  )
+}
+
 export default function BrandInfo({ data, update }) {
   const logoUrl = data.logoUrl || ''
   const sourceUrl = data.sourceUrl || ''
@@ -46,13 +74,7 @@ export default function BrandInfo({ data, update }) {
         <div className="bi-section-label">Color Palette</div>
         <div className="bi-swatches">
           {(data.colors || []).map((c, i) => (
-            <div className="bi-swatch-row" key={i}>
-              <div className="bi-swatch-block" style={{ background: c.hex }} />
-              <div className="bi-swatch-info">
-                <span className="bi-swatch-name">{c.name}</span>
-                <span className="bi-swatch-hex">{c.hex}</span>
-              </div>
-            </div>
+            <Swatch color={c} key={i} />
           ))}
         </div>
       </div>
