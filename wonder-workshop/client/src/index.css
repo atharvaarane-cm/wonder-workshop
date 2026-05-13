@@ -13,6 +13,24 @@
   --green:     #2D9A4E;
   --amber:     #D97706;
   --font:      'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: 'Playfair Display', 'Times New Roman', Georgia, serif;
+}
+
+/* Dark theme overrides the CSS variables so every component using
+   var(--text) / var(--bg) / etc. cascades correctly. Components that
+   hardcoded their light-theme color still need per-selector overrides,
+   but new code that sticks to the variables is dark-mode-correct by
+   default. */
+:root[data-theme="dark"] {
+  --bg:        #0E0E0F;
+  --card:      #1A1A1B;
+  --sidebar:   #131314;
+  --dark:      #F5F5F5;
+  --border:    rgba(255,255,255,0.08);
+  --border-md: rgba(255,255,255,0.14);
+  --text:      #E8E8E8;
+  --muted:     rgba(255,255,255,0.55);
+  --faint:     rgba(255,255,255,0.3);
 }
 
 html { height: 100%; overflow: hidden; }
@@ -24,7 +42,7 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Discover layout ──────────────────────────────────────────── */
 .discover-layout {
   flex: 1; min-height: 0; height: 100%; display: flex; overflow: hidden;
-  background: #F0EFED; color: #1A1A1A; position: relative;
+  background: var(--bg); color: var(--text); position: relative;
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
