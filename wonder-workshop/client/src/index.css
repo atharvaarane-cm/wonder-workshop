@@ -1864,6 +1864,29 @@ textarea { font-family: var(--font); resize: none; }
   box-shadow: 0 8px 20px rgba(0,0,0,0.24);
   outline: none;
 }
+
+/* ··· more-actions menu on image slots — collapses Download / Upscale /
+   Delete behind a single button so the primary actions (Refresh,
+   Variations, Edit Prompt) stay the front-of-house. */
+.img-slot-more-wrap { position: relative; }
+.img-slot-more-btn { font-weight: 700; padding: 5px 9px; min-width: 36px; }
+.img-slot-more-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 10;
+  display: flex; flex-direction: column;
+  min-width: 130px; padding: 4px;
+  background: rgba(20,20,20,0.96); border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px; backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.img-slot-more-menu button {
+  text-align: left; padding: 7px 10px; border-radius: 5px;
+  background: none; border: none; cursor: pointer;
+  color: #fff; font-family: var(--font); font-size: 12px;
+  transition: background 0.1s;
+}
+.img-slot-more-menu button:hover { background: rgba(255,255,255,0.08); }
+.img-slot-more-menu-danger { color: #F87171 !important; }
+.img-slot-more-menu-danger:hover { background: rgba(248,113,113,0.12) !important; }
 .img-version-badge {
   position: absolute; top: 8px; left: 8px; z-index: 2;
   padding: 2px 4px; border-radius: 999px;
