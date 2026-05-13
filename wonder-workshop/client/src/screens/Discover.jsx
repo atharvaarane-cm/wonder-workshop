@@ -416,30 +416,54 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], onOp
                 <button className="page-empty-btn" onClick={() => setActivePage('home')}>Go to Home</button>
               </div>
             ) : (
-              <div className="projects-grid">
-                {projects.filter(p => !discoverSearch || p.name?.toLowerCase().includes(discoverSearch.toLowerCase()) || p.brief?.creativeDirection?.brand?.toLowerCase().includes(discoverSearch.toLowerCase())).map((p, i) => (
-                  <div key={p.id} className="project-card" onClick={() => onOpenProject(p)}>
-                    <div className="project-card-bg" style={{ background: CARD_GRADIENTS[i % CARD_GRADIENTS.length] }}>
-                      <span className="project-card-brand">{p.brief?.creativeDirection?.brand || p.name}</span>
-                    </div>
-                    <div className="project-card-body">
-                      <div className="project-card-name">{p.name}</div>
-                      <div className="project-card-meta">
-                        {p.brief?.creativeDirection?.format && <span>{p.brief.creativeDirection.format}</span>}
-                        {p.brief?.creativeDirection?.shots && <span>{p.brief.creativeDirection.shots} shots</span>}
-                        {p.createdAt && <span>{new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+              <div className="projects-by-folder">
+                {folders.map(([folderName, folderProjects], folderIdx) => {
+                  const filtered = folderProjects.filter(p => !discoverSearch
+                    || p.name?.toLowerCase().includes(discoverSearch.toLowerCase())
+                    || p.brief?.creativeDirection?.brand?.toLowerCase().includes(discoverSearch.toLowerCase()))
+                  if (!filtered.length) return null
+                  // Skip the folder header when "Projects" is the only bucket —
+                  // keeps the page clean for users without custom folders.
+                  const showHeader = folders.length > 1
+                  return (
+                    <div className="projects-folder" key={folderName}>
+                      {showHeader && (
+                        <div className="projects-folder-header">
+                          <span className="projects-folder-name">{folderName}</span>
+                          <span className="projects-folder-count">{filtered.length}</span>
+                        </div>
+                      )}
+                      <div className="projects-grid">
+                        {filtered.map((p, i) => (
+                          <div key={p.id} className="project-card" onClick={() => onOpenProject(p)}>
+                            <div className="project-card-bg" style={{ background: CARD_GRADIENTS[(folderIdx * 3 + i) % CARD_GRADIENTS.length] }}>
+                              <span className="project-card-brand">{p.brief?.creativeDirection?.brand || p.name}</span>
+                            </div>
+                            <div className="project-card-body">
+                              <div className="project-card-name">{p.name}</div>
+                              <div className="project-card-meta">
+                                {p.brief?.creativeDirection?.format && <span>{p.brief.creativeDirection.format}</span>}
+                                {p.brief?.creativeDirection?.shots && <span>{p.brief.creativeDirection.shots} shots</span>}
+                                {p.createdAt && <span>{new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                              </div>
+                            </div>
+                            <div className="project-card-actions" onClick={e => e.stopPropagation()}>
+                              <button onClick={e => { e.stopPropagation(); startRename(p, e) }} title="Rename">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 8.5V10h1.5l5-5L7 3.5l-5 5zM7.7 2.8l1.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); promptMoveToFolder(p) }} title="Move to folder…">
+                                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 4a1 1 0 011-1h3l1 1h4a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); onDeleteProject?.(p.id) }} title="Delete">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="project-card-actions" onClick={e => e.stopPropagation()}>
-                      <button onClick={e => { e.stopPropagation(); startRename(p, e) }} title="Rename">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 8.5V10h1.5l5-5L7 3.5l-5 5zM7.7 2.8l1.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); onDeleteProject?.(p.id) }} title="Delete">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </main>

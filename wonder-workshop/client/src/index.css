@@ -279,6 +279,21 @@ textarea { font-family: var(--font); resize: none; }
 .page-empty-btn:hover { background: var(--hover); }
 
 /* Projects grid */
+.projects-by-folder { display: flex; flex-direction: column; gap: 32px; }
+.projects-folder { display: flex; flex-direction: column; gap: 14px; }
+.projects-folder-header {
+  display: flex; align-items: baseline; gap: 10px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.projects-folder-name {
+  font-family: var(--font-serif); font-size: 22px; font-weight: 700;
+  letter-spacing: -0.01em; color: var(--text);
+}
+.projects-folder-count {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  padding: 2px 8px; border-radius: 999px; background: var(--bg);
+  border: 1px solid var(--border);
+}
 .projects-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px;
 }
