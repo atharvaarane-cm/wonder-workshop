@@ -10,8 +10,8 @@ function Skeleton() {
   )
 }
 
-export default function SectionCard({ name, loading, children, active, onClick, imageResolution, imageLoading, canAutoGenerate, onAutoGenerate }) {
-  const [collapsed, setCollapsed] = useState(false)
+export default function SectionCard({ name, loading, children, active, onClick, imageResolution, imageLoading, canAutoGenerate, onAutoGenerate, defaultCollapsed = false }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
   const dotState = loading || imageLoading ? 'amber' : 'green'
 
