@@ -17,6 +17,7 @@ const RATIO_DIMS = {
   '9:16': { width: 504, height: 896 },
   '1:1':  { width: 768, height: 768 },
   '4:5':  { width: 640, height: 800 },
+  '3:4':  { width: 624, height: 832 },
   '4:3':  { width: 896, height: 672 },
   '2:1':  { width: 896, height: 448 },
 }
@@ -26,11 +27,12 @@ const RATIO_CSS = {
   '9:16': '9/16',
   '1:1':  '1/1',
   '4:5':  '4/5',
+  '3:4':  '3/4',
   '4:3':  '4/3',
   '2:1':  '2/1',
 }
 
-export default function ImageSlot({ label, prompt, style, className, view, seed }) {
+export default function ImageSlot({ label, prompt, style, className, view, seed, ratio }) {
   const project = useContext(ProjectContext)
   const slotKey = prompt || null
   const initial = slotKey && project?.images?.[slotKey]
@@ -191,7 +193,11 @@ export default function ImageSlot({ label, prompt, style, className, view, seed 
       // dead URLs as versions and end the loading state before the work is done.
       let res
       try {
-        const dims = RATIO_DIMS[project?.ratio] || RATIO_DIMS['16:9']
+        // Per-section override beats the project-level ratio. Section
+        // ingredients (character refs, mood-board tiles) shouldn't be forced
+        // to the final-output aspect — only the Storyboard cares about that.
+        const effectiveRatio = ratio || project?.ratio
+        const dims = RATIO_DIMS[effectiveRatio] || RATIO_DIMS['16:9']
         res = await fetch('/api/image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -406,7 +412,7 @@ export default function ImageSlot({ label, prompt, style, className, view, seed 
       className={`img-slot${isActive ? ' active' : ''}${dropActive ? ' drop-target' : ''} ${className || ''}`}
       style={(() => {
         if (style?.height || style?.aspectRatio) return style
-        const r = project?.ratio || '16:9'
+        const r = ratio || project?.ratio || '16:9'
         const css = RATIO_CSS[r] || '16/9'
         const [rw, rh] = css.split('/').map(Number)
         if (rh > rw) {
