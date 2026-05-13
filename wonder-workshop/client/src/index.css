@@ -1211,70 +1211,62 @@ textarea { font-family: var(--font); resize: none; }
 .cd-field label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: block; margin-bottom: 4px; }
 .cd-field .val { font-size: 13px; font-weight: 500; }
 
-/* ── Brand Info — top row (logo + rules), bottom row (color palette strip) */
-.bi-layout { display: flex; flex-direction: column; gap: 22px; }
-.bi-top-row { display: grid; grid-template-columns: 200px 1fr; gap: 32px; align-items: start; }
-.bi-colors-row { padding-top: 18px; border-top: 1px solid var(--border); }
-.bi-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
-.bi-swatches-horizontal {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-}
+/* ── Brand Info — May 13 mockup: logo + BRAND COLORS on the left,
+   guidelines on the right ──────────────────────────────────────── */
+.bi-layout { display: grid; grid-template-columns: 240px 1fr; gap: 32px; align-items: start; }
+.bi-left-col { display: flex; flex-direction: column; gap: 12px; }
+.bi-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; font-weight: 700; }
 
-.bi-logo-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .bi-logo-wrap {
   /* Empty state — let the inner ImageSlot govern look so it matches
-     other empty slots (dark + sparkle in dark mode). No outer white
-     border-on-dark sandwich. */
-  width: 100%; aspect-ratio: 1/1; border-radius: 12px;
+     other empty slots (dark + sparkle in dark mode). */
+  width: 100%; aspect-ratio: 1/1; border-radius: 14px;
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 /* When an actual logo is loaded, switch to the white photo-mat
    treatment so the logo always reads correctly. */
 .bi-logo-wrap.has-logo {
-  background: #fff; border: 1px solid var(--border); padding: 18px;
+  background: #fff; border: 1px solid var(--border); padding: 22px;
 }
 [data-theme="dark"] .bi-logo-wrap.has-logo { background: #fff; }
 .bi-logo-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .bi-source-link {
   font-size: 11px; color: var(--muted); text-decoration: none; font-weight: 500;
   border: 1px solid var(--border); border-radius: 14px; padding: 4px 10px;
+  align-self: flex-start;
 }
 .bi-source-link:hover { color: var(--text); border-color: var(--border-md); }
 
-.bi-swatches { display: flex; flex-direction: column; gap: 6px; }
-/* Swatch tile: big color block on top, name + hex stacked below.
-   Matches the mockup's color palette layout. */
-.bi-swatch-row {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-  padding: 4px; border-radius: 10px;
-  border: 1px solid transparent; background: transparent;
-  cursor: pointer; font-family: var(--font); text-align: left;
-  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+/* BRAND COLORS — joined strip of color blocks, no gaps. Hex code fades in
+   on hover. Click to copy. Matches the May 13 mockup. */
+.bi-colors { display: flex; flex-direction: column; }
+.bi-swatches-strip {
+  display: flex; flex-direction: row;
+  border-radius: 6px; overflow: hidden;
+  height: 48px;
+  border: 1px solid var(--border);
 }
-.bi-swatch-row:hover {
-  background: var(--bg); border-color: var(--border);
+.bi-swatch {
+  flex: 1; border: none; padding: 0; cursor: pointer;
+  position: relative;
+  transition: transform 0.14s;
+  min-width: 0;
 }
-.bi-swatch-row:active { transform: scale(0.98); }
-.bi-swatch-row.copied .bi-swatch-block {
-  outline: 2px solid #2D9A4E; outline-offset: 2px;
+.bi-swatch:hover { transform: translateY(-1px); }
+.bi-swatch:active { transform: translateY(0); }
+.bi-swatch-hex-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  color: #fff;
+  background: rgba(0,0,0,0.55);
+  opacity: 0; transition: opacity 0.14s;
+  pointer-events: none;
 }
-.bi-swatch-block {
-  width: 100%; aspect-ratio: 1/1; min-height: 56px;
-  border-radius: 10px;
-  border: 1px solid var(--border); flex-shrink: 0;
-  transition: outline 0.12s, transform 0.12s;
+.bi-swatch:hover .bi-swatch-hex-overlay { opacity: 1; }
+.bi-swatch.copied .bi-swatch-hex-overlay {
+  opacity: 1; background: rgba(45,154,78,0.85);
 }
-.bi-swatch-row:hover .bi-swatch-block { transform: scale(1.03); }
-.bi-swatch-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 0 2px; }
-.bi-swatch-name { font-size: 12px; font-weight: 600; color: var(--text); }
-.bi-swatch-hex {
-  font-size: 10px; color: var(--muted); font-family: monospace;
-  letter-spacing: 0.02em;
-}
-.bi-swatch-row.copied .bi-swatch-hex { color: #2D9A4E; font-weight: 700; }
-[data-theme="dark"] .bi-swatch-row.copied .bi-swatch-hex { color: #5BCB7A; }
 
 .bi-rules-text { font-size: 13px; color: var(--muted); line-height: 1.65; }
 
@@ -2233,7 +2225,7 @@ textarea { font-family: var(--font); resize: none; }
   .board-scroll { padding: 12px; }
 
   /* Section content grids — 2 col on mobile */
-  .bi-top-row { grid-template-columns: 1fr; gap: 16px; }
+  .bi-layout { grid-template-columns: 1fr; gap: 16px; }
   .cd-layout { grid-template-columns: 1fr; }
   .cd-grid { grid-template-columns: repeat(2, 1fr); }
   .character-views { grid-template-columns: repeat(2, 1fr); }

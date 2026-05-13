@@ -6,7 +6,10 @@ function domainFromUrl(url) {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
 }
 
-function Swatch({ color }) {
+// Swatch tile per the May 13 mockup — joined into the strip, no labels
+// visible by default. Hex code fades in over the color on hover, and
+// clicking the swatch copies the hex to the clipboard.
+function Swatch({ color, first, last }) {
   const [copied, setCopied] = useState(false)
 
   async function copy(e) {
@@ -21,15 +24,14 @@ function Swatch({ color }) {
   return (
     <button
       type="button"
-      className={`bi-swatch-row${copied ? ' copied' : ''}`}
+      className={`bi-swatch${first ? ' first' : ''}${last ? ' last' : ''}${copied ? ' copied' : ''}`}
       onClick={copy}
-      title={`Click to copy ${color.hex}`}
+      style={{ background: color.hex }}
+      title={color.name ? `${color.name} · ${color.hex}` : color.hex}
     >
-      <div className="bi-swatch-block" style={{ background: color.hex }} />
-      <div className="bi-swatch-info">
-        <span className="bi-swatch-name">{color.name}</span>
-        <span className="bi-swatch-hex">{copied ? '✓ Copied' : color.hex}</span>
-      </div>
+      <span className="bi-swatch-hex-overlay">
+        {copied ? '✓ Copied' : color.hex}
+      </span>
     </button>
   )
 }
@@ -51,47 +53,53 @@ export default function BrandInfo({ data, update }) {
     else setLogoFailed(true)
   }
 
+  const colors = data.colors || []
+
   return (
     <div className="bi-layout">
 
-      {/* Top row: logo on the left, brand guidelines stretching to the right. */}
-      <div className="bi-top-row">
+      {/* Left column: logo on top, BRAND COLORS strip below. */}
+      <div className="bi-left-col">
+        <div className={`bi-logo-wrap${fallbacks.length > 0 && !logoFailed ? ' has-logo' : ''}`}>
+          {fallbacks.length > 0 && !logoFailed
+            ? <img src={fallbacks[srcIdx]} alt="Brand logo" onError={handleError} className="bi-logo-img" />
+            : <ImageSlot label="Logo" style={{ width: '100%', height: '100%', borderRadius: 12 }} />
+          }
+        </div>
 
-        <div className="bi-logo-col">
-          <div className={`bi-logo-wrap${fallbacks.length > 0 && !logoFailed ? ' has-logo' : ''}`}>
-            {fallbacks.length > 0 && !logoFailed
-              ? <img src={fallbacks[srcIdx]} alt="Brand logo" onError={handleError} className="bi-logo-img" />
-              : <ImageSlot label="Logo" style={{ width: '100%', height: '100%', borderRadius: 12 }} />
-            }
+        {sourceUrl && (
+          <a href={sourceUrl} target="_blank" rel="noreferrer" className="bi-source-link">
+            {domain || 'Visit site'} ↗
+          </a>
+        )}
+
+        {colors.length > 0 && (
+          <div className="bi-colors">
+            <div className="bi-section-label">Brand Colors</div>
+            <div className="bi-swatches-strip">
+              {colors.map((c, i) => (
+                <Swatch
+                  color={c}
+                  key={i}
+                  first={i === 0}
+                  last={i === colors.length - 1}
+                />
+              ))}
+            </div>
           </div>
-          {sourceUrl && (
-            <a href={sourceUrl} target="_blank" rel="noreferrer" className="bi-source-link">
-              {domain || 'Visit site'} ↗
-            </a>
-          )}
-        </div>
-
-        <div className="bi-rules-col">
-          <div className="bi-section-label">Brand Guidelines</div>
-          <EditableText
-            tag="p"
-            className="bi-rules-text"
-            value={data.rules ?? ''}
-            onChange={v => update('brandInfo.rules', v)}
-            placeholder="Brand guidelines and rules…"
-          />
-        </div>
-
+        )}
       </div>
 
-      {/* Bottom row: color palette as a horizontal strip. */}
-      <div className="bi-colors-row">
-        <div className="bi-section-label">Color Palette</div>
-        <div className="bi-swatches-horizontal">
-          {(data.colors || []).map((c, i) => (
-            <Swatch color={c} key={i} />
-          ))}
-        </div>
+      {/* Right column: brand guidelines */}
+      <div className="bi-rules-col">
+        <div className="bi-section-label">Brand Guidelines</div>
+        <EditableText
+          tag="p"
+          className="bi-rules-text"
+          value={data.rules ?? ''}
+          onChange={v => update('brandInfo.rules', v)}
+          placeholder="Brand guidelines and rules…"
+        />
       </div>
 
     </div>
