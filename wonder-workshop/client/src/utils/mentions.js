@@ -41,6 +41,18 @@ export function getMentionHandles(brief) {
       expansion: [env.heroName, ...parts].join(', '),
     })
   }
+  // Named products/elements (e.g. @Frappuccino, @AirForce1s)
+  for (const product of brief?.productElements || []) {
+    if (!product?.name) continue
+    const parts = []
+    if (product.description) parts.push(product.description)
+    handles.push({
+      key: product.name,
+      label: product.name,
+      kind: 'product',
+      expansion: [product.name, ...parts].join(', '),
+    })
+  }
   return handles
 }
 

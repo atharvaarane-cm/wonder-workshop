@@ -1307,6 +1307,40 @@ textarea { font-family: var(--font); resize: none; }
 
 /* Combined Character Design section: bio + Headshots row + Full Body row. */
 .character-design { display: flex; flex-direction: column; gap: 18px; }
+
+/* Product / Elements section — named items in a flexible grid. Each name
+   becomes a @handle other prompts can reference. */
+.prod-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+.prod-item { display: flex; flex-direction: column; gap: 6px; }
+.prod-name {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  text-align: center; padding: 2px 4px;
+}
+.prod-name:empty::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  font-weight: 500;
+}
+.prod-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  aspect-ratio: 1/1; border-radius: 10px;
+  border: 1.5px dashed var(--border-md); background: transparent;
+  color: var(--muted); font-family: var(--font); font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.prod-add:hover {
+  border-color: #7C5CFC; color: #7C5CFC;
+  background: rgba(124,92,252,0.06);
+}
+[data-theme="dark"] .prod-add:hover {
+  border-color: #9B7DFF; color: #9B7DFF;
+  background: rgba(155,125,255,0.08);
+}
 .character-bio {
   display: grid; grid-template-columns: 120px 1fr; gap: 16px;
   padding-bottom: 14px; border-bottom: 1px solid var(--border);

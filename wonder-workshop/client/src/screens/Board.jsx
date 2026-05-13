@@ -45,7 +45,7 @@ function sectionIsEmpty(sectionId, brief) {
                         && !brief.brandInfo?.sourceUrl
     case 'mb':   return !brief.creativeDirection?.description
     case 'loc':  return !brief.environment?.heroEnvironment && !brief.environment?.heroName
-    case 'cp':   return !brief.character?.wardrobe
+    case 'cp':   return !(brief.productElements?.length) && !brief.character?.wardrobe
     case 'char': return !brief.character?.description
                         && !brief.character?.wardrobe
                         && !brief.character?.name
@@ -180,7 +180,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'mb':  return <MoodBoard data={brief.creativeDirection} />
       case 'loc': return <LocationsSetDesign data={brief.environment} update={update} />
-      case 'cp':   return <ClothingProps data={brief.character} />
+      case 'cp':   return <ClothingProps brief={brief} update={update} />
       case 'char': return <CharacterDesign data={brief.character} update={update} />
       case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} brief={brief} />
       default:    return null
