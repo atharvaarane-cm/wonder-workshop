@@ -1139,32 +1139,38 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── Creative Direction ────────────────────────────────────────── */
 /* ── Creative Direction two-column layout ───────────────────── */
-.cd-wrap { display: flex; flex-direction: column; }
-/* Top accent gradient lives at the page level now (the production strip
-   above the hero title). The Creative section's signature visual is the
-   blue-tinted right column below, not a strip. */
-.cd-gradient-strip { display: none; }
-.cd-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
-.cd-left { }
-.cd-right {
-  display: flex; flex-direction: column; gap: 0;
-  padding: 22px 24px;
-  background: #1F4FE0; /* mockup-spec featured blue */
+.cd-wrap {
+  display: flex; flex-direction: column;
+  /* Break out of section-body's padding so the blue header strip
+     touches the card's left/right edges. */
+  margin: -18px -18px 0;
   border-radius: 14px;
+  overflow: hidden;
+}
+.cd-feature-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 24px;
+  background: #1F4FE0;
   color: #fff;
 }
-[data-theme="dark"] .cd-right { background: #1F4FE0; }
-/* Force readable colors inside the blue panel regardless of theme. */
-.cd-right .cd-eyebrow { color: rgba(255,255,255,0.7); }
-.cd-right .cd-desc { color: rgba(255,255,255,0.92); }
-.cd-right .cd-key-message { color: #fff; }
-.cd-right .cd-meta-label { color: rgba(255,255,255,0.65); }
-.cd-right .cd-meta-val { color: #fff; }
-.cd-right .cd-shots-link { color: #FFE4B0; }
-.cd-right .cd-divider { background: rgba(255,255,255,0.18); }
-.cd-right .cd-tone-chip {
-  background: rgba(255,255,255,0.16); color: #fff; border-color: rgba(255,255,255,0.32);
+.cd-feature-label {
+  font: 700 16px var(--font-serif);
+  letter-spacing: -0.01em;
 }
+.cd-feature-meta { display: flex; align-items: center; gap: 24px; }
+.cd-feature-meta-item { display: flex; flex-direction: column; gap: 1px; align-items: flex-end; }
+.cd-feature-meta-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+}
+.cd-feature-meta-val { font-size: 14px; font-weight: 700; color: #fff; }
+.cd-body { padding: 20px 24px 22px; }
+.cd-body .cd-key-message {
+  font-size: 14px; font-style: italic; color: var(--text); line-height: 1.55;
+  margin: 0 0 12px; font-family: var(--font-serif);
+}
+.cd-body .cd-desc { font-size: 14px; color: var(--text); line-height: 1.6; margin: 0; }
+.cd-body .cd-tone-row { margin-top: 12px; }
 .cd-header-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .cd-brand { font-size: 22px; font-weight: 700; font-family: 'Instrument Serif', Georgia, serif; margin: 0; color: var(--text); }
 .cd-eyebrow {
