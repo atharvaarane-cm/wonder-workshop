@@ -43,6 +43,9 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "shotRoute": "<location progression>",
     "keyElements": ["<element1>", "<element2>", "<element3>"]
   },
+  "productElements": [
+    { "name": "<short product/prop name, e.g. 'Frappuccino' or 'Air Force 1s'>", "description": "<detailed visual description for product photography>" }
+  ],
   "shotList": [
     { "num": "01", "framing": "<EWS|WS|MS|CU|ECU|OTS|POV>", "description": "<shot description>", "camera": "<Drone|Steadicam|Handheld|Tripod|Gimbal>", "duration": "<Xs>" }
   ],
