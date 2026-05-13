@@ -32,6 +32,28 @@ const ROWS = [
 
 const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'mb', 'loc', 'cp', 'char', 'sl'])
 
+// Sections start collapsed when the brief has no relevant content for
+// them — matches the mockup's tighter feel (empty sections show only
+// the header). User can manually expand any section via the chevron.
+function sectionIsEmpty(sectionId, brief) {
+  if (!brief) return true
+  switch (sectionId) {
+    case 'cd':   return !brief.creativeDirection?.description
+    case 'bi':   return !brief.brandInfo?.rules
+                        && !(brief.brandInfo?.colors?.length)
+                        && !brief.brandInfo?.logoUrl
+                        && !brief.brandInfo?.sourceUrl
+    case 'mb':   return !brief.creativeDirection?.description
+    case 'loc':  return !brief.environment?.heroEnvironment && !brief.environment?.heroName
+    case 'cp':   return !brief.character?.wardrobe
+    case 'char': return !brief.character?.description
+                        && !brief.character?.wardrobe
+                        && !brief.character?.name
+    case 'sl':   return !(brief.shotList?.length)
+    default:     return false
+  }
+}
+
 export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
@@ -388,6 +410,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       active={activeId === sec.id}
                       imageResolution={IMAGE_SECTION_IDS.has(sec.id) ? imageResolution : null}
                       imageLoading={(loadingBySection[sec.title] || 0) > 0}
+                      defaultCollapsed={sectionIsEmpty(sec.id, brief)}
                       canAutoGenerate={IMAGE_SECTION_IDS.has(sec.id)}
                       onAutoGenerate={() => {
                         window.dispatchEvent(new CustomEvent('ww-generate-section', {
