@@ -58,10 +58,10 @@ export default function BrandInfo({ data, update }) {
       <div className="bi-top-row">
 
         <div className="bi-logo-col">
-          <div className="bi-logo-wrap">
+          <div className={`bi-logo-wrap${fallbacks.length > 0 && !logoFailed ? ' has-logo' : ''}`}>
             {fallbacks.length > 0 && !logoFailed
               ? <img src={fallbacks[srcIdx]} alt="Brand logo" onError={handleError} className="bi-logo-img" />
-              : <ImageSlot label="Logo" style={{ width: '100%', height: '100%', borderRadius: 10 }} />
+              : <ImageSlot label="Logo" style={{ width: '100%', height: '100%', borderRadius: 12 }} />
             }
           </div>
           {sourceUrl && (
