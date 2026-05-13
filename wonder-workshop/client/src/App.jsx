@@ -146,6 +146,7 @@ export default function App() {
         saveImage: () => {},
         moveImage: () => {},
         ratio: shareData.brief?.generationSettings?.ratio || '16:9',
+        brief: shareData.brief,
       }}>
         <Board
           brief={shareData.brief}
@@ -167,6 +168,7 @@ export default function App() {
         saveImage: handleSaveImage,
         moveImage: handleMoveImage,
         ratio: project.brief?.generationSettings?.ratio || '16:9',
+        brief: project.brief,
       }}>
         <Board
           brief={project.brief}

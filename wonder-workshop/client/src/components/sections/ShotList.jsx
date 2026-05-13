@@ -1,5 +1,6 @@
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
+import MentionInput from '../MentionInput.jsx'
 import { expandMentions } from '../../utils/mentions.js'
 
 export default function ShotList({ data, updateShot, brief }) {
@@ -26,7 +27,14 @@ export default function ShotList({ data, updateShot, brief }) {
 
           {/* Info below image */}
           <div className="shot-info">
-            <EditableText tag="p" className="shot-desc" value={shot.description} onChange={v => updateShot(i, 'description', v)} />
+            <MentionInput
+              className="shot-desc"
+              value={shot.description || ''}
+              onChange={v => updateShot(i, 'description', v)}
+              brief={brief}
+              rows={3}
+              placeholder="Describe this shot — use @Sarah or @Sunset Beach to reference named entities…"
+            />
             <div className="shot-meta-row">
               <EditableText className="shot-cam" value={shot.camera} onChange={v => updateShot(i, 'camera', v)} />
               <EditableText className="shot-dur" value={shot.duration} onChange={v => updateShot(i, 'duration', v)} />
