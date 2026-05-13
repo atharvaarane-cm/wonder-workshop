@@ -1,5 +1,7 @@
+import { useContext } from 'react'
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
+import { ProjectContext } from '../../hooks/useProject.js'
 
 // Deterministic seed from the bio so each generation tends to land on the
 // same character look (Pollinations' seed honors this loosely).
@@ -9,46 +11,79 @@ function hashStr(s) {
   return Math.abs(h)
 }
 
+// 4-view rig per the May 13 mockup — FRONT / SIDE / 3/4 ANGLE / BACK.
 const VIEWS = [
-  { id: 'FRONT', label: 'FRONT', angle: 'facing directly forward, front view' },
-  { id: '3/4',   label: '3/4',   angle: 'three-quarter view, angled 45 degrees left' },
-  { id: 'SIDE',  label: 'SIDE',  angle: 'strict side profile, facing right' },
+  { id: 'FRONT',     label: 'FRONT',     angle: 'facing directly forward, front view, full face visible' },
+  { id: 'SIDE',      label: 'SIDE',      angle: 'strict side profile, facing right' },
+  { id: '3/4',       label: '3/4 ANGLE', angle: 'three-quarter view, angled 45 degrees left' },
+  { id: 'BACK',      label: 'BACK',      angle: 'shot from behind, back of head and body visible, no face' },
 ]
 
-// Prompts must match the strings the previous Character.jsx (modes 'fullbody'
-// and 'closeup') sent — they're the slotKey for persistence, so existing
-// projects' versions still hydrate from localStorage in the right slot.
 function closeupPrompt(data, view) {
   return `${data.description}, ${data.wardrobe}, close-up portrait, head and shoulders, ${view.angle}, sharp face detail, studio lighting, clean white background, headshot`
 }
 function fullbodyPrompt(data, view) {
   return `${data.description}, ${data.wardrobe}, full body, standing, ${view.angle}, full body shot, white studio background, professional photography, character reference sheet`
 }
+function referencePrompt(data) {
+  // The reference image — frontal close-up so it doubles as the "main"
+  // face shot. Same prompt the FRONT headshot uses so versions show up
+  // consistently in the variant thumbnails below.
+  return `${data?.description || ''}, ${data?.wardrobe || ''}, close-up portrait, head and shoulders, facing directly forward, front view, full face visible, sharp face detail, studio lighting, clean white background, headshot`
+}
+
+// Small clickable thumbnails of every version of the reference image —
+// matches the variant strip under the main portrait in the mockup.
+function ReferenceThumbs({ slotKey }) {
+  const project = useContext(ProjectContext)
+  const slot = slotKey ? project?.images?.[slotKey] : null
+  const versions = slot?.versions || []
+  const activeVersion = slot?.activeVersion ?? 0
+  if (versions.length < 2) return null
+  const others = versions.map((v, i) => ({ v, i })).filter(({ i }) => i !== activeVersion)
+  return (
+    <div className="char-ref-thumbs">
+      {others.slice(0, 3).map(({ v, i }) => (
+        <button
+          key={(v.src || '') + i}
+          className="char-ref-thumb"
+          title={`Switch to version ${i + 1}`}
+          onClick={e => {
+            e.stopPropagation()
+            window.dispatchEvent(new CustomEvent('ww-set-active-version', {
+              detail: { slotKey, versionIndex: i },
+            }))
+          }}
+        >
+          <img src={v.src} alt={`Reference variant ${i + 1}`} />
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export default function CharacterDesign({ data, update }) {
   const seed = hashStr((data?.description || '') + (data?.wardrobe || ''))
-
-  // Bio portrait: small headshot beside the name + description, per mockup.
-  // Uses the same FRONT close-up prompt as the Headshots row so the
-  // portrait stays consistent with the rest of the character refs.
-  const portraitPrompt = `${data?.description || ''}, ${data?.wardrobe || ''}, close-up portrait, head and shoulders, facing directly forward, front view, sharp face detail, studio lighting, clean white background, headshot`
+  const refPrompt = referencePrompt(data)
 
   return (
     <div className="character-design">
-      {/* Bio */}
+      {/* Bio: reference image on the left, NAME + DESCRIPTION on the right. */}
       <div className="character-bio">
-        <div className="character-bio-portrait">
+        <div className="character-bio-reference">
+          <div className="character-bio-label">REFERENCE</div>
           <ImageSlot
-            label="Portrait"
-            view="FRONT"
-            seed={seed}
+            label="Reference"
             ratio="1:1"
-            prompt={portraitPrompt}
+            seed={seed}
+            prompt={refPrompt}
             style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10 }}
           />
+          <ReferenceThumbs slotKey={refPrompt} />
         </div>
+
         <div className="character-bio-text">
-          <div className="character-bio-label">BIO</div>
+          <div className="character-bio-label">NAME</div>
           <EditableText
             tag="p"
             className="character-bio-name"
@@ -56,6 +91,7 @@ export default function CharacterDesign({ data, update }) {
             onChange={v => update('character.name', v)}
             placeholder="Character name…"
           />
+          <div className="character-bio-label character-bio-label-desc">DESCRIPTION</div>
           <EditableText
             tag="p"
             className="character-bio-description"
@@ -63,21 +99,13 @@ export default function CharacterDesign({ data, update }) {
             onChange={v => update('character.description', v)}
             placeholder="Character description…"
           />
-          <p className="character-bio-wardrobe">
-            <strong>Wardrobe: </strong>
-            <EditableText
-              value={data?.wardrobe}
-              onChange={v => update('character.wardrobe', v)}
-              placeholder="Wardrobe details…"
-            />
-          </p>
         </div>
       </div>
 
-      {/* Headshots */}
+      {/* Headshots — 4-view grid */}
       <div className="character-views-group">
         <div className="character-views-label">Headshots</div>
-        <div className="character-views">
+        <div className="character-views character-views-4">
           {VIEWS.map(v => (
             <div className="character-view" key={`hs-${v.id}`}>
               <ImageSlot
@@ -93,10 +121,10 @@ export default function CharacterDesign({ data, update }) {
         </div>
       </div>
 
-      {/* Full Body */}
+      {/* Full Body — 4-view grid */}
       <div className="character-views-group">
         <div className="character-views-label">Full Body</div>
-        <div className="character-views">
+        <div className="character-views character-views-4">
           {VIEWS.map(v => (
             <div className="character-view" key={`fb-${v.id}`}>
               <ImageSlot
