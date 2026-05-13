@@ -6,6 +6,13 @@ export default function CreativeDirection({ data, update, onGoToShotList }) {
   const toneKeywords = Array.isArray(data.toneKeywords) ? data.toneKeywords : []
 
   return (
+    <div className="cd-wrap">
+
+      {/* Gradient strip — orange→pink→purple, sits flush against the
+          section card's edges. Visual hero of the Creative section
+          per the Figma mockup. */}
+      <div className="cd-gradient-strip" aria-hidden="true" />
+
     <div className="cd-layout">
 
       {/* Left — hero image */}
@@ -78,6 +85,7 @@ export default function CreativeDirection({ data, update, onGoToShotList }) {
         </div>
 
       </div>
+    </div>
     </div>
   )
 }
