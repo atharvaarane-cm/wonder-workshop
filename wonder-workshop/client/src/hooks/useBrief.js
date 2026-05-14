@@ -139,6 +139,38 @@ function mergeBrandResearch(brief, brandResearch) {
   }
 }
 
+// Programmatically prefix the character / location / product names with @
+// in every shotList description. We instruct the LLM to do this (see
+// SYSTEM_PROMPT), but Gemini doesn't reliably follow it — so we enforce it
+// here. expandMentions() downstream then swaps each @handle for the
+// entity's full description at image-generation time, keeping every
+// storyboard frame consistent with the designed character/location/product.
+function injectMentionHandles(brief) {
+  if (!brief || !Array.isArray(brief.shotList)) return brief
+  const names = []
+  if (brief.character?.name) names.push(brief.character.name)
+  if (brief.environment?.heroName) names.push(brief.environment.heroName)
+  for (const p of brief.productElements || []) {
+    if (p?.name) names.push(p.name)
+  }
+  if (!names.length) return brief
+  // Longest first so "The Concertgoer" wins over a stray "The".
+  const sorted = [...names].sort((a, b) => b.length - a.length)
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  const shotList = brief.shotList.map(shot => {
+    if (!shot?.description) return shot
+    let desc = shot.description
+    for (const name of sorted) {
+      // Whole-phrase, case-insensitive, not already @-prefixed.
+      const re = new RegExp(`(?<!@)\\b${esc(name)}\\b`, 'gi')
+      desc = desc.replace(re, m => `@${m}`)
+    }
+    return { ...shot, description: desc }
+  })
+  return { ...brief, shotList }
+}
+
 export async function generateBrief(userPrompt) {
   const brandResearch = await fetchBrandResearch(userPrompt)
   const researchContext = brandResearch
@@ -177,7 +209,7 @@ export async function generateBrief(userPrompt) {
   const parsed = JSON.parse(repaired)
   const projectInfo = parsed.projectInfo || {}
 
-  return mergeBrandResearch({
+  const merged = mergeBrandResearch({
     ...parsed,
     projectInfo: {
       projectName: projectInfo.projectName || parsed.title || '',
@@ -187,6 +219,8 @@ export async function generateBrief(userPrompt) {
     },
     originalPrompt: userPrompt,
   }, brandResearch)
+
+  return injectMentionHandles(merged)
 }
 
 export async function streamChat(messages, onToken, signal) {

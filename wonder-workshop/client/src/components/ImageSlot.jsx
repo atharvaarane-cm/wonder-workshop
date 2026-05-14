@@ -231,68 +231,71 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
       setQueued(false)
       bumpLoading(+1)
 
-      // /api/image returns the Pollinations URL immediately (it doesn't fetch
-      // the image server-side). The actual generation happens when the browser
-      // requests that URL, which takes 60-90s. We need to preload the URL here
-      // — only declare success once the image truly loads, so we don't store
-      // dead URLs as versions and end the loading state before the work is done.
-      let res
-      try {
-        // Per-section override beats the project-level ratio. Section
-        // ingredients (character refs, mood-board tiles) shouldn't be forced
-        // to the final-output aspect — only the Storyboard cares about that.
-        const effectiveRatio = ratio || project?.ratio
-        const dims = RATIO_DIMS[effectiveRatio] || RATIO_DIMS['16:9']
-        res = await fetch('/api/image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: text, ...dims, ...(seed != null ? { seed } : {}) }),
-        })
-      } catch {
-        setError('Generation failed')
-        bumpLoading(-1)
-        toast('Generation failed', 'error')
-        return
-      }
-
-      const data = await res.json().catch(() => ({}))
-      if (!data.image) {
-        setError(data.error || 'Failed')
-        bumpLoading(-1)
-        toast(data.error || 'Generation failed', 'error')
-        return
-      }
-
-      const url = data.image
+      // Per-section override beats the project-level ratio. Section
+      // ingredients (character refs, mood-board tiles) shouldn't be forced
+      // to the final-output aspect — only the Storyboard cares about that.
+      const effectiveRatio = ratio || project?.ratio
+      const dims = RATIO_DIMS[effectiveRatio] || RATIO_DIMS['16:9']
       const wasFirst = versions.length === 0
 
-      await new Promise(resolve => {
-        const probe = new Image()
-        probe.onload = () => {
-          const next = {
-            src: url,
-            prompt: text,
-            source: 'generated',
-            createdAt: new Date().toISOString(),
-          }
-          setVersions(prev => {
-            const updated = [...prev, next]
-            setActiveVersion(updated.length - 1)
-            return updated
+      // One attempt: ask /api/image for a fresh Pollinations URL, then
+      // preload it. The URL comes back instantly; the actual generation
+      // happens when the browser requests it (~60-90s). Resolves to the
+      // loaded URL on success, or null on any failure.
+      async function attemptOnce() {
+        let res
+        try {
+          res = await fetch('/api/image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: text, ...dims, ...(seed != null ? { seed } : {}) }),
           })
-          setEditingPrompt(false)
-          bumpLoading(-1)
-          if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New image version created')
-          resolve()
+        } catch {
+          return null
         }
-        probe.onerror = () => {
-          setError('Image generator unreachable')
-          bumpLoading(-1)
-          if (!opts.silent) toast('Generation failed', 'error')
-          resolve()
+        const data = await res.json().catch(() => ({}))
+        if (!data.image) return null
+        return new Promise(resolve => {
+          const probe = new Image()
+          probe.onload = () => resolve(data.image)
+          probe.onerror = () => resolve(null)
+          probe.src = data.image
+        })
+      }
+
+      // Retry up to 3x with growing backoff — Pollinations rate-limits an
+      // IP under sustained load (e.g. the auto-generate burst), returning
+      // 5xx for a stretch. A single transient failure shouldn't kill the
+      // slot permanently.
+      const MAX_ATTEMPTS = 3
+      let loadedUrl = null
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS && !loadedUrl; attempt++) {
+        loadedUrl = await attemptOnce()
+        if (!loadedUrl && attempt < MAX_ATTEMPTS) {
+          await new Promise(r => setTimeout(r, 2500 * attempt))
         }
-        probe.src = url
-      })
+      }
+
+      if (loadedUrl) {
+        const next = {
+          src: loadedUrl,
+          prompt: text,
+          source: 'generated',
+          createdAt: new Date().toISOString(),
+        }
+        setVersions(prev => {
+          const updated = [...prev, next]
+          setActiveVersion(updated.length - 1)
+          return updated
+        })
+        setEditingPrompt(false)
+        bumpLoading(-1)
+        if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New image version created')
+      } else {
+        setError('Image generator unreachable')
+        bumpLoading(-1)
+        if (!opts.silent) toast('Generation failed', 'error')
+      }
     })
   }
 
