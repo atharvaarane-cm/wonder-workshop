@@ -4,6 +4,10 @@ import MentionInput from '../MentionInput.jsx'
 import { expandMentions } from '../../utils/mentions.js'
 
 export default function ShotList({ data, updateShot, brief }) {
+  // Storyboard frames follow the project's output ratio — a 4:5 project
+  // shouldn't show 16:9 shots. CSS aspect-ratio takes "4/5", so swap the colon.
+  const ratio = brief?.generationSettings?.ratio || '16:9'
+  const aspectCss = ratio.replace(':', '/')
   return (
     <div className="shot-grid">
       {(data || []).map((shot, i) => {
@@ -16,9 +20,10 @@ export default function ShotList({ data, updateShot, brief }) {
         <div className="shot-cell" key={shot.num}>
 
           {/* Image with overlaid badges */}
-          <div className="shot-img-wrap">
+          <div className="shot-img-wrap" style={{ aspectRatio: aspectCss }}>
             <ImageSlot
               prompt={prompt}
+              ratio={ratio}
               style={{ width: '100%', height: '100%', borderRadius: 8 }}
             />
             <span className="shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
