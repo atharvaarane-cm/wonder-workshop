@@ -1426,7 +1426,8 @@ textarea { font-family: var(--font); resize: none; }
 .shot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .shot-cell { display: flex; flex-direction: column; gap: 8px; }
 
-/* Image area with overlay badges */
+/* Image area with overlay badges. aspect-ratio is set inline from the
+   project's output ratio — see ShotList.jsx. */
 .shot-img-wrap {
   position: relative; width: 100%; aspect-ratio: 16/9;
   border-radius: 8px; overflow: hidden; background: var(--bg);
