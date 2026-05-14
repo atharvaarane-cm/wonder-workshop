@@ -54,7 +54,7 @@ function sectionIsEmpty(sectionId, brief) {
   }
 }
 
-export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false }) {
+export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false, autoGenerateImages = false, onAutoGenerateConsumed }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
   const [activeImageTarget, setActiveImageTarget] = useState(null)
@@ -84,6 +84,29 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     const t = setTimeout(() => saveBriefRef.current?.(brief), 400)
     return () => clearTimeout(t)
   }, [brief])
+
+  // When the project was just created via "Generate" (not "Start blank"),
+  // auto-fire image generation across every image-bearing section so the
+  // user lands on a fully-populated board, per Ravi's "it should
+  // autogenerate the images as well." Runs once per mount — Board is
+  // keyed by project id in App, so each Generate is a fresh mount.
+  useEffect(() => {
+    if (!autoGenerateImages) return
+    // Small delay so every ImageSlot has mounted and registered its
+    // ww-generate-section listener before we dispatch.
+    const t = setTimeout(() => {
+      ROWS.flat()
+        .filter(sec => IMAGE_SECTION_IDS.has(sec.id))
+        .forEach(sec => {
+          window.dispatchEvent(new CustomEvent('ww-generate-section', {
+            detail: { sectionTitle: sec.title },
+          }))
+        })
+      onAutoGenerateConsumed?.()
+    }, 350)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     function onToast(e) {
