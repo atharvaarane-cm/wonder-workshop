@@ -8,12 +8,6 @@ function toast(msg, type = 'success') {
   window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg, type } }))
 }
 
-const VIEW_COLORS = {
-  'FRONT': '#0891B2',
-  '3/4':   '#D97706',
-  'SIDE':  '#7C5CFC',
-}
-
 const RATIO_DIMS = {
   '16:9': { width: 896, height: 504 },
   '9:16': { width: 504, height: 896 },
@@ -34,7 +28,7 @@ const RATIO_CSS = {
   '2:1':  '2/1',
 }
 
-export default function ImageSlot({ label, prompt, style, className, view, seed, ratio }) {
+export default function ImageSlot({ label, prompt, style, className, seed, ratio }) {
   const project = useContext(ProjectContext)
   const slotKey = prompt || null
   const initial = slotKey && project?.images?.[slotKey]
@@ -46,7 +40,6 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
   const [queued, setQueued] = useState(false)
   const [error, setError] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [editingPrompt, setEditingPrompt] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -126,17 +119,6 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
     window.addEventListener('ww-set-active-version', onSetActiveVersion)
     return () => window.removeEventListener('ww-set-active-version', onSetActiveVersion)
   }, [slotKey, versions.length])
-
-  // Close the ··· more-menu when the user clicks anywhere outside it.
-  useEffect(() => {
-    if (!moreMenuOpen) return
-    function onDocClick(e) {
-      if (e.target.closest('.img-slot-more-wrap')) return
-      setMoreMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [moreMenuOpen])
 
   // Lightbox + prompt-edit modal: lock body scroll + Esc to close.
   useEffect(() => {
@@ -397,11 +379,6 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
     toast('Restored')
   }
 
-  function upscale(e) {
-    e.stopPropagation()
-    toast('Upscale queued')
-  }
-
   async function copyPromptToClipboard(e) {
     e?.stopPropagation?.()
     const text = (activeImage?.prompt || editablePrompt || '').trim()
@@ -506,15 +483,6 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
       onDragLeave={onSlotDragLeave}
       onDrop={onSlotDrop}
     >
-      {view && VIEW_COLORS[view] && (
-        <div
-          className="img-slot-view-chip"
-          title={`View: ${view}`}
-          style={{ background: VIEW_COLORS[view] }}
-        >
-          {view}
-        </div>
-      )}
       {activeImage
         ? <>
             <img
@@ -565,42 +533,33 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
                 </button>
               )}
             </div>
-            <button
-              className="img-magnify-btn"
-              title="View larger"
-              onClick={openLightbox}
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.6"/>
-                <path d="M10.5 10.5l3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                <path d="M7 5v4M5 7h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-              </svg>
-            </button>
-            <div className="img-slot-overlay">
-              <button className="img-slot-action" onClick={generate} disabled={loading}>{loading ? '…' : 'Refresh'}</button>
-              <button className="img-slot-action" onClick={generateVariations} disabled={loading} title="Generate 3 variations of this prompt">Variations</button>
-              <button className="img-slot-action" onClick={e => { e.stopPropagation(); setEditingPrompt(v => !v) }}>Edit Prompt</button>
-              <div className="img-slot-more-wrap">
-                <button
-                  className="img-slot-action img-slot-more-btn"
-                  onClick={e => { e.stopPropagation(); setMoreMenuOpen(o => !o) }}
-                  title="More actions"
-                >
-                  ···
-                </button>
-                {moreMenuOpen && (
-                  <div className="img-slot-more-menu" onClick={e => e.stopPropagation()}>
-                    <button onClick={e => { setMoreMenuOpen(false); downloadImage(e) }}>Download</button>
-                    <button onClick={e => { setMoreMenuOpen(false); upscale(e) }}>Upscale</button>
-                    <button
-                      className="img-slot-more-menu-danger"
-                      onClick={e => { setMoreMenuOpen(false); deleteImage(e) }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
-              </div>
+            {/* Blue floating hover-nav — Ravi's "hover nav" pill from the
+                Figma canvas. Appears above the image on hover (or while the
+                slot is the chat's active target). */}
+            <div className="img-hover-nav" onClick={e => e.stopPropagation()}>
+              <button className="ihn-btn" onClick={openLightbox} title="Expand">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button className="ihn-btn" onClick={downloadImage} title="Download">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button className="ihn-btn" onClick={e => { e.stopPropagation(); inputRef.current.click() }} title="Replace with an upload">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 14V6M5 9l3-3 3 3M3 3h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button className="ihn-edit" onClick={e => { e.stopPropagation(); setEditingPrompt(true) }}>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Edit with prompt
+              </button>
+              <span className="ihn-sep" />
+              <button className="ihn-btn" onClick={generate} disabled={loading} title="Regenerate">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button className="ihn-btn" onClick={generateVariations} disabled={loading} title="Generate 3 variations">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3z" fill="currentColor"/></svg>
+              </button>
+              <button className="ihn-btn ihn-btn-danger" onClick={deleteImage} title="Delete">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
             </div>
             {pendingUndo && (
               <div className="img-slot-undo" onClick={e => e.stopPropagation()}>
