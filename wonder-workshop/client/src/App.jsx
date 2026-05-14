@@ -32,6 +32,11 @@ export default function App() {
   const [shareData] = useState(() => parseShareHash())
   const [project, setProject] = useState(() => shareData ? null : getActiveProject())
   const [projects, setProjects] = useState(() => listProjects())
+  // Set when a project is created via "Generate" (not "Start blank" or
+  // opening an existing one). Board reads it on mount and fires
+  // image generation across every section, per Ravi's "it should
+  // autogenerate the images as well".
+  const [autoGenerateImages, setAutoGenerateImages] = useState(false)
   // Dark by default per the new mockup direction; explicit user preference wins.
   const [theme, setTheme] = useState(() => localStorage.getItem('ww_theme') || 'dark')
 
@@ -48,6 +53,7 @@ export default function App() {
 
   function handleGenerate(brief) {
     const p = createProject(brief)
+    setAutoGenerateImages(true)
     setProject(p)
     refreshList()
   }
@@ -70,12 +76,14 @@ export default function App() {
       },
     }
     const p = createProject(stubBrief)
+    setAutoGenerateImages(false) // "Start blank" stays blank — no auto image gen
     setProject(p)
     refreshList()
   }
 
   function handleOpenProject(p) {
     setActiveProject(p.id)
+    setAutoGenerateImages(false) // opening an existing project shouldn't re-fire generation
     setProject(p)
   }
 
@@ -171,11 +179,14 @@ export default function App() {
         brief: project.brief,
       }}>
         <Board
+          key={project.id}
           brief={project.brief}
           onBack={handleBack}
           theme={theme}
           toggleTheme={toggleTheme}
           onSaveBrief={handleSaveBrief}
+          autoGenerateImages={autoGenerateImages}
+          onAutoGenerateConsumed={() => setAutoGenerateImages(false)}
         />
       </ProjectContext.Provider>
     )
