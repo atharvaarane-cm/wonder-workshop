@@ -12,6 +12,7 @@ import ShotList from '../components/sections/ShotList.jsx'
 import ShareModal from '../components/ShareModal.jsx'
 import ExportDropdown from '../components/ExportDropdown.jsx'
 import OnePager from '../components/OnePager.jsx'
+import GenerationLogModal from '../components/GenerationLogModal.jsx'
 import { ProjectContext } from '../hooks/useProject.js'
 import { generateBrief } from '../hooks/useBrief.js'
 
@@ -63,6 +64,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [shareOpen, setShareOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [onePagerOpen, setOnePagerOpen] = useState(false)
+  const [genLogOpen, setGenLogOpen] = useState(false)
   const [agentPanelOpen, setAgentPanelOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -320,6 +322,11 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
               <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
           </button>
+          <button className="topbar-icon-btn" onClick={() => setGenLogOpen(true)} title="Generation log — diagnose image generation">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <path d="M2.5 3.5h11M2.5 8h11M2.5 12.5h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </button>
           <div className="topbar-sep-v" />
           <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
             {theme === 'dark'
@@ -481,6 +488,9 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       )}
       {onePagerOpen && (
         <OnePager brief={brief} images={project?.images || {}} onClose={() => setOnePagerOpen(false)} />
+      )}
+      {genLogOpen && (
+        <GenerationLogModal onClose={() => setGenLogOpen(false)} />
       )}
     </div>
   )

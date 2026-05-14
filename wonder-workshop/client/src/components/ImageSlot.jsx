@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { ProjectContext } from '../hooks/useProject.js'
 import { enqueue } from '../utils/generationQueue.js'
+import { logGeneration } from '../utils/generationLog.js'
 import MentionInput from './MentionInput.jsx'
 
 function toast(msg, type = 'success') {
@@ -237,12 +238,17 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
       const effectiveRatio = ratio || project?.ratio
       const dims = RATIO_DIMS[effectiveRatio] || RATIO_DIMS['16:9']
       const wasFirst = versions.length === 0
+      const sectionTitle = slotRef.current?.closest('[data-section-title]')?.dataset.sectionTitle || ''
 
       // One attempt: ask /api/image for a fresh Pollinations URL, then
       // preload it. The URL comes back instantly; the actual generation
-      // happens when the browser requests it (~60-90s). Resolves to the
-      // loaded URL on success, or null on any failure.
+      // happens when the browser requests it (~60-90s). Returns a result
+      // object recording exactly which stage succeeded or failed, so the
+      // generation log can tell network errors / bad HTTP / missing URL /
+      // failed image loads apart.
       async function attemptOnce() {
+        const started = performance.now()
+        const ms = () => Math.round(performance.now() - started)
         let res
         try {
           res = await fetch('/api/image', {
@@ -250,15 +256,21 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: text, ...dims, ...(seed != null ? { seed } : {}) }),
           })
-        } catch {
-          return null
+        } catch (err) {
+          return { url: null, stage: 'fetch-threw', detail: String(err?.message || err), ms: ms() }
+        }
+        if (!res.ok) {
+          const body = await res.text().catch(() => '')
+          return { url: null, stage: 'http-error', status: res.status, detail: body.slice(0, 200), ms: ms() }
         }
         const data = await res.json().catch(() => ({}))
-        if (!data.image) return null
+        if (!data.image) {
+          return { url: null, stage: 'no-image-field', status: res.status, detail: JSON.stringify(data).slice(0, 200), ms: ms() }
+        }
         return new Promise(resolve => {
           const probe = new Image()
-          probe.onload = () => resolve(data.image)
-          probe.onerror = () => resolve(null)
+          probe.onload = () => resolve({ url: data.image, stage: 'ok', status: res.status, imageUrl: data.image, ms: ms() })
+          probe.onerror = () => resolve({ url: null, stage: 'probe-failed', status: res.status, imageUrl: data.image, detail: 'Pollinations image URL failed to load in the browser', ms: ms() })
           probe.src = data.image
         })
       }
@@ -266,12 +278,25 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
       // Retry up to 3x with growing backoff — Pollinations rate-limits an
       // IP under sustained load (e.g. the auto-generate burst), returning
       // 5xx for a stretch. A single transient failure shouldn't kill the
-      // slot permanently.
+      // slot permanently. Every attempt is logged for diagnosis.
       const MAX_ATTEMPTS = 3
       let loadedUrl = null
       for (let attempt = 1; attempt <= MAX_ATTEMPTS && !loadedUrl; attempt++) {
-        loadedUrl = await attemptOnce()
-        if (!loadedUrl && attempt < MAX_ATTEMPTS) {
+        const r = await attemptOnce()
+        logGeneration({
+          label: label || 'Image',
+          section: sectionTitle,
+          prompt: text,
+          attempt,
+          maxAttempts: MAX_ATTEMPTS,
+          stage: r.stage,
+          status: r.status,
+          detail: r.detail,
+          imageUrl: r.imageUrl,
+          ms: r.ms,
+        })
+        if (r.url) { loadedUrl = r.url; break }
+        if (attempt < MAX_ATTEMPTS) {
           await new Promise(r => setTimeout(r, 2500 * attempt))
         }
       }
