@@ -1771,6 +1771,23 @@ textarea { font-family: var(--font); resize: none; }
 .ihn-edit:hover { background: rgba(255,255,255,0.3); }
 .ihn-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.28); margin: 0 3px; flex-shrink: 0; }
 
+/* Fast custom tooltips for the hover-nav — native `title` has a ~1s
+   browser delay; this shows almost immediately. Sits below the button
+   so it stays inside the image area. */
+.ihn-btn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; top: calc(100% + 7px); left: 50%;
+  transform: translateX(-50%);
+  background: #111; color: #fff; font-size: 10.5px; font-weight: 600;
+  font-family: var(--font); white-space: nowrap;
+  padding: 4px 8px; border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.1s ease 0.04s;
+  z-index: 20;
+}
+.ihn-btn[data-tip]:hover::after { opacity: 1; }
+
 /* Lightbox */
 .img-lightbox {
   position: fixed; inset: 0; z-index: 1000;
@@ -1986,29 +2003,32 @@ textarea { font-family: var(--font); resize: none; }
 }
 .img-slot-undo button:hover { background: rgba(255,255,255,0.24); }
 
-/* Three-dot pulse — used while an image is generating */
-.img-slot-loading {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  color: var(--muted); font-size: 11px;
+/* Generating shimmer — covers the whole slot whenever a generation is
+   queued or in flight, so there's always a clear "working" signal even
+   when the slot already holds an image (e.g. Variations). */
+.img-slot-generating {
+  position: absolute; inset: 0; z-index: 4; pointer-events: none;
+  border-radius: inherit; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(17,17,17,0.4);
 }
-.img-slot-loading .loading-dots {
-  display: flex; gap: 6px; align-items: center;
+.img-slot-generating::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(100deg,
+    transparent 30%, rgba(255,255,255,0.22) 50%, transparent 70%);
+  background-size: 240% 100%;
+  animation: slot-shimmer 1.25s linear infinite;
 }
-.img-slot-loading .loading-dots span {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #7C5CFC;
-  animation: loading-dot 1.2s ease-in-out infinite;
+@keyframes slot-shimmer {
+  0%   { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
 }
-.img-slot-loading .loading-dots span:nth-child(2) { animation-delay: 0.18s; }
-.img-slot-loading .loading-dots span:nth-child(3) { animation-delay: 0.36s; }
-.img-slot-loading .loading-label {
-  font-weight: 600; letter-spacing: 0.04em;
+.img-slot-generating-label {
+  position: relative; z-index: 1;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: #fff;
+  background: rgba(0,0,0,0.5); padding: 4px 11px; border-radius: 999px;
+  backdrop-filter: blur(4px);
 }
-@keyframes loading-dot {
-  0%, 80%, 100% { transform: scale(0.55); opacity: 0.4; }
-  40%           { transform: scale(1);    opacity: 1; }
-}
-[data-theme="dark"] .img-slot-loading .loading-dots span { background: #9B7DFF; }
 
 .img-version-badge {
   position: absolute; top: 8px; left: 8px; z-index: 2;
