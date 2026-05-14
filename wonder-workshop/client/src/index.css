@@ -2225,6 +2225,75 @@ textarea { font-family: var(--font); resize: none; }
 }
 [data-theme="dark"] .img-slot-btn.generate { background: #7C5CFC; color: #fff; border-color: transparent; }
 
+/* ── Generation log modal ──────────────────────────────────────── */
+.genlog-modal {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center; padding: 32px;
+}
+.genlog-content {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  width: 100%; max-width: 720px; max-height: 80vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+}
+.genlog-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.genlog-eyebrow {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+.genlog-sub { font-size: 13px; color: var(--text); margin-top: 3px; }
+.genlog-header-actions { display: flex; align-items: center; gap: 6px; }
+.genlog-btn {
+  font-size: 12px; padding: 0 11px; height: 30px; border-radius: 7px;
+  border: 1px solid var(--border-md); background: var(--card); color: var(--text);
+  font-family: var(--font); cursor: pointer; white-space: nowrap;
+}
+.genlog-btn:hover:not(:disabled) { background: rgba(0,0,0,0.04); }
+.genlog-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.genlog-close {
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-md); background: var(--card); color: var(--muted);
+  border-radius: 7px; cursor: pointer;
+}
+.genlog-close:hover { color: var(--text); }
+.genlog-body {
+  overflow-y: auto; padding: 12px 18px 18px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.genlog-empty { font-size: 13px; color: var(--muted); padding: 24px 4px; text-align: center; }
+.genlog-row {
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+  background: var(--bg);
+}
+.genlog-row-fail { border-color: rgba(224,65,65,0.4); }
+.genlog-row-top {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12px;
+}
+.genlog-badge {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em;
+  padding: 2px 6px; border-radius: 4px;
+}
+.genlog-badge-ok { background: rgba(34,160,90,0.16); color: #1FA85C; }
+.genlog-badge-fail { background: rgba(224,65,65,0.16); color: #E04141; }
+.genlog-stage { font-weight: 600; color: var(--text); }
+.genlog-meta { color: var(--muted); font-size: 11px; }
+.genlog-ts { margin-left: auto; }
+.genlog-row-where { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+.genlog-row-detail {
+  font-size: 11.5px; color: #E04141; margin-top: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word;
+}
+.genlog-row-url {
+  font-size: 11px; color: var(--muted); margin-top: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all;
+}
+[data-theme="dark"] .genlog-btn:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
+
 /* ── Mobile overrides (must come after all base rules) ─────────── */
 @media (max-width: 640px) {
   /* Board topbar — keep Back, gradient strip, theme toggle, Share only */
