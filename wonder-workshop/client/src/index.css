@@ -1712,24 +1712,35 @@ textarea { font-family: var(--font); resize: none; }
   position: relative;
 }
 .img-slot:hover { border-color: rgba(0,0,0,0.3); background: rgba(0,0,0,0.03); }
-/* Selected slot — a soft, static white glow. The animated shimmer
-   sweep is reserved for the *generating* state so the two are
-   visually distinct (per Ravi). */
+/* Selected slot — a bright white glow. The static glow distinguishes
+   "selected" from the animated shimmer sweep of the *generating* state
+   (per Ravi). The glow is painted as an ::after ring ON TOP of the
+   image: a plain box-shadow would sit outside the slot and get clipped
+   by overflow:hidden parents (e.g. the storyboard's .shot-img-wrap),
+   and the cover image would hide any inset shadow on the slot itself. */
 .img-slot.active {
   border-style: solid;
-  border-width: 2px;
-  border-color: rgba(255,255,255,0.55);
-  box-shadow:
-    0 0 0 3px rgba(255,255,255,0.10),
-    0 0 22px rgba(255,255,255,0.22);
+  border-color: rgba(255,255,255,0.85);
+  box-shadow: 0 0 28px rgba(255,255,255,0.3);
 }
-/* Light theme: a white glow disappears on a light canvas — use a soft
-   neutral-dark glow + a darker border so the selection still reads. */
-:root:not([data-theme="dark"]) .img-slot.active {
-  border-color: rgba(0,0,0,0.35);
+.img-slot.active::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 5;
+  border-radius: inherit; pointer-events: none;
   box-shadow:
-    0 0 0 3px rgba(0,0,0,0.06),
-    0 0 18px rgba(0,0,0,0.16);
+    inset 0 0 0 3px rgba(255,255,255,0.95),
+    inset 0 0 24px rgba(255,255,255,0.5);
+}
+/* Light theme: a white ring vanishes on light imagery — use the same
+   blue as the hover-nav so selection still reads clearly. */
+:root:not([data-theme="dark"]) .img-slot.active {
+  border-color: #2F6BFF;
+  box-shadow: 0 0 24px rgba(47,107,255,0.3);
+}
+:root:not([data-theme="dark"]) .img-slot.active::after {
+  box-shadow:
+    inset 0 0 0 3px #2F6BFF,
+    inset 0 0 22px rgba(47,107,255,0.4);
 }
 .img-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .img-slot-empty-placeholder { color: var(--faint); font-size: 11px; }
