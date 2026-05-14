@@ -47,7 +47,7 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     { "name": "<short product/prop name, e.g. 'Frappuccino' or 'Air Force 1s'>", "description": "<detailed visual description for product photography>" }
   ],
   "shotList": [
-    { "num": "01", "framing": "<EWS|WS|MS|CU|ECU|OTS|POV>", "description": "<shot description>", "camera": "<Drone|Steadicam|Handheld|Tripod|Gimbal>", "duration": "<Xs>" }
+    { "num": "01", "framing": "<EWS|WS|MS|CU|ECU|OTS|POV>", "description": "<shot description — see @-handle rule below>", "camera": "<Drone|Steadicam|Handheld|Tripod|Gimbal>", "duration": "<Xs>" }
   ],
   "imagePrompts": [
     "<detailed Stable Diffusion prompt for a key visual — cinematic, specific, evocative>",
@@ -57,6 +57,16 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
 
 Rules:
 - shotList (the storyboard) must have exactly 9 items
+- @-HANDLES — CRITICAL for storyboard consistency: every shotList[].description
+  MUST reference the character, location, and products by their @handle —
+  the exact name you assigned, prefixed with @. The handles are:
+    @<character.name>        e.g. @Sarah
+    @<environment.heroName>  e.g. @Sunset Beach
+    @<each productElements[].name>  e.g. @Frappuccino
+  Example description: "@Sarah walks into @Sunset Beach holding her @Frappuccino, golden hour light"
+  Multi-word names keep their spaces: "@The Concertgoer", not "@TheConcertgoer".
+  This makes every storyboard frame regenerate with the exact character /
+  location / product you designed, instead of a random stand-in.
 - imagePrompts must have exactly 4 items — make them vivid, cinematographic descriptions
 - brandInfo.colors must have 3-5 colors appropriate for the brand. If verified brand research is provided, use those exact colors first.
 - If verified brand research is provided, preserve brandInfo.logoUrl and brandInfo.sourceUrl exactly.
