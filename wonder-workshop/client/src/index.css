@@ -1292,10 +1292,13 @@ textarea { font-family: var(--font); resize: none; }
 .bi-rules-text { font-size: 13px; color: var(--muted); line-height: 1.65; }
 
 /* ── Character ─────────────────────────────────────────────────── */
-.character-views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 0; }
+.character-views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 0; }
 .character-views.character-views-4 { grid-template-columns: repeat(4, 1fr); }
-.character-view { background: var(--bg); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
-.view-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); }
+.character-view { display: flex; flex-direction: column; gap: 6px; }
+.character-view-caption {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
 .character-icon { font-size: 36px; opacity: 0.15; margin-bottom: 4px; }
 .character-wardrobe { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .character-wardrobe strong { color: var(--text); }
@@ -1372,10 +1375,15 @@ textarea { font-family: var(--font); resize: none; }
 }
 .character-bio-reference { display: flex; flex-direction: column; gap: 8px; }
 .character-bio-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.character-bio-label,
-.character-views-label {
+.character-bio-label {
   font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--muted); margin-bottom: 4px;
+}
+/* Headshots / Full Body — proper sentence-case headings, not tiny
+   uppercase labels. Both groups share this so they line up exactly. */
+.character-views-label {
+  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
+  color: var(--text); margin: 0;
 }
 .character-bio-label-desc { margin-top: 12px; }
 .character-bio-name {
@@ -1725,19 +1733,42 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .img-slot-empty-placeholder { color: var(--faint); font-size: 11px; }
 
-/* Magnify (open lightbox) button — top-right of the image
-   (version badge sits at top-left, so we go opposite to avoid overlap). */
-.img-magnify-btn {
-  position: absolute; top: 6px; right: 6px;
-  width: 26px; height: 26px; border-radius: 7px;
-  background: rgba(17,17,17,0.78); border: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; opacity: 0; transition: opacity 0.15s, background 0.15s;
-  z-index: 4;
+/* Blue floating hover-nav pill — Ravi's "hover nav" from the Figma
+   canvas. Sits just inside the top edge of the image; fades in on
+   hover or when the slot is the chat's active target. */
+.img-hover-nav {
+  position: absolute; top: 8px; left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  z-index: 6; display: flex; align-items: center; gap: 1px;
+  padding: 4px; border-radius: 999px;
+  background: #2F6BFF;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.32);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
 }
-.img-slot:hover .img-magnify-btn,
-.img-slot.active .img-magnify-btn { opacity: 1; }
-.img-magnify-btn:hover { background: rgba(17,17,17,0.94); }
+.img-slot:hover .img-hover-nav,
+.img-slot.active .img-hover-nav {
+  opacity: 1; pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.ihn-btn {
+  width: 27px; height: 27px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: #fff; cursor: pointer;
+  border-radius: 999px; transition: background 0.12s;
+}
+.ihn-btn:hover:not(:disabled) { background: rgba(255,255,255,0.22); }
+.ihn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ihn-btn-danger:hover:not(:disabled) { background: rgba(255,86,86,0.92); }
+.ihn-edit {
+  display: flex; align-items: center; gap: 5px; height: 27px;
+  padding: 0 11px; border-radius: 999px; border: none;
+  background: rgba(255,255,255,0.16); color: #fff; cursor: pointer;
+  font-family: var(--font); font-size: 11.5px; white-space: nowrap;
+  transition: background 0.12s;
+}
+.ihn-edit:hover { background: rgba(255,255,255,0.3); }
+.ihn-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.28); margin: 0 3px; flex-shrink: 0; }
 
 /* Lightbox */
 .img-lightbox {
@@ -1932,17 +1963,6 @@ textarea { font-family: var(--font); resize: none; }
 }
 .img-slot-broken-btn:hover { background: #7C5CFC; color: #fff; border-color: #7C5CFC; }
 
-/* View-pair chip: shows FRONT/3-4/SIDE in matching colors across CharRef
-   and Character sections so you can visually trace which slot corresponds
-   to which view. */
-.img-slot-view-chip {
-  position: absolute; bottom: 6px; left: 6px; z-index: 4;
-  padding: 2px 8px; border-radius: 999px;
-  color: #fff; font-size: 9px; font-weight: 900; letter-spacing: 0.1em;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-  pointer-events: none;
-}
-
 /* Undo-delete banner that fades in at the bottom of the slot for 5s */
 .img-slot-undo {
   position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 5;
@@ -1989,50 +2009,6 @@ textarea { font-family: var(--font); resize: none; }
 }
 [data-theme="dark"] .img-slot-loading .loading-dots span { background: #9B7DFF; }
 
-.img-slot-overlay {
-  position: absolute; inset: 0; background: rgba(0,0,0,0.45);
-  display: none; align-items: center; justify-content: center; gap: 8px; border-radius: 8px;
-  flex-wrap: wrap; padding: 10px;
-}
-.img-slot:hover .img-slot-overlay { display: flex; }
-.img-slot-action {
-  font-size: 11px; font-family: var(--font); padding: 5px 10px;
-  border-radius: 7px; border: 1px solid rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.15); color: #fff; cursor: pointer;
-  backdrop-filter: blur(4px);
-  transition: transform 0.14s, background 0.14s, border-color 0.14s, box-shadow 0.14s;
-}
-.img-slot-action:hover,
-.img-slot-action:focus-visible {
-  transform: translateY(-1px);
-  background: rgba(124,92,252,0.78);
-  border-color: rgba(255,255,255,0.55);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.24);
-  outline: none;
-}
-
-/* ··· more-actions menu on image slots — collapses Download / Upscale /
-   Delete behind a single button so the primary actions (Refresh,
-   Variations, Edit Prompt) stay the front-of-house. */
-.img-slot-more-wrap { position: relative; }
-.img-slot-more-btn { font-weight: 700; padding: 5px 9px; min-width: 36px; }
-.img-slot-more-menu {
-  position: absolute; top: calc(100% + 4px); right: 0; z-index: 10;
-  display: flex; flex-direction: column;
-  min-width: 130px; padding: 4px;
-  background: rgba(20,20,20,0.96); border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 8px; backdrop-filter: blur(8px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-}
-.img-slot-more-menu button {
-  text-align: left; padding: 7px 10px; border-radius: 5px;
-  background: none; border: none; cursor: pointer;
-  color: #fff; font-family: var(--font); font-size: 12px;
-  transition: background 0.1s;
-}
-.img-slot-more-menu button:hover { background: rgba(255,255,255,0.08); }
-.img-slot-more-menu-danger { color: #F87171 !important; }
-.img-slot-more-menu-danger:hover { background: rgba(248,113,113,0.12) !important; }
 .img-version-badge {
   position: absolute; top: 8px; left: 8px; z-index: 2;
   padding: 2px 4px; border-radius: 999px;
@@ -2536,7 +2512,7 @@ textarea { font-family: var(--font); resize: none; }
   /* When printing the board normally (no one pager open) */
   .topbar, .agent-panel, .agent-panel-collapsed,
   .board-nav-dots, .readonly-banner,
-  .img-slot-overlay, .img-version-badge, .img-magnify-btn,
+  .img-hover-nav, .img-version-badge,
   .img-slot-btn, .section-card-actions { display: none !important; }
   .board-body { display: block !important; }
   .board-content { display: block !important; }

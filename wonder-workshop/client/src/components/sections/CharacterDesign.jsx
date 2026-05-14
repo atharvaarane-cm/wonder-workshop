@@ -110,12 +110,12 @@ export default function CharacterDesign({ data, update }) {
             <div className="character-view" key={`hs-${v.id}`}>
               <ImageSlot
                 label={v.label}
-                view={v.id}
                 seed={seed}
                 ratio="4:5"
                 prompt={closeupPrompt(data || {}, v)}
                 style={{ width: '100%', aspectRatio: '4/5', borderRadius: 10 }}
               />
+              <div className="character-view-caption">{v.label}</div>
             </div>
           ))}
         </div>
@@ -129,12 +129,12 @@ export default function CharacterDesign({ data, update }) {
             <div className="character-view" key={`fb-${v.id}`}>
               <ImageSlot
                 label={v.label}
-                view={v.id}
                 seed={seed}
                 ratio="3:4"
                 prompt={fullbodyPrompt(data || {}, v)}
                 style={{ width: '100%', aspectRatio: '3/4', borderRadius: 10 }}
               />
+              <div className="character-view-caption">{v.label}</div>
             </div>
           ))}
         </div>
