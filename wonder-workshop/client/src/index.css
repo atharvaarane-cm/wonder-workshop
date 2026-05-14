@@ -2113,21 +2113,30 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot-empty:hover .img-slot-plus { opacity: 1; }
 .img-slot-empty.menu-open .img-slot-plus { opacity: 0; }
 
-/* Sparkle affordance — signals "AI / generate" on empty slots */
+/* Sparkle affordance — idle state on empty slots. Fades OUT on hover /
+   when the menu opens, handing the spotlight to the Upload/Generate
+   buttons. */
 .img-slot-sparkle {
+  position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   color: rgba(0,0,0,0.32);
   opacity: 0.65;
   transition: opacity 0.15s, color 0.15s, transform 0.18s ease-out;
-  filter: drop-shadow(0 0 6px rgba(124,92,252,0));
 }
-.img-slot-empty:hover .img-slot-sparkle {
-  opacity: 1;
-  color: #7C5CFC;
-  transform: scale(1.08);
-  filter: drop-shadow(0 0 10px rgba(124,92,252,0.35));
-}
+.img-slot-empty:hover .img-slot-sparkle,
 .img-slot-empty.menu-open .img-slot-sparkle { opacity: 0; }
+[data-theme="dark"] .img-slot-sparkle { color: rgba(255,255,255,0.35); }
+
+/* Upload / Generate buttons — hidden by default, revealed on hover or
+   when the slot menu is open. Zero clicks to see the options. */
+.img-slot-actions {
+  opacity: 0; transition: opacity 0.15s;
+  pointer-events: none;
+}
+.img-slot-empty:hover .img-slot-actions,
+.img-slot-empty.menu-open .img-slot-actions {
+  opacity: 1; pointer-events: auto;
+}
 [data-theme="dark"] .img-slot-sparkle { color: rgba(255,255,255,0.35); }
 [data-theme="dark"] .img-slot-empty:hover .img-slot-sparkle {
   color: #9B7DFF;

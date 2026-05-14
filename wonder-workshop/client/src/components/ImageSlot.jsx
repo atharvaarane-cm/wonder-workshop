@@ -596,8 +596,20 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
                   </div>
                   <span className="loading-label">Generating…</span>
                 </div>
-              : menuOpen
-                ? <div className="img-slot-actions" onClick={e => e.stopPropagation()}>
+              : <>
+                  {/* ✦ sparkle — the idle affordance. Fades out on hover /
+                      when the menu is open. */}
+                  <div className="img-slot-sparkle" title="Generate or upload an image">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 2.5l1.7 4.6 4.6 1.7-4.6 1.7L12 15.1l-1.7-4.6L5.7 8.8l4.6-1.7L12 2.5z" fill="currentColor"/>
+                      <path d="M19 14l0.85 2.3L22.15 17l-2.3 0.85L19 20.15 18.15 17.85 15.85 17l2.3-0.85L19 14z" fill="currentColor" opacity="0.7"/>
+                      <path d="M6 16l0.7 1.9L8.6 18.6l-1.9 0.7L6 21.2 5.3 19.3 3.4 18.6l1.9-0.7L6 16z" fill="currentColor" opacity="0.55"/>
+                    </svg>
+                  </div>
+                  {/* Upload / Generate — always in the DOM, revealed on hover
+                      (or when the slot menu is open). Zero clicks to see the
+                      options; one click to act. */}
+                  <div className="img-slot-actions" onClick={e => e.stopPropagation()}>
                     <button className="img-slot-btn" onClick={e => { e.stopPropagation(); inputRef.current.click() }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       Upload
@@ -609,15 +621,7 @@ export default function ImageSlot({ label, prompt, style, className, view, seed,
                       </button>
                     )}
                   </div>
-                : <div className="img-slot-sparkle" title="Click to generate or upload">
-                    {/* AI ✦ sparkle — signals 'generate' more clearly than a plain plus,
-                        matching the convention from Gemini / OpenAI etc. */}
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 2.5l1.7 4.6 4.6 1.7-4.6 1.7L12 15.1l-1.7-4.6L5.7 8.8l4.6-1.7L12 2.5z" fill="currentColor"/>
-                      <path d="M19 14l0.85 2.3L22.15 17l-2.3 0.85L19 20.15 18.15 17.85 15.85 17l2.3-0.85L19 14z" fill="currentColor" opacity="0.7"/>
-                      <path d="M6 16l0.7 1.9L8.6 18.6l-1.9 0.7L6 21.2 5.3 19.3 3.4 18.6l1.9-0.7L6 16z" fill="currentColor" opacity="0.55"/>
-                    </svg>
-                  </div>
+                </>
             }
             {label && !menuOpen && !loading && <span className="img-slot-label">{label}</span>}
             {menuOpen && (
