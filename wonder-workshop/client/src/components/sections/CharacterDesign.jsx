@@ -12,18 +12,36 @@ function hashStr(s) {
 }
 
 // 4-view rig per the May 13 mockup — FRONT / SIDE / 3/4 ANGLE / BACK.
+// Pollinations ignores subtle pose language, so each angle is described
+// bluntly and redundantly to actually land the pose.
 const VIEWS = [
-  { id: 'FRONT',     label: 'FRONT',     angle: 'facing directly forward, front view, full face visible' },
-  { id: 'SIDE',      label: 'SIDE',      angle: 'strict side profile, facing right' },
-  { id: '3/4',       label: '3/4 ANGLE', angle: 'three-quarter view, angled 45 degrees left' },
-  { id: 'BACK',      label: 'BACK',      angle: 'shot from behind, back of head and body visible, no face' },
+  {
+    id: 'FRONT', label: 'FRONT',
+    closeup: 'looking straight at the camera, perfectly symmetrical front-facing view, full face centered and visible',
+    fullbody: 'standing and facing the camera straight on, symmetrical front view, arms relaxed at sides',
+  },
+  {
+    id: 'SIDE', label: 'SIDE',
+    closeup: 'strict side profile, head turned a full 90 degrees so only the side of the face is visible, mugshot profile shot, gaze pointed straight ahead in profile, ear and jawline visible, NOT looking at the camera',
+    fullbody: 'full side profile, entire body rotated 90 degrees to face left, standing straight, only the side of the body visible',
+  },
+  {
+    id: '3/4', label: '3/4 ANGLE',
+    closeup: 'three-quarter portrait, head and shoulders rotated about 45 degrees away from the camera, both eyes visible but face clearly angled, classic 3/4 angle',
+    fullbody: 'three-quarter body view, whole body turned about 45 degrees away from the camera, standing naturally',
+  },
+  {
+    id: 'BACK', label: 'BACK',
+    closeup: 'viewed from directly behind, back of the head and hair fills the frame, face completely hidden, head facing the same direction as the body, natural unturned neck',
+    fullbody: 'viewed from directly behind, full back of the body and head visible, face not visible at all, head and body both facing away from the camera, natural posture',
+  },
 ]
 
 function closeupPrompt(data, view) {
-  return `${data.description}, ${data.wardrobe}, close-up portrait, head and shoulders, ${view.angle}, sharp face detail, studio lighting, clean white background, headshot`
+  return `${data.description}, ${data.wardrobe}, close-up portrait, head and shoulders, ${view.closeup}, sharp face detail, studio lighting, clean white background, headshot`
 }
 function fullbodyPrompt(data, view) {
-  return `${data.description}, ${data.wardrobe}, full body, standing, ${view.angle}, full body shot, white studio background, professional photography, character reference sheet`
+  return `${data.description}, ${data.wardrobe}, ${view.fullbody}, full body shot head to toe, white studio background, professional photography, character reference sheet`
 }
 function referencePrompt(data) {
   // The reference image — frontal close-up so it doubles as the "main"
