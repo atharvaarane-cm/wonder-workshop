@@ -485,11 +485,15 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     >
       {activeImage
         ? <>
+            {/* Clicking the image selects the slot (so the chat panel
+                targets it) — the slot's onMouseDownCapture handles that.
+                The lightbox is opened only via the Expand hover-nav button,
+                so a click no longer covers the slot before the selection
+                glow is visible. */}
             <img
               src={activeImage.src}
               alt={label}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: brokenSrc === activeImage.src ? 'default' : 'zoom-in' }}
-              onClick={brokenSrc === activeImage.src ? undefined : openLightbox}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: brokenSrc === activeImage.src ? 'default' : 'pointer' }}
               onLoad={() => brokenSrc === activeImage.src && setBrokenSrc(null)}
               onError={() => setBrokenSrc(activeImage.src)}
               draggable={!!slotKey && brokenSrc !== activeImage.src}
