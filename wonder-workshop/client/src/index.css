@@ -2233,9 +2233,12 @@ textarea { font-family: var(--font); resize: none; }
   cursor: pointer; position: relative;
 }
 /* Centered + icon — the idle affordance on empty slots. Fades out
-   on hover to hand the spotlight to the Upload / Generate buttons. */
+   on hover to hand the spotlight to the Upload / Generate buttons.
+   pointer-events: none so it never captures clicks meant for the
+   buttons beneath it (the absolute overlay otherwise eats them even
+   at opacity 0). */
 .img-slot-sparkle {
-  position: absolute; inset: 0;
+  position: absolute; inset: 0; pointer-events: none;
   display: flex; align-items: center; justify-content: center;
   color: rgba(0,0,0,0.45);
   transition: opacity 0.15s;
