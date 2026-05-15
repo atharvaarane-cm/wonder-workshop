@@ -32,11 +32,14 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "rules": "<brand guidelines in 1-2 sentences>"
   },
   "character": {
-    "name": "<short character name, e.g. 'Sarah' or 'The Runner'>",
+    "name": "<short character name for the primary subject, e.g. 'Sarah' or 'The Runner'>",
     "description": "<talent description>",
     "wardrobe": "<wardrobe details>",
     "views": ["FRONT", "3/4", "SIDE"]
   },
+  "characters": [
+    { "name": "<short name for an additional named character>", "description": "<talent description>", "wardrobe": "<wardrobe>" }
+  ],
   "environment": {
     "heroName": "<short location name, e.g. 'Sunset Beach' or 'Times Square Diner'>",
     "heroEnvironment": "<main location description>",
@@ -57,10 +60,16 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
 
 Rules:
 - shotList (the storyboard) must have exactly 9 items
+- MULTIPLE CHARACTERS: the primary subject ALWAYS goes in `character`.
+  If the prompt clearly implies additional distinct named people (a
+  couple, two friends, parent + child, a team, etc.), put each
+  secondary character in the `characters` array. If there is only one
+  person in the scene, return `characters: []` (empty array).
 - @-HANDLES — CRITICAL for storyboard consistency: every shotList[].description
-  MUST reference the character, location, and products by their @handle —
+  MUST reference the character(s), location, and products by their @handle —
   the exact name you assigned, prefixed with @. The handles are:
     @<character.name>        e.g. @Sarah
+    @<each characters[].name> e.g. @Mike (additional characters)
     @<environment.heroName>  e.g. @Sunset Beach
     @<each productElements[].name>  e.g. @Frappuccino
   Example description: "@Sarah walks into @Sunset Beach holding her @Frappuccino, golden hour light"
