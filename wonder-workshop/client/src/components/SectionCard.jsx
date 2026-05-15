@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function Skeleton() {
   return (
@@ -10,8 +10,16 @@ function Skeleton() {
   )
 }
 
-export default function SectionCard({ name, loading, children, active, onClick, imageResolution, imageLoading, canAutoGenerate, onAutoGenerate, defaultCollapsed = false }) {
+export default function SectionCard({ name, loading, children, active, onClick, imageResolution, imageLoading, canAutoGenerate, onAutoGenerate, onDelete, defaultCollapsed = false }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
+  // Two-click delete: first click arms it, second confirms. Auto-disarms
+  // after a few seconds so a stray click doesn't leave it primed.
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  useEffect(() => {
+    if (!confirmDelete) return
+    const t = setTimeout(() => setConfirmDelete(false), 3500)
+    return () => clearTimeout(t)
+  }, [confirmDelete])
 
   const dotState = loading || imageLoading ? 'amber' : 'green'
 
@@ -37,6 +45,26 @@ export default function SectionCard({ name, loading, children, active, onClick, 
             </svg>
             <span>AUTO-GENERATE</span>
           </button>
+        )}
+        {onDelete && (
+          confirmDelete ? (
+            <button
+              className="section-delete-btn confirm"
+              onClick={e => { e.stopPropagation(); setConfirmDelete(false); onDelete() }}
+            >
+              Delete?
+            </button>
+          ) : (
+            <button
+              className="section-delete-btn"
+              onClick={e => { e.stopPropagation(); setConfirmDelete(true) }}
+              title="Delete this section's content"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          )
         )}
         <button
           className={`section-collapse-btn${collapsed ? ' collapsed' : ''}`}

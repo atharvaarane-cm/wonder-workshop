@@ -159,6 +159,13 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   function updateShot(i, field, value) {
     setBrief(prev => ({ ...prev, shotList: prev.shotList.map((s, idx) => idx === i ? { ...s, [field]: value } : s) }))
   }
+  // Clear a whole entity (character / environment) back to empty. Its
+  // image slots rebuild from the now-empty data, so the old generated
+  // images simply stop being referenced.
+  function deleteSection(path, label) {
+    update(path, {})
+    window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: `${label} deleted` } }))
+  }
 
   // Chat-driven regeneration: AgentPanel calls this when the model returns
   // a regenerate_active_image function call. We just rebroadcast as a
@@ -446,6 +453,11 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                           detail: { sectionTitle: sec.title },
                         }))
                       }}
+                      onDelete={
+                        sec.id === 'char' ? () => deleteSection('character', 'Character')
+                        : sec.id === 'loc' ? () => deleteSection('environment', 'Location')
+                        : undefined
+                      }
                       onClick={() => {
                         // Tracking the active section for nav purposes doesn't
                         // require clearing the active image — that would steal
