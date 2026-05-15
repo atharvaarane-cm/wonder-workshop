@@ -1080,6 +1080,12 @@ textarea { font-family: var(--font); resize: none; }
 }
 .section-autogen-btn:hover { background: #353535; border-color: #525252; }
 .section-autogen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.section-autogen-check {
+  width: 13px; height: 13px; border-radius: 999px;
+  background: #1FA85C;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
 
 /* Project-info row hidden by default — not in the Figma mockup. Fields
    (Project Name / Job Number / Client Name / Brand / Campaign) still
