@@ -41,6 +41,7 @@ export default function ClothingProps({ brief, update }) {
           <div className="prod-item" key={i}>
             <ImageSlot
               ratio="1:1"
+              slimWhenEmpty
               prompt={prompt}
               style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10 }}
             />

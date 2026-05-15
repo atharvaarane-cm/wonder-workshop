@@ -11,22 +11,26 @@ export default function MoodBoard({ data }) {
     <div className="mb-grid">
       <ImageSlot
         ratio="16:9"
+        slimWhenEmpty
         prompt={`${base}, hero wide shot, atmospheric style reference`}
         style={{ width: '100%', height: 240, borderRadius: 10 }}
       />
       <div className="mb-tiles">
         <ImageSlot
           ratio="1:1"
+          slimWhenEmpty
           prompt={`${base}, colour palette texture reference`}
           style={{ width: '100%', height: 200, borderRadius: 8 }}
         />
         <ImageSlot
           ratio="1:1"
+          slimWhenEmpty
           prompt={`${base}, lighting reference, film still, cinematic`}
           style={{ width: '100%', height: 200, borderRadius: 8 }}
         />
         <ImageSlot
           ratio="1:1"
+          slimWhenEmpty
           prompt={`${base}, texture and material reference, macro detail`}
           style={{ width: '100%', height: 200, borderRadius: 8 }}
         />

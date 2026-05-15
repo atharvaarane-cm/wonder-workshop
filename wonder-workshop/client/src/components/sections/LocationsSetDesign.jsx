@@ -13,6 +13,7 @@ export default function LocationsSetDesign({ data, update }) {
     <div className="loc-hero-wrap">
       <ImageSlot
         ratio="16:9"
+        slimWhenEmpty
         prompt={`${hero}, ${elements}, wide establishing shot, golden hour, cinematic photography`}
         style={{ width: '100%', aspectRatio: '16/9', borderRadius: 10 }}
       />
