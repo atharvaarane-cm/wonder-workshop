@@ -33,6 +33,12 @@ const ROWS = [
 
 const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'mb', 'loc', 'cp', 'char', 'sl'])
 
+// Sections that fire image generation on a "Generate" run. Mood Board,
+// Locations, and Product / Elements are intentionally excluded — per
+// Ravi, those should stay optional and only generate on explicit
+// request, not as part of the auto-generate burst.
+const AUTO_GENERATE_SECTION_IDS = new Set(['cd', 'bi', 'char', 'sl'])
+
 // Sections start collapsed when the brief has no relevant content for
 // them — matches the mockup's tighter feel (empty sections show only
 // the header). User can manually expand any section via the chevron.
@@ -98,7 +104,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     // ww-generate-section listener before we dispatch.
     const t = setTimeout(() => {
       ROWS.flat()
-        .filter(sec => IMAGE_SECTION_IDS.has(sec.id))
+        .filter(sec => AUTO_GENERATE_SECTION_IDS.has(sec.id))
         .forEach(sec => {
           window.dispatchEvent(new CustomEvent('ww-generate-section', {
             detail: { sectionTitle: sec.title },
