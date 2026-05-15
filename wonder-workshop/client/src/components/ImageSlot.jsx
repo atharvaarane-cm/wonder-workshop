@@ -583,14 +583,12 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
             className={`img-slot-empty${menuOpen ? ' menu-open' : ''}`}
             onClick={e => { e.stopPropagation(); if (!loading && !queued) setMenuOpen(o => !o) }}
           >
-            {/* ✦ sparkle — the idle affordance. Fades out on hover /
-                when the menu is open. The generating shimmer (rendered
-                below, outside this branch) covers it during generation. */}
+            {/* Simple + icon — the idle affordance per the Figma mockup.
+                Fades out on hover so the Upload / Generate buttons take
+                center stage. */}
             <div className="img-slot-sparkle" title="Generate or upload an image">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2.5l1.7 4.6 4.6 1.7-4.6 1.7L12 15.1l-1.7-4.6L5.7 8.8l4.6-1.7L12 2.5z" fill="currentColor"/>
-                <path d="M19 14l0.85 2.3L22.15 17l-2.3 0.85L19 20.15 18.15 17.85 15.85 17l2.3-0.85L19 14z" fill="currentColor" opacity="0.7"/>
-                <path d="M6 16l0.7 1.9L8.6 18.6l-1.9 0.7L6 21.2 5.3 19.3 3.4 18.6l1.9-0.7L6 16z" fill="currentColor" opacity="0.55"/>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
               </svg>
             </div>
             {/* Upload / Generate — always in the DOM, revealed on hover
