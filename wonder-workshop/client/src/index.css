@@ -1509,8 +1509,12 @@ textarea { font-family: var(--font); resize: none; }
   font-size: 11px; font-weight: 700; font-family: var(--font);
   background: rgba(0,0,0,0.55); color: #fff;
   padding: 2px 7px; border-radius: 20px; backdrop-filter: blur(4px);
-  letter-spacing: 0.04em; pointer-events: none;
+  letter-spacing: 0.04em;
 }
+/* The shot-num badge doubles as the drag handle for reordering. */
+.shot-drag-handle { cursor: grab; user-select: none; }
+.shot-drag-handle:active { cursor: grabbing; background: rgba(0,109,212,0.85); }
+.shot-cell.drag-over { outline: 2px dashed #006dd4; outline-offset: 3px; border-radius: 9px; }
 .shot-badge-framing {
   position: absolute; bottom: 8px; left: 8px;
   font-size: 10px; font-weight: 700; font-family: var(--font);
