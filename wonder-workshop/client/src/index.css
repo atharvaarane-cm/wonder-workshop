@@ -1179,15 +1179,16 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Creative Direction two-column layout ───────────────────── */
 .cd-wrap {
   display: flex; flex-direction: column;
-  /* Break out of section-body's padding so the blue header strip
-     touches the card's left/right edges. */
-  margin: -18px -18px 0;
-  border-radius: 14px;
+  /* Break out of section-body padding (40px 43px) so the blue header
+     strip touches the card's left/right/top edges — per Figma the
+     blue strip IS the section header for this card. */
+  margin: -40px -43px 0;
+  border-radius: 0;
   overflow: hidden;
 }
 .cd-feature-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 14px 24px;
+  padding: 22px 43px;
   background: #006dd4;
   color: #fff;
 }
@@ -2233,7 +2234,9 @@ textarea { font-family: var(--font); resize: none; }
 /* Hide the section-header's border-bottom when a feature bar (like the
    Creative section's blue strip) sits flush below it — avoids the
    visible double-line seam. */
-.section-card:has(.cd-wrap) .section-header { border-bottom: none; }
+/* The CD card's blue strip IS its header — hide the default text
+   header above it so we don't render two stacked headers. */
+.section-card:has(.cd-wrap) .section-header { display: none; }
 
 /* ── Board prompt bar ────────────────────────────────────────── */
 .board-prompt-bar {
