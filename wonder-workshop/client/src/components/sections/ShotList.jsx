@@ -1,9 +1,113 @@
+import { useEffect, useRef, useState } from 'react'
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
 import MentionInput from '../MentionInput.jsx'
-import { expandMentions } from '../../utils/mentions.js'
+import { expandMentions, getMentionHandles } from '../../utils/mentions.js'
 
-export default function ShotList({ data, updateShot, addShot, removeShot, brief }) {
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Split a shot description into a sequence of {type:'text'|'mention'}
+// tokens so @handles can render as styled, clickable spans. Matches
+// against the brief's known handles only — unknown @-tokens stay as
+// plain text.
+function tokenizeDescription(text, handles) {
+  if (!text) return []
+  if (!handles.length) return [{ type: 'text', value: text }]
+  const sorted = [...handles].sort((a, b) => b.key.length - a.key.length)
+  const pattern = sorted.map(h => `@${escapeRe(h.key)}(?![A-Za-z0-9_])`).join('|')
+  const re = new RegExp(`(${pattern})`, 'gi')
+  const parts = text.split(re)
+  const tokens = []
+  for (const part of parts) {
+    if (!part) continue
+    if (part.startsWith('@')) {
+      const handle = handles.find(h => '@' + h.key.toLowerCase() === part.toLowerCase())
+      if (handle) {
+        tokens.push({ type: 'mention', handle, raw: part })
+        continue
+      }
+    }
+    tokens.push({ type: 'text', value: part })
+  }
+  return tokens
+}
+
+// Click-to-edit description for a storyboard shot. When idle, renders
+// the description with @handles as colored, clickable pills (clicking
+// jumps to the referenced section). When clicked, swaps in the
+// MentionInput textarea for editing. Click outside to commit + return
+// to the display.
+function ShotDescription({ value, onChange, brief, placeholder, onJumpToHandle }) {
+  const [editing, setEditing] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!editing) return
+    function onDocClick(e) {
+      if (wrapRef.current?.contains(e.target)) return
+      // Also keep editing open if the click is inside the mention
+      // autocomplete dropdown (which lives in MentionInput).
+      if (e.target.closest?.('.mention-dropdown')) return
+      setEditing(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [editing])
+
+  if (editing) {
+    return (
+      <div className="shot-desc-wrap" ref={wrapRef}>
+        <MentionInput
+          className="shot-desc"
+          value={value}
+          onChange={onChange}
+          brief={brief}
+          rows={3}
+          placeholder={placeholder}
+          autoFocus
+        />
+      </div>
+    )
+  }
+
+  if (!value) {
+    return (
+      <div className="shot-desc-display empty" onClick={() => setEditing(true)}>
+        {placeholder}
+      </div>
+    )
+  }
+
+  const handles = getMentionHandles(brief)
+  const tokens = tokenizeDescription(value, handles)
+
+  return (
+    <div className="shot-desc-display" onClick={() => setEditing(true)}>
+      {tokens.map((t, i) =>
+        t.type === 'mention' ? (
+          <button
+            key={i}
+            type="button"
+            className={`shot-mention shot-mention-${t.handle.kind}`}
+            onClick={e => {
+              e.stopPropagation()
+              onJumpToHandle?.(t.handle)
+            }}
+            title={`Jump to ${t.handle.kind === 'character' ? 'Character Design' : t.handle.kind === 'location' ? 'Locations' : 'Product / Elements'}`}
+          >
+            {t.raw}
+          </button>
+        ) : (
+          <span key={i}>{t.value}</span>
+        ),
+      )}
+    </div>
+  )
+}
+
+export default function ShotList({ data, updateShot, addShot, removeShot, brief, onJumpToHandle }) {
   // Storyboard frames follow the project's output ratio — a 4:5 project
   // shouldn't show 16:9 shots. CSS aspect-ratio takes "4/5", so swap the colon.
   const ratio = brief?.generationSettings?.ratio || '16:9'
@@ -44,13 +148,12 @@ export default function ShotList({ data, updateShot, addShot, removeShot, brief 
 
           {/* Info below image */}
           <div className="shot-info">
-            <MentionInput
-              className="shot-desc"
+            <ShotDescription
               value={shot.description || ''}
               onChange={v => updateShot(i, 'description', v)}
               brief={brief}
-              rows={3}
               placeholder="Describe this shot — use @Sarah or @Sunset Beach to reference named entities…"
+              onJumpToHandle={onJumpToHandle}
             />
             {wasExpanded && (
               <div

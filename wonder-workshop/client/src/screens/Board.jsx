@@ -294,6 +294,18 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     setTimeout(() => { isProgrammaticScroll.current = false }, 700)
   }
 
+  // Click on a colored @handle in the storyboard scrolls to that
+  // entity's section. character → Character Design, location →
+  // Locations / Set Design, product → Product / Elements.
+  function jumpToHandle(handle) {
+    if (!handle?.kind) return
+    const idByKind = { character: 'char', location: 'loc', product: 'cp' }
+    const id = idByKind[handle.kind]
+    if (!id) return
+    const rowIdx = ROWS.findIndex(row => row.some(s => s.id === id))
+    if (rowIdx >= 0) scrollToRow(rowIdx)
+  }
+
   const activeTitle = ROWS.flat().find(s => s.id === activeId)?.title ?? 'Brief'
   const activeChatTitle = activeImageTarget?.sectionTitle
     ? `${activeImageTarget.sectionTitle} / ${activeImageTarget.label}`
@@ -321,7 +333,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                             updateCharacterAt={updateCharacterAt}
                             removeCharacterAt={removeCharacterAt}
                           />
-      case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} addShot={addShot} removeShot={removeShot} brief={brief} />
+      case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} addShot={addShot} removeShot={removeShot} brief={brief} onJumpToHandle={jumpToHandle} />
       default:    return null
     }
   }
