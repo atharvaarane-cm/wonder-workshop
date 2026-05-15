@@ -1072,14 +1072,15 @@ textarea { font-family: var(--font); resize: none; }
   align-self: stretch;
 }
 .topbar-gradient {
-  position: absolute; left: 0; right: 0; height: 4px; border-radius: 999px;
+  position: absolute; left: 0; right: 0; top: 4px; bottom: 4px;
+  border-radius: 999px;
   background: linear-gradient(90deg,
     #FF6A1A 0%, #FFB300 22%, #FF4F8A 46%, #B454FF 68%, #4DA9FF 100%
   );
 }
 .topbar-logo-mark {
   position: relative; height: 22px; width: auto; display: block;
-  padding: 0 10px; background: var(--card);
+  padding: 0 14px; background: var(--card);
 }
 
 /* Project info row — TITLE eyebrow + big title on the left, CLIENT
@@ -1220,7 +1221,7 @@ textarea { font-family: var(--font); resize: none; }
   overflow: hidden;
 }
 .cd-feature-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 48px;
   padding: 22px 43px;
   background: #006dd4;
   color: #fff;
@@ -1229,8 +1230,8 @@ textarea { font-family: var(--font); resize: none; }
   font: 400 20px var(--font);
   letter-spacing: -0.01em;
 }
-.cd-feature-meta { display: flex; align-items: center; gap: 24px; }
-.cd-feature-meta-item { display: flex; flex-direction: column; gap: 1px; align-items: flex-end; }
+.cd-feature-meta { display: flex; align-items: center; gap: 48px; }
+.cd-feature-meta-item { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .cd-feature-meta-label {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
   color: #46a4ff;
@@ -1252,7 +1253,7 @@ textarea { font-family: var(--font); resize: none; }
 }
 .cd-ratio-chevron { opacity: 0.85; }
 .cd-ratio-menu {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 200;
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 200;
   display: flex; flex-direction: column; min-width: 96px; padding: 4px;
   background: var(--card); border: 1px solid var(--border); border-radius: 9px;
   box-shadow: 0 12px 32px rgba(0,0,0,0.45);
