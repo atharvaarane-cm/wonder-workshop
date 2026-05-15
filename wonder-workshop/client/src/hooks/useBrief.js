@@ -60,11 +60,11 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
 
 Rules:
 - shotList (the storyboard) must have exactly 9 items
-- MULTIPLE CHARACTERS: the primary subject ALWAYS goes in `character`.
+- MULTIPLE CHARACTERS: the primary subject ALWAYS goes in the 'character' field.
   If the prompt clearly implies additional distinct named people (a
   couple, two friends, parent + child, a team, etc.), put each
-  secondary character in the `characters` array. If there is only one
-  person in the scene, return `characters: []` (empty array).
+  secondary character in the 'characters' array. If there is only one
+  person in the scene, return characters as an empty array [].
 - @-HANDLES — CRITICAL for storyboard consistency: every shotList[].description
   MUST reference the character(s), location, and products by their @handle —
   the exact name you assigned, prefixed with @. The handles are:
