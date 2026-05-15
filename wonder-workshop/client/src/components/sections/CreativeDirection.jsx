@@ -79,7 +79,8 @@ export default function CreativeDirection({ data, update, currentRatio, onAspect
         </div>
       </div>
 
-      {/* Dark body — just the prose description, per the mockup. */}
+      {/* Dark body — prose description + supporting-file chips, per the
+          mockup. Attachments are name-only (no file content stored). */}
       <div className="cd-body">
         <EditableText
           tag="p"
@@ -88,6 +89,48 @@ export default function CreativeDirection({ data, update, currentRatio, onAspect
           onChange={v => update('creativeDirection.description', v)}
           placeholder="Creative description…"
         />
+        <div className="cd-attachments">
+          <label className="cd-attach-add" title="Add a supporting file">
+            <input
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={e => {
+                const files = Array.from(e.target.files || [])
+                if (!files.length) return
+                const next = [
+                  ...(data.attachments || []),
+                  ...files.map(f => ({ name: f.name })),
+                ]
+                update('creativeDirection.attachments', next)
+                e.target.value = ''
+              }}
+            />
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          </label>
+          {(data.attachments || []).map((a, i) => (
+            <button
+              key={i}
+              className="cd-attach-chip"
+              title={`Remove ${a.name}`}
+              onClick={() => {
+                const next = (data.attachments || []).filter((_, j) => j !== i)
+                update('creativeDirection.attachments', next)
+              }}
+            >
+              <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
+                <path d="M2 1.5h5L10 4.5v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V1.5z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
+                <path d="M7 1.5V4.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
+                <path d="M4 7.5h4M4 9.5h4M4 11.5h2.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+              </svg>
+              <span className="cd-attach-name">
+                {a.name.length > 26 ? a.name.slice(0, 24) + '…' : a.name}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
     </div>

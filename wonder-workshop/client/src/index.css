@@ -929,12 +929,43 @@ textarea { font-family: var(--font); resize: none; }
   height: 52px; flex-shrink: 0; display: flex; align-items: center;
   padding: 0 20px; gap: 10px; background: var(--card); border-bottom: 1px solid var(--border);
 }
+/* Back button — dark pill with chevron, per the Figma mockup. */
 .topbar-back {
-  font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px;
-  cursor: pointer; flex-shrink: 0; background: none; border: none;
-  font-family: var(--font); padding: 0;
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  height: 33px; padding: 0 14px; border-radius: 7px;
+  background: #171717; border: 1px solid #272727;
+  color: #b8b8b8; font: 500 13px var(--font); cursor: pointer;
+  transition: background 0.12s, color 0.12s;
 }
-.topbar-back:hover { color: var(--text); }
+.topbar-back:hover { background: #1f1f1f; color: #fff; }
+
+/* Project-name pill — dark, sits right next to Back. Click opens the
+   original-prompt popover for renaming / regenerating the brief. */
+.topbar-project-pill-wrap { position: relative; flex-shrink: 0; }
+.topbar-project-pill {
+  display: flex; align-items: center; gap: 8px; max-width: 240px;
+  height: 33px; padding: 0 14px; border-radius: 7px;
+  background: #171717; border: 1px solid #272727;
+  color: #d4d4d4; font: 500 13px var(--font); cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.topbar-project-pill:hover { background: #1f1f1f; color: #fff; }
+.topbar-project-pill-name {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 180px;
+}
+.topbar-project-pill svg { opacity: 0.7; flex-shrink: 0; }
+
+/* Pink Export button — Figma node 19:2 / 19:3 (bg #be256f, border #da4a90). */
+.topbar-export-wrap { position: relative; flex-shrink: 0; }
+.topbar-export-pink {
+  display: flex; align-items: center; gap: 6px;
+  height: 33px; padding: 0 14px; border-radius: 7px;
+  background: #be256f; border: 1px solid #da4a90;
+  color: #fff; font: 600 13px var(--font); cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.topbar-export-pink:hover { background: #c93479; border-color: #e25998; }
 .topbar-desc-btn {
   display: flex; align-items: center; gap: 4px; font-size: 12px; font-family: var(--font);
   padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-md);
@@ -1051,9 +1082,35 @@ textarea { font-family: var(--font); resize: none; }
   padding: 0 10px; background: var(--card);
 }
 
-/* Big hero title at the top of the board — leads with the project name in
-   serif type per the mockup. Editable in place. */
-.board-hero { max-width: 1100px; margin: 0 auto 22px; }
+/* Project info row — TITLE eyebrow + big title on the left, CLIENT
+   and PROJECT label/value blocks stacked on the right. Per the Figma
+   mockup directly below the topbar. */
+.board-info-row {
+  max-width: 1100px; margin: 0 auto 30px;
+  display: grid; grid-template-columns: 1fr auto; gap: 32px;
+  align-items: start;
+}
+.board-info-title-block { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.board-info-eyebrow {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.board-info-meta {
+  display: flex; flex-direction: column; gap: 14px;
+  min-width: 180px;
+}
+.board-info-meta-item { display: flex; flex-direction: column; gap: 4px; }
+.board-info-meta-value {
+  font-size: 14px; font-weight: 500; color: var(--text);
+  outline: none; cursor: text;
+}
+.board-info-meta-value:empty::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+}
+
+/* Big hero title at the top of the board — leads with the project
+   name. Editable in place. */
 .board-hero-title {
   font: 400 64px/1.05 var(--font);
   color: #d4d4d4; letter-spacing: -0.025em;
@@ -1082,31 +1139,6 @@ textarea { font-family: var(--font); resize: none; }
 .section-autogen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .section-autogen-btn svg { flex-shrink: 0; opacity: 0.95; }
 
-/* Project-info row hidden by default — not in the Figma mockup. Fields
-   (Project Name / Job Number / Client Name / Brand / Campaign) still
-   bind through to brief.projectInfo via the rendered JSX, so the data
-   stays intact. Re-show by removing the `display: none` and restoring
-   the grid. Field is also editable inline via the chat. */
-.project-info-panel { display: none; }
-.project-info-panel-original {
-  max-width: 1100px; margin: 0 auto 16px;
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
-}
-.project-info-field {
-  display: flex; flex-direction: column; gap: 5px;
-  padding: 11px 12px; border-radius: 10px;
-  background: var(--card); border: 1px solid var(--border);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
-}
-.project-info-field span {
-  font-size: 9px; font-weight: 800; letter-spacing: 0.07em;
-  text-transform: uppercase; color: var(--muted);
-}
-.project-info-field input {
-  min-width: 0; border: none; outline: none; background: transparent;
-  color: var(--text); font: 700 13px var(--font);
-}
-.project-info-field input::placeholder { color: var(--faint); }
 .board-pair-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .board-full-row { display: block; }
 
@@ -1237,6 +1269,32 @@ textarea { font-family: var(--font); resize: none; }
 .cd-ratio-item.active:hover { background: #006dd4; }
 .cd-body { padding: 40px 43px; }
 .cd-body .cd-desc { font-size: 14px; color: #e2e2e2; line-height: 1.6; margin: 0; }
+
+/* File attachment chips at the bottom of the Creative body — supports
+   uploading reference docs (treatment PDFs, brand guidelines) per the
+   Figma mockup. Attachments are name-only — files aren't stored. */
+.cd-attachments {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  margin-top: 28px;
+}
+.cd-attach-add {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 999px;
+  background: #1a1a1a; border: 1px solid #282828;
+  color: #d4d4d4; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.cd-attach-add:hover { background: #232323; border-color: #3a3a3a; }
+.cd-attach-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 11px 5px 9px; border-radius: 7px;
+  background: transparent; border: none;
+  color: var(--muted); font: 500 12px var(--font); cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.cd-attach-chip:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.cd-attach-chip svg { flex-shrink: 0; opacity: 0.7; }
+.cd-attach-name { white-space: nowrap; }
 .cd-header-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .cd-brand { font-size: 22px; font-weight: 700; font-family: var(--font); margin: 0; color: var(--text); }
 .cd-eyebrow {

@@ -383,58 +383,24 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
 
       <div className="topbar">
         <button className="topbar-back" onClick={onBack}>
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M10 3.5l-4.5 4.5 4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M10 3.5l-4.5 4.5 4.5 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
           Back
         </button>
-        {brief.creativeDirection?.productionType && (
-          <span className="prod-pill prod-pill-type">{brief.creativeDirection.productionType}</span>
-        )}
-        {brief.creativeDirection?.duration && (
-          <span className="prod-pill">{brief.creativeDirection.duration}</span>
-        )}
-        {(() => {
-          const currentRatio = brief.generationSettings?.ratio || brief.creativeDirection?.format
-          if (!currentRatio) return null
-          return (
-            <div className="prod-ratio-wrap">
-              <button
-                className="prod-pill prod-pill-btn"
-                onClick={e => { e.stopPropagation(); setRatioMenuOpen(o => !o) }}
-                title="Change aspect ratio"
-              >
-                {currentRatio}
-                <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                  <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </button>
-              {ratioMenuOpen && (
-                <div className="prod-ratio-menu" onClick={e => e.stopPropagation()}>
-                  {RATIO_OPTIONS.map(r => (
-                    <button
-                      key={r}
-                      className={`prod-ratio-item${r === currentRatio ? ' active' : ''}`}
-                      onClick={() => { update('generationSettings.ratio', r); setRatioMenuOpen(false) }}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })()}
-        <div className="topbar-gradient-wrap">
-          <span className="topbar-gradient" aria-hidden="true" />
-          <img className="topbar-logo-mark" src="/brand-assets/wonder-w-mark-transparent.png" alt="Wonder Workshop" />
-        </div>
-        <div style={{ position: 'relative' }}>
-          <button className="topbar-desc-btn" onClick={() => {
-            setDescPrompt(brief.originalPrompt || brief.creativeDirection?.description || '')
-            setDescOpen(o => !o)
-          }}>
-            Description
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+
+        {/* Project-name pill — click to rename / regenerate the brief
+            from a new prompt. Per the Figma mockup, this is the only
+            piece of identity in the topbar besides Back + Export. */}
+        <div className="topbar-project-pill-wrap">
+          <button
+            className="topbar-project-pill"
+            onClick={() => {
+              setDescPrompt(brief.originalPrompt || brief.creativeDirection?.description || '')
+              setDescOpen(o => !o)
+            }}
+          >
+            <span className="topbar-project-pill-name">{brief.projectInfo?.projectName || brief.title || 'Untitled'}</span>
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </button>
           {descOpen && (
@@ -476,52 +442,37 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
             </div>
           )}
         </div>
-        <div className="topbar-right">
-          <button className="topbar-icon-btn" onClick={() => setAgentPanelOpen(o => !o)} title={agentPanelOpen ? 'Hide panel' : 'Show panel'}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M10.5 2.5v11" stroke="currentColor" strokeWidth="1.3"/>
-            </svg>
-          </button>
-          <button className="topbar-icon-btn" onClick={() => setSearchOpen(o => !o)} title="Search sections">
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <button className="topbar-icon-btn" onClick={() => setGenLogOpen(true)} title="Generation log — diagnose image generation">
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <path d="M2.5 3.5h11M2.5 8h11M2.5 12.5h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <div className="topbar-sep-v" />
-          <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
-            {theme === 'dark'
-              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1.7"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
-              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            }
-          </button>
-          {!readOnly && (
-            <button className="btn-outline" onClick={() => setShareOpen(true)}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M10.5 3.8L5.5 7.2M5.5 8.8l5 3.4" stroke="currentColor" strokeWidth="1.3"/></svg>
-              Share
-            </button>
-          )}
-          <div style={{ position: 'relative' }}>
-            <button className="btn-dark" onClick={() => setExportOpen(o => !o)}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 13h10" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/></svg>
+
+        {/* Gradient strip with W mark in the center. */}
+        <div className="topbar-gradient-wrap">
+          <span className="topbar-gradient" aria-hidden="true" />
+          <img className="topbar-logo-mark" src="/brand-assets/wonder-w-mark-transparent.png" alt="Wonder Workshop" />
+        </div>
+
+        {/* Pink Export button — the only right-side affordance per
+            the mockup. Theme / Share / Generation log are inside the
+            dropdown (kept out of the visible topbar for visual parity). */}
+        {!readOnly && (
+          <div className="topbar-export-wrap">
+            <button className="topbar-export-pink" onClick={() => setExportOpen(o => !o)}>
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M5 11L11 5M5 5h6v6" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
               Export
-              <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }}><path d="M2 3.5l3 3 3-3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round"/></svg>
             </button>
             {exportOpen && (
               <ExportDropdown
                 brief={brief}
                 onClose={() => setExportOpen(false)}
                 onOnePager={() => setOnePagerOpen(true)}
+                onShare={() => setShareOpen(true)}
+                onToggleTheme={toggleTheme}
+                onOpenGenLog={() => setGenLogOpen(true)}
+                theme={theme}
               />
             )}
           </div>
-        </div>
+        )}
       </div>
 
 
@@ -559,32 +510,42 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       <div className="board-body">
         <div className="board-content">
           <div className="board-scroll" ref={scrollContainerRef}>
-            {/* Hero title — the mockup leads with the project name in big serif. */}
-            <div className="board-hero">
-              <EditableText
-                tag="h1"
-                className="board-hero-title"
-                value={brief.projectInfo?.projectName || brief.title}
-                onChange={v => update('projectInfo.projectName', v)}
-                placeholder="Untitled project"
-              />
-            </div>
-            <div className="project-info-panel">
-              {[
-                ['projectName', 'Project Name'],
-                ['jobNumber', 'Job Number'],
-                ['clientName', 'Client Name'],
-                ['brandCampaignName', 'Brand / Campaign Name'],
-              ].map(([key, label]) => (
-                <label className="project-info-field" key={key}>
-                  <span>{label}</span>
-                  <input
-                    value={brief.projectInfo?.[key] || ''}
-                    onChange={e => update(`projectInfo.${key}`, e.target.value)}
-                    placeholder={label}
+            {/* Project info row — TITLE eyebrow + big title on the left,
+                CLIENT / PROJECT label-value blocks stacked on the right.
+                Mirrors the Figma mockup directly. */}
+            <div className="board-info-row">
+              <div className="board-info-title-block">
+                <div className="board-info-eyebrow">Title</div>
+                <EditableText
+                  tag="h1"
+                  className="board-hero-title"
+                  value={brief.projectInfo?.projectName || brief.title}
+                  onChange={v => update('projectInfo.projectName', v)}
+                  placeholder="Untitled project"
+                />
+              </div>
+              <div className="board-info-meta">
+                <div className="board-info-meta-item">
+                  <div className="board-info-eyebrow">Client</div>
+                  <EditableText
+                    tag="div"
+                    className="board-info-meta-value"
+                    value={brief.projectInfo?.clientName || ''}
+                    onChange={v => update('projectInfo.clientName', v)}
+                    placeholder="Client"
                   />
-                </label>
-              ))}
+                </div>
+                <div className="board-info-meta-item">
+                  <div className="board-info-eyebrow">Project</div>
+                  <EditableText
+                    tag="div"
+                    className="board-info-meta-value"
+                    value={brief.projectInfo?.brandCampaignName || brief.projectInfo?.jobNumber || ''}
+                    onChange={v => update('projectInfo.brandCampaignName', v)}
+                    placeholder="Project"
+                  />
+                </div>
+              </div>
             </div>
             <div className="board-cards">
               {ROWS.map((row, ri) => (
