@@ -1,5 +1,10 @@
 import { useEffect } from 'react'
+import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../utils/characterPrompts.js'
+import { expandMentions } from '../utils/mentions.js'
 
+// Resolve a generated image for a given slotKey (= the exact prompt
+// string the corresponding ImageSlot used). Returns the active version's
+// src or null when no image has been generated for that slot.
 function getImg(images, prompt) {
   if (!images || !prompt) return null
   const slot = images[prompt]
@@ -7,109 +12,110 @@ function getImg(images, prompt) {
   return slot.versions[slot.activeVersion ?? 0]?.src || null
 }
 
-function hashStr(s) {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
-  return Math.abs(h)
-}
-
-function ImgThumb({ src, alt, className }) {
-  if (!src) return null
-  return <img src={src} alt={alt || ''} className={className} />
-}
-
 function SectionLabel({ children }) {
   return <div className="op-section-label">{children}</div>
 }
 
+// One character "sheet": REFERENCE on the left, name + description on
+// the right, then a strip of Headshots (4 views) and a strip of Full
+// Body (4 views). Used for the primary character (brief.character) and
+// any additional characters (brief.characters[]).
+function CharacterSheet({ character, images, eyebrow }) {
+  if (!character?.name && !character?.description) return null
+
+  const refSrc = getImg(images, referencePrompt(character))
+  const headshotSrcs = VIEWS.map(v => getImg(images, closeupPrompt(character, v)))
+  const fullBodySrcs = VIEWS.map(v => getImg(images, fullbodyPrompt(character, v)))
+
+  return (
+    <div className="op-section op-character-sheet">
+      {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
+      <div className="op-char-bio">
+        {refSrc && <img src={refSrc} alt={character.name || 'Reference'} className="op-charsheet-ref" />}
+        <div className="op-char-bio-text">
+          {character.name && <div className="op-char-name">{character.name}</div>}
+          {character.description && <p className="op-body">{character.description}</p>}
+          {character.wardrobe && (
+            <p className="op-body" style={{ marginTop: 6 }}>
+              <strong>Wardrobe:</strong> {character.wardrobe}
+            </p>
+          )}
+        </div>
+      </div>
+      {headshotSrcs.some(Boolean) && (
+        <div className="op-char-views-group">
+          <div className="op-char-views-label">Headshots</div>
+          <div className="op-char-views">
+            {headshotSrcs.map((src, i) => (
+              <div key={`hs-${i}`} className="op-char-view">
+                {src
+                  ? <img src={src} alt={VIEWS[i].label} className="op-char-view-img" />
+                  : <div className="op-char-view-empty" />
+                }
+                <span className="op-char-view-cap">{VIEWS[i].label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {fullBodySrcs.some(Boolean) && (
+        <div className="op-char-views-group">
+          <div className="op-char-views-label">Full Body</div>
+          <div className="op-char-views">
+            {fullBodySrcs.map((src, i) => (
+              <div key={`fb-${i}`} className="op-char-view">
+                {src
+                  ? <img src={src} alt={VIEWS[i].label} className="op-char-view-img" />
+                  : <div className="op-char-view-empty" />
+                }
+                <span className="op-char-view-cap">{VIEWS[i].label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// One-pager export — trimmed to the three sections the meeting brief
+// called out as essential: character sheets, locations, storyboard
+// sequence. Lighting & Mood, Mood Board / Style refs, the Clothing &
+// Props strip, and the dense Shot List table were removed; the
+// storyboard now renders as the actual generated frame images.
 export default function OnePager({ brief, images = {}, onClose }) {
   const cd    = brief?.creativeDirection || {}
   const pi    = brief?.projectInfo || {}
   const bi    = brief?.brandInfo || {}
   const shots = brief?.shotList || []
-  const moods = brief?.lightingMood || []
-  const char  = brief?.character || {}
   const env   = brief?.environment || {}
 
-  // ── Prompt reconstruction ──────────────────────────────────────
-  const heroPrompt = `${cd.brand} ${cd.description} cinematic film still, professional photography, high quality`
+  // Hero image — uses the same prompt the project's hero generator
+  // would use (no separate hero section in the current Board, so this
+  // is best-effort and usually null).
+  const heroPrompt = `${cd.brand || ''} ${cd.description || ''} cinematic film still, professional photography, high quality`
+  const heroSrc = getImg(images, heroPrompt)
 
-  // Mood cards
-  const moodPrompts = moods.map((m, i) =>
-    brief?.imagePrompts?.[i] ||
-    `${m.name}, ${m.description}, cinematic lighting, film still, ${(m.tags || []).join(', ')}`
-  )
-
-  // Mood Board
-  const mbBase = `${cd.brand ?? ''} ${cd.description ?? ''}, mood board, cinematic aesthetic, editorial`
-  const mbPrompts = [
-    `${mbBase}, hero wide shot, atmospheric style reference`,
-    `${mbBase}, colour palette texture reference`,
-    `${mbBase}, lighting reference, film still, cinematic`,
-  ]
-
-  // Locations / Set Design
-  const locBase     = env.heroEnvironment ?? 'cinematic location'
+  // Locations — single hero per the current LocationsSetDesign.
+  const locHero = env.heroEnvironment || 'cinematic location'
   const locElements = (env.keyElements || []).slice(0, 3).join(', ')
-  const locPrompts  = [
-    `${locBase}, ${locElements}, wide establishing shot, golden hour, cinematic photography`,
-    `${locBase}, interior detail shot, atmospheric lighting, production design`,
-    `${locBase}, ${env.shotRoute ?? 'location'}, atmospheric wide angle, cinematic`,
-  ]
+  const locPrompt = `${locHero}, ${locElements}, wide establishing shot, golden hour, cinematic photography`
+  const locSrc = getImg(images, locPrompt)
 
-  // Char Ref (editorial style)
-  const charRefBase = char.description ?? 'professional talent'
-  const charRefPrompts = [
-    `${charRefBase}, front facing, full body, white studio background, editorial fashion photography`,
-    `${charRefBase}, three quarter view, dynamic pose, editorial photography, studio lighting`,
-    `${charRefBase}, side profile, clean editorial photography, minimal background`,
-  ]
+  // Storyboard frames — same prompt construction as ShotList.jsx
+  // (expanded @mentions + framing + camera + "cinematic film still").
+  const shotFrames = shots.map(shot => {
+    const expanded = expandMentions(shot.description, brief)
+    const prompt = `${expanded}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`
+    return { shot, src: getImg(images, prompt) }
+  })
 
-  // Character Full Body
-  const charFBBase   = `${char.description}, ${char.wardrobe}, full body, standing`
-  const charFBSuffix = 'full body shot, white studio background, professional photography, character reference sheet'
-  const charFBPrompts = [
-    `${charFBBase}, facing directly forward, front view, ${charFBSuffix}`,
-    `${charFBBase}, three-quarter view, angled 45 degrees left, ${charFBSuffix}`,
-    `${charFBBase}, strict side profile, facing right, ${charFBSuffix}`,
-  ]
-
-  // Character Close Up
-  const charCUBase   = `${char.description}, ${char.wardrobe}, close-up portrait, head and shoulders`
-  const charCUSuffix = 'sharp face detail, studio lighting, clean white background, headshot'
-  const charCUPrompts = [
-    `${charCUBase}, facing directly forward, front view, ${charCUSuffix}`,
-    `${charCUBase}, three-quarter view, angled 45 degrees left, ${charCUSuffix}`,
-    `${charCUBase}, strict side profile, facing right, ${charCUSuffix}`,
-  ]
-
-  // Clothing / Props
-  const wardrobe = char.wardrobe ?? 'athletic wear, professional outfit'
-  const clothingPrompts = [
-    `${wardrobe}, clothing outfit flat lay, fashion product photography, clean white background, overhead view`,
-    `${wardrobe} shoes, sneakers product shot, isolated white background, studio lighting, commercial photography`,
-    `${wardrobe} accessories props sunglasses watch, product photography, white background, commercial`,
-  ]
-
-  // ── Resolve images ─────────────────────────────────────────────
-  const heroSrc       = getImg(images, heroPrompt)
-  const moodSrcs      = moodPrompts.map(p => getImg(images, p))
-  const mbSrcs        = mbPrompts.map(p => getImg(images, p))
-  const locSrcs       = locPrompts.map(p => getImg(images, p))
-  const charRefSrcs   = charRefPrompts.map(p => getImg(images, p))
-  const charFBSrcs    = charFBPrompts.map(p => getImg(images, p))
-  const charCUSrcs    = charCUPrompts.map(p => getImg(images, p))
-  const clothingSrcs  = clothingPrompts.map(p => getImg(images, p))
-
-  const charFrontAny  = charRefSrcs[0] || charFBSrcs[0]
-
-  const hasMoodImgs     = moodSrcs.some(Boolean)
-  const hasMbImgs       = mbSrcs.some(Boolean)
-  const hasLocImgs      = locSrcs.some(Boolean)
-  const hasCharRefImgs  = charRefSrcs.some(Boolean)
-  const hasCharFBImgs   = charFBSrcs.some(Boolean)
-  const hasCharCUImgs   = charCUSrcs.some(Boolean)
-  const hasClothingImgs = clothingSrcs.some(Boolean)
+  // All characters: primary + any additional. CharacterSheet skips
+  // entries with no name AND no description.
+  const characters = [
+    brief?.character,
+    ...((brief?.characters) || []),
+  ].filter(Boolean)
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -121,7 +127,7 @@ export default function OnePager({ brief, images = {}, onClose }) {
     <div className="onepager-backdrop" onClick={onClose}>
       <div className="onepager-shell" onClick={e => e.stopPropagation()}>
 
-        {/* Toolbar */}
+        {/* Toolbar (hidden in print) */}
         <div className="onepager-toolbar no-print">
           <span className="onepager-toolbar-title">One Pager Preview</span>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -143,7 +149,7 @@ export default function OnePager({ brief, images = {}, onClose }) {
 
         <div className="onepager-page">
 
-          {/* ── Hero image ── */}
+          {/* ── Hero / header ── */}
           {heroSrc ? (
             <div className="op-hero">
               <img src={heroSrc} alt="Hero" className="op-hero-img" />
@@ -169,7 +175,6 @@ export default function OnePager({ brief, images = {}, onClose }) {
             </div>
           )}
 
-          {/* Meta strip after hero */}
           {heroSrc && (
             <div className="op-meta-strip">
               {[
@@ -188,7 +193,7 @@ export default function OnePager({ brief, images = {}, onClose }) {
             </div>
           )}
 
-          {/* ── Creative Direction ── */}
+          {/* ── Creative direction prose ── */}
           {cd.description && (
             <div className="op-section op-direction">
               <SectionLabel>Creative Direction</SectionLabel>
@@ -196,185 +201,66 @@ export default function OnePager({ brief, images = {}, onClose }) {
             </div>
           )}
 
-          {/* ── Main 2-col: info + shot list ── */}
-          <div className="op-two-col">
-            <div className="op-col">
-
-              {/* Brand */}
-              {(bi.colors?.length > 0 || bi.rules) && (
-                <div className="op-section">
-                  <SectionLabel>Brand</SectionLabel>
-                  {bi.colors?.length > 0 && (
-                    <div className="op-colors">
-                      {bi.colors.map((c, i) => (
-                        <div className="op-color" key={i}>
-                          <div className="op-color-swatch" style={{ background: c.hex }} />
-                          <div className="op-color-info">
-                            <div className="op-color-hex">{c.hex}</div>
-                            <div className="op-color-name">{c.name}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {bi.rules && <p className="op-body" style={{ marginTop: 6 }}>{bi.rules}</p>}
-                </div>
-              )}
-
-              {/* Character */}
-              {(char.description || char.wardrobe || charFrontAny) && (
-                <div className="op-section">
-                  <SectionLabel>Character</SectionLabel>
-                  <div className="op-char-row">
-                    {charFrontAny && <img src={charFrontAny} alt="Character" className="op-char-img" />}
-                    <div>
-                      {char.description && <p className="op-body">{char.description}</p>}
-                      {char.wardrobe && (
-                        <p className="op-body" style={{ marginTop: 4 }}>
-                          <strong>Wardrobe:</strong> {char.wardrobe}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Clothing / Props */}
-              {hasClothingImgs && (
-                <div className="op-section">
-                  <SectionLabel>Clothing &amp; Props</SectionLabel>
-                  <div className="op-img-strip">
-                    {clothingSrcs.map((src, i) => src && (
-                      <img key={i} src={src} alt={`clothing ${i+1}`} className="op-strip-img op-strip-square" />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Lighting & Mood */}
-              {moods.length > 0 && (
-                <div className="op-section">
-                  <SectionLabel>Lighting &amp; Mood</SectionLabel>
-                  <div className="op-moods">
-                    {moods.map((m, i) => (
-                      <div className="op-mood" key={i}>
-                        {moodSrcs[i]
-                          ? <img src={moodSrcs[i]} alt={m.name} className="op-mood-thumb" />
-                          : (
-                            <div className="op-mood-bar" style={{
-                              background: m.colors?.length > 1
-                                ? `linear-gradient(135deg, ${m.colors[0]}, ${m.colors[1]})`
-                                : m.colors?.[0] || '#888'
-                            }} />
-                          )
-                        }
-                        <div className="op-mood-info">
-                          <div className="op-mood-name">{m.letter} — {m.name}</div>
-                          <div className="op-mood-desc">{m.description}</div>
-                          {m.tags?.length > 0 && (
-                            <div className="op-mood-tags">
-                              {m.tags.map(t => <span key={t} className="op-mood-tag">{t}</span>)}
-                            </div>
-                          )}
-                        </div>
+          {/* ── Brand ── */}
+          {(bi.colors?.length > 0 || bi.rules) && (
+            <div className="op-section">
+              <SectionLabel>Brand</SectionLabel>
+              {bi.colors?.length > 0 && (
+                <div className="op-colors">
+                  {bi.colors.map((c, i) => (
+                    <div className="op-color" key={i}>
+                      <div className="op-color-swatch" style={{ background: c.hex }} />
+                      <div className="op-color-info">
+                        <div className="op-color-hex">{c.hex}</div>
+                        <div className="op-color-name">{c.name}</div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               )}
+              {bi.rules && <p className="op-body" style={{ marginTop: 6 }}>{bi.rules}</p>}
             </div>
+          )}
 
-            {/* Shot List */}
-            {shots.length > 0 && (
-              <div className="op-col">
-                <div className="op-section">
-                  <SectionLabel>Shot List</SectionLabel>
-                  <table className="op-shot-table">
-                    <thead>
-                      <tr><th>#</th><th>Frame</th><th>Description</th><th>Camera</th><th>Dur</th></tr>
-                    </thead>
-                    <tbody>
-                      {shots.map((s, i) => (
-                        <tr key={i}>
-                          <td className="op-shot-num">{s.num}</td>
-                          <td className="op-shot-frame">{s.framing}</td>
-                          <td>{s.description}</td>
-                          <td className="op-shot-camera">{s.camera}</td>
-                          <td className="op-shot-dur">{s.duration}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* ── Character sheets (primary + additional) ── */}
+          {characters.map((c, idx) => (
+            <CharacterSheet
+              key={idx}
+              character={c}
+              images={images}
+              eyebrow={idx === 0 ? 'Character' : `Character — ${c.name || idx + 1}`}
+            />
+          ))}
 
-          {/* ── Mood Board / Style Ref ── */}
-          {hasMbImgs && (
+          {/* ── Locations ── */}
+          {locSrc && (
             <div className="op-section">
-              <SectionLabel>Mood Board / Style Ref</SectionLabel>
-              <div className="op-img-strip">
-                {mbSrcs.map((src, i) => src && (
-                  <img key={i} src={src} alt={`mood board ${i+1}`}
-                    className={`op-strip-img ${i === 0 ? 'op-strip-wide' : ''}`} />
-                ))}
+              <SectionLabel>Locations</SectionLabel>
+              <div className="op-loc-hero">
+                <img src={locSrc} alt={env.heroName || 'Location'} className="op-loc-hero-img" />
+                {env.heroName && <div className="op-loc-caption">{env.heroName}</div>}
               </div>
             </div>
           )}
 
-          {/* ── Locations / Set Design ── */}
-          {hasLocImgs && (
+          {/* ── Storyboard sequence (frames, not a table) ── */}
+          {shotFrames.length > 0 && (
             <div className="op-section">
-              <SectionLabel>Locations / Set Design</SectionLabel>
-              <div className="op-img-strip">
-                {locSrcs.map((src, i) => src && (
-                  <img key={i} src={src} alt={`location ${i+1}`}
-                    className={`op-strip-img ${i === 0 ? 'op-strip-wide' : ''}`} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Character Reference (editorial) ── */}
-          {hasCharRefImgs && (
-            <div className="op-section">
-              <SectionLabel>Char Ref</SectionLabel>
-              <div className="op-char-ref-strip">
-                {charRefSrcs.map((src, i) => src && (
-                  <div key={i} className="op-char-ref-item">
-                    <img src={src} alt={['FRONT','3/4','SIDE'][i]} className="op-char-ref-img" />
-                    <span className="op-char-ref-label">{['FRONT','3/4','SIDE'][i]}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Character Full Body ── */}
-          {hasCharFBImgs && (
-            <div className="op-section">
-              <SectionLabel>Character — Full Body</SectionLabel>
-              <div className="op-char-ref-strip">
-                {charFBSrcs.map((src, i) => src && (
-                  <div key={i} className="op-char-ref-item">
-                    <img src={src} alt={['FRONT','3/4','SIDE'][i]} className="op-char-ref-img" />
-                    <span className="op-char-ref-label">{['FRONT','3/4','SIDE'][i]}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Character Close Up ── */}
-          {hasCharCUImgs && (
-            <div className="op-section">
-              <SectionLabel>Character — Close Up</SectionLabel>
-              <div className="op-char-ref-strip">
-                {charCUSrcs.map((src, i) => src && (
-                  <div key={i} className="op-char-ref-item">
-                    <img src={src} alt={['FRONT','3/4','SIDE'][i]} className="op-char-ref-img" />
-                    <span className="op-char-ref-label">{['FRONT','3/4','SIDE'][i]}</span>
+              <SectionLabel>Storyboard Sequence</SectionLabel>
+              <div className="op-storyboard">
+                {shotFrames.map(({ shot, src }, i) => (
+                  <div key={i} className="op-sb-frame">
+                    <div className="op-shot-img-wrap">
+                      {src
+                        ? <img src={src} alt={`Shot ${shot.num}`} className="op-shot-img" />
+                        : <div className="op-shot-empty" />
+                      }
+                      <span className="op-shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
+                      <span className="op-shot-badge-framing">{shot.framing}</span>
+                    </div>
+                    {shot.description && (
+                      <p className="op-shot-desc">{shot.description}</p>
+                    )}
                   </div>
                 ))}
               </div>
