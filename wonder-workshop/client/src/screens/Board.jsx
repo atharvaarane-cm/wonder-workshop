@@ -449,9 +449,8 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
           <img className="topbar-logo-mark" src="/brand-assets/wonder-w-mark-transparent.png" alt="Wonder Workshop" />
         </div>
 
-        {/* Pink Export button — the only right-side affordance per
-            the mockup. Theme / Share / Generation log are inside the
-            dropdown (kept out of the visible topbar for visual parity). */}
+        {/* Pink Export button + a dedicated theme toggle on the far right.
+            Share / Generation log remain inside the Export dropdown. */}
         {!readOnly && (
           <div className="topbar-export-wrap">
             <button className="topbar-export-pink" onClick={() => setExportOpen(o => !o)}>
@@ -466,12 +465,29 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                 onClose={() => setExportOpen(false)}
                 onOnePager={() => setOnePagerOpen(true)}
                 onShare={() => setShareOpen(true)}
-                onToggleTheme={toggleTheme}
                 onOpenGenLog={() => setGenLogOpen(true)}
-                theme={theme}
               />
             )}
           </div>
+        )}
+        {toggleTheme && (
+          <button
+            className="topbar-theme-toggle"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.7"/>
+                <path d="M12 2.5v2M12 19.5v2M4.5 4.5l1.4 1.4M18.1 18.1l1.4 1.4M2.5 12h2M19.5 12h2M4.5 19.5l1.4-1.4M18.1 5.9l1.4-1.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
         )}
       </div>
 
