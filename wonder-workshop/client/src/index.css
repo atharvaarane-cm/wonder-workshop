@@ -1370,20 +1370,13 @@ textarea { font-family: var(--font); resize: none; }
 }
 .prod-add {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  aspect-ratio: 1/1; border-radius: 10px;
-  border: 1.5px dashed var(--border-md); background: transparent;
-  color: var(--muted); font-family: var(--font); font-size: 12px; font-weight: 600;
+  aspect-ratio: 1/1; border-radius: 7px;
+  border: 1px solid #282828; background: #1a1a1a;
+  color: #717171; font-family: var(--font); font-size: 12px; font-weight: 600;
   cursor: pointer;
   transition: border-color 0.12s, color 0.12s, background 0.12s;
 }
-.prod-add:hover {
-  border-color: #7C5CFC; color: #7C5CFC;
-  background: rgba(124,92,252,0.06);
-}
-[data-theme="dark"] .prod-add:hover {
-  border-color: #9B7DFF; color: #9B7DFF;
-  background: rgba(155,125,255,0.08);
-}
+.prod-add:hover { border-color: #3a3a3a; color: #fff; }
 /* Bio area: REFERENCE column on the left (1:1 portrait + variant thumbs),
    NAME + DESCRIPTION column on the right. Matches the May 13 mockup. */
 .character-bio {
@@ -1481,17 +1474,12 @@ textarea { font-family: var(--font); resize: none; }
 .shot-add-cell {
   width: 100%; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 6px;
-  border: 1.5px dashed var(--border-md); border-radius: 8px;
-  background: transparent; color: var(--muted);
+  border: 1px solid #282828; border-radius: 7px;
+  background: #1a1a1a; color: #717171;
   font-family: var(--font); font-size: 12px; font-weight: 600;
   cursor: pointer; transition: border-color 0.12s, color 0.12s, background 0.12s;
 }
-.shot-add-cell:hover {
-  border-color: #7C5CFC; color: #7C5CFC; background: rgba(124,92,252,0.06);
-}
-[data-theme="dark"] .shot-add-cell:hover {
-  border-color: #9B7DFF; color: #9B7DFF; background: rgba(155,125,255,0.08);
-}
+.shot-add-cell:hover { border-color: #3a3a3a; color: #fff; }
 
 /* Info below */
 .shot-info { display: flex; flex-direction: column; gap: 5px; padding: 0 2px; }
@@ -1768,13 +1756,13 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── Image slots ───────────────────────────────────────────────── */
 .img-slot {
-  background: var(--bg); border: 1.5px dashed var(--border-md);
-  border-radius: 8px; overflow: hidden; cursor: pointer;
+  background: #1a1a1a; border: 1px solid #282828;
+  border-radius: 7px; overflow: hidden; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color 0.15s, background 0.15s;
   position: relative;
 }
-.img-slot:hover { border-color: rgba(0,0,0,0.3); background: rgba(0,0,0,0.03); }
+.img-slot:hover { border-color: #3a3a3a; }
 /* Selected slot — a bright white glow. The static glow distinguishes
    "selected" from the animated shimmer sweep of the *generating* state
    (per Ravi). The glow is painted as an ::after ring ON TOP of the
