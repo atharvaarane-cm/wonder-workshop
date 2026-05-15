@@ -39,6 +39,10 @@ const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'mb', 'loc', 'cp', 'char', 'sl'])
 // request, not as part of the auto-generate burst.
 const AUTO_GENERATE_SECTION_IDS = new Set(['cd', 'bi', 'char', 'sl'])
 
+// Aspect ratios the project can switch to post-creation — mirrors the
+// options on the Discover screen's ratio picker.
+const RATIO_OPTIONS = ['16:9', '9:16', '1:1', '4:5', '4:3', '2:1']
+
 // Sections start collapsed when the brief has no relevant content for
 // them — matches the mockup's tighter feel (empty sections show only
 // the header). User can manually expand any section via the chevron.
@@ -71,6 +75,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [exportOpen, setExportOpen] = useState(false)
   const [onePagerOpen, setOnePagerOpen] = useState(false)
   const [genLogOpen, setGenLogOpen] = useState(false)
+  const [ratioMenuOpen, setRatioMenuOpen] = useState(false)
   const [agentPanelOpen, setAgentPanelOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -125,6 +130,17 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     window.addEventListener('ww-toast', onToast)
     return () => window.removeEventListener('ww-toast', onToast)
   }, [])
+
+  // Close the aspect-ratio menu on any click outside it.
+  useEffect(() => {
+    if (!ratioMenuOpen) return
+    function onDocClick(e) {
+      if (e.target.closest('.prod-ratio-wrap')) return
+      setRatioMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [ratioMenuOpen])
 
   useEffect(() => {
     function onActiveImage(e) {
@@ -266,9 +282,37 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
         {brief.creativeDirection?.duration && (
           <span className="prod-pill">{brief.creativeDirection.duration}</span>
         )}
-        {(brief.generationSettings?.ratio || brief.creativeDirection?.format) && (
-          <span className="prod-pill">{brief.generationSettings?.ratio || brief.creativeDirection.format}</span>
-        )}
+        {(() => {
+          const currentRatio = brief.generationSettings?.ratio || brief.creativeDirection?.format
+          if (!currentRatio) return null
+          return (
+            <div className="prod-ratio-wrap">
+              <button
+                className="prod-pill prod-pill-btn"
+                onClick={e => { e.stopPropagation(); setRatioMenuOpen(o => !o) }}
+                title="Change aspect ratio"
+              >
+                {currentRatio}
+                <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                  <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+              {ratioMenuOpen && (
+                <div className="prod-ratio-menu" onClick={e => e.stopPropagation()}>
+                  {RATIO_OPTIONS.map(r => (
+                    <button
+                      key={r}
+                      className={`prod-ratio-item${r === currentRatio ? ' active' : ''}`}
+                      onClick={() => { update('generationSettings.ratio', r); setRatioMenuOpen(false) }}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
         <div className="topbar-gradient-wrap">
           <span className="topbar-gradient" aria-hidden="true" />
           <img className="topbar-logo-mark" src="/brand-assets/wonder-w-mark-transparent.png" alt="Wonder Workshop" />

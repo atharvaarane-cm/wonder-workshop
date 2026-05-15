@@ -1008,6 +1008,33 @@ textarea { font-family: var(--font); resize: none; }
 .prod-pill-type {
   background: #E04141; color: #fff; border-color: transparent;
 }
+
+/* Aspect-ratio pill is a dropdown — change the project ratio post-creation. */
+.prod-ratio-wrap { position: relative; flex-shrink: 0; }
+.prod-pill-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: pointer; transition: border-color 0.12s, background 0.12s;
+}
+.prod-pill-btn:hover { border-color: var(--border-md); }
+.prod-pill-btn svg { opacity: 0.6; }
+.prod-ratio-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 300;
+  display: flex; flex-direction: column; min-width: 92px; padding: 4px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 9px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+}
+[data-theme="dark"] .prod-ratio-menu { box-shadow: 0 8px 28px rgba(0,0,0,0.45); }
+.prod-ratio-item {
+  text-align: left; padding: 6px 9px; border-radius: 6px;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.04em; color: var(--text);
+  transition: background 0.1s;
+}
+.prod-ratio-item:hover { background: rgba(0,0,0,0.05); }
+[data-theme="dark"] .prod-ratio-item:hover { background: rgba(255,255,255,0.07); }
+.prod-ratio-item.active { background: #7C5CFC; color: #fff; }
+.prod-ratio-item.active:hover { background: #7C5CFC; }
 .topbar-gradient-wrap {
   flex: 1; min-width: 60px; position: relative;
   display: flex; align-items: center; justify-content: center;
