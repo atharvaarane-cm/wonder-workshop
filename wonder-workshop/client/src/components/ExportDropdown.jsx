@@ -82,7 +82,7 @@ function exportPptx(brief) {
   pptx.writeFile({ fileName: `${brief?.creativeDirection?.brand || 'wonder'}-brief.pptx` })
 }
 
-export default function ExportDropdown({ brief, onClose, onOnePager }) {
+export default function ExportDropdown({ brief, onClose, onOnePager, onShare, onToggleTheme, onOpenGenLog, theme }) {
   const ref = useRef()
 
   useEffect(() => {
@@ -155,6 +155,54 @@ export default function ExportDropdown({ brief, onClose, onOnePager }) {
           <span className="export-option-hint">Backup · re-import later</span>
         </span>
       </button>
+
+      {/* Utility actions tucked out of the visible topbar per the mockup. */}
+      {(onShare || onToggleTheme || onOpenGenLog) && <div className="export-divider" />}
+
+      {onShare && (
+        <button className="export-option" onClick={() => { onShare(); onClose() }}>
+          <span className="export-option-icon">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <circle cx="12" cy="3" r="1.6" stroke="currentColor" strokeWidth="1.3"/>
+              <circle cx="12" cy="13" r="1.6" stroke="currentColor" strokeWidth="1.3"/>
+              <circle cx="4" cy="8" r="1.6" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M10.6 3.9L5.4 7.1M5.4 8.9l5.2 3.2" stroke="currentColor" strokeWidth="1.3"/>
+            </svg>
+          </span>
+          <span className="export-option-text">
+            <span className="export-option-label">Share link</span>
+            <span className="export-option-hint">Read-only URL anyone can open</span>
+          </span>
+        </button>
+      )}
+
+      {onOpenGenLog && (
+        <button className="export-option" onClick={() => { onOpenGenLog(); onClose() }}>
+          <span className="export-option-icon">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <path d="M2.5 3.5h11M2.5 8h11M2.5 12.5h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </span>
+          <span className="export-option-text">
+            <span className="export-option-label">Generation log</span>
+            <span className="export-option-hint">Diagnose image-gen failures</span>
+          </span>
+        </button>
+      )}
+
+      {onToggleTheme && (
+        <button className="export-option" onClick={() => { onToggleTheme(); onClose() }}>
+          <span className="export-option-icon">
+            {theme === 'dark'
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1.7"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            }
+          </span>
+          <span className="export-option-text">
+            <span className="export-option-label">{theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}</span>
+          </span>
+        </button>
+      )}
 
     </div>
   )
