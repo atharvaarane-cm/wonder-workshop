@@ -14,19 +14,19 @@ function timeAgo(ts) {
 const TOOLS = [
   {
     name: 'update_brief_field',
-    description: 'Update any text field in the brief using dot-path notation. Examples: "creativeDirection.brand", "creativeDirection.description", "character.description", "character.wardrobe", "environment.heroEnvironment", "brandInfo.rules". Use when the user asks to change/edit/rename/set a brief field.',
+    description: 'Update any text field in the brief using dot-path notation. PREFERRED for ANY change to a character / location / product entity (appearance, wardrobe, environment, etc.) — every image driven by that entity will re-fire automatically with the new value. Examples of paths: "character.description", "character.wardrobe", "characters.0.description", "environment.heroEnvironment", "environment.heroName", "productElements.0.description", "creativeDirection.brand", "brandInfo.rules". The value REPLACES the field — always provide the FULL new value (e.g. include the existing description + your modification, not just the modification).',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'Dot-path to the field within the brief JSON.' },
-        value: { type: 'string', description: 'The new value as a plain string.' },
+        value: { type: 'string', description: 'The new full value as a plain string — replaces what was there before.' },
       },
       required: ['path', 'value'],
     },
   },
   {
     name: 'regenerate_active_image',
-    description: 'Regenerate the currently-selected image with a new prompt. Only call this when the user has an active image selected AND they ask to remake/regenerate/redo/try the image differently. Provide the FULL new prompt, not just a delta — describe subject, setting, lighting, framing, mood.',
+    description: 'Regenerate ONLY the currently-selected image with a new prompt. Call this ONLY for one-off image-level tweaks the user wants for THIS frame alone (different lighting, mood, framing, a stylistic variation). For changes to a character / location / product that should propagate across every image of that entity, use update_brief_field instead. Provide the FULL new prompt — describe subject, setting, lighting, framing, mood.',
     parameters: {
       type: 'object',
       properties: {
@@ -124,9 +124,12 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     const hasActiveImage = !!activeImageTarget?.prompt
     const systemPrompt = [
       `You are a creative production assistant working inside Wonder Workshop, a brief tool.`,
-      `When the user asks to change/edit/set/rename/update any field, CALL update_brief_field with the appropriate dot-path — do not just describe the change.`,
-      `When the user asks to regenerate/remake/redo/change the active image, CALL regenerate_active_image with the FULL new prompt.`,
-      `When the user asks a question or wants conversation, respond with plain text only (no function calls). Keep replies under 3 sentences.`,
+      ``,
+      `# Tool routing — pick the RIGHT tool:`,
+      `- If the user wants to change a CHARACTER's appearance (hair, clothes, wardrobe, look) — or any property of the character / location / product entity — CALL update_brief_field on the relevant entity field (character.description, character.wardrobe, environment.heroEnvironment, productElements, etc.). Every image driven by that entity will re-fire automatically with the new value. Example: "make her have purple hair" → update_brief_field(path: "character.description", value: "<full original description, with purple hair added>"). Always include the FULL new value — your update REPLACES the field.`,
+      `- If the user wants a ONE-OFF tweak to JUST the currently selected image (lighting, framing, mood, a stylistic variation), CALL regenerate_active_image with the FULL new prompt — describe subject, setting, lighting, framing, mood. This only affects the selected image, not other images of the same entity.`,
+      `- If the user asks a question or wants conversation, respond with plain text only (no function calls). Keep replies under 3 sentences.`,
+      `- NEVER just describe a change — always CALL the tool.`,
       ``,
       `# Scope rules — read carefully`,
       hasActiveImage
@@ -163,14 +166,29 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       abortRef.current = controller
       const { text: replyText, actions } = await chatWithTools(history, TOOLS, controller.signal)
 
-      // Apply each function call against the live brief.
+      // Apply each function call against the live brief. Track which
+      // entity sections need their images re-fired afterwards (e.g.
+      // when the agent edits character.description, every character
+      // view should regenerate with the new description baked in).
       const applied = []
+      const sectionsToRegen = new Set()
       for (const a of actions) {
         if (a.name === 'update_brief_field' && onUpdate) {
           const { path, value } = a.args || {}
           if (path && typeof value === 'string') {
             onUpdate(path, value)
             applied.push(a)
+            // Identify which section's image prompts derive from this
+            // field. Only entity-level fields trigger a regen — title
+            // / projectInfo / creativeDirection.description don't
+            // drive image generation directly.
+            if (path.startsWith('character.') || path.startsWith('characters.') || path === 'character' || path === 'characters') {
+              sectionsToRegen.add('Character Design')
+            } else if (path.startsWith('environment.') || path === 'environment') {
+              sectionsToRegen.add('Locations / Set Design')
+            } else if (path.startsWith('productElements') || path === 'productElements') {
+              sectionsToRegen.add('Product / Elements')
+            }
           }
         } else if (a.name === 'regenerate_active_image' && onRegenerateImage) {
           const { new_prompt } = a.args || {}
@@ -179,6 +197,19 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
             if (ok) applied.push(a)
           }
         }
+      }
+
+      // Fire section regens after a tick so React has propagated the
+      // brief update — image slots build their prompts from the new
+      // field values rather than the stale ones.
+      if (sectionsToRegen.size > 0) {
+        setTimeout(() => {
+          for (const sectionTitle of sectionsToRegen) {
+            window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
+              detail: { sectionTitle },
+            }))
+          }
+        }, 80)
       }
 
       // Assemble the agent's reply. If Gemini sent text, use it; if there
