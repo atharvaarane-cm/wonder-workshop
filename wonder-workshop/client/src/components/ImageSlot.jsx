@@ -466,7 +466,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         // version lands, the slot expands to its real size.
         if (slimWhenEmpty && !activeImage) {
           const { aspectRatio, height, maxHeight, ...rest } = style || {}
-          return { ...rest, height: 100 }
+          return { ...rest, height: 66 }
         }
         if (style?.height || style?.aspectRatio) return style
         const r = ratio || project?.ratio || '16:9'
