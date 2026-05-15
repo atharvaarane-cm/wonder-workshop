@@ -1208,7 +1208,38 @@ textarea { font-family: var(--font); resize: none; }
   font-size: 10px; font-weight: 700; text-transform: uppercase;
   color: #46a4ff;
 }
-.cd-feature-meta-val { font-size: 24px; font-weight: 400; color: #cce7ff; }
+.cd-feature-meta-val {
+  font-size: 24px; font-weight: 400; color: #cce7ff;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+/* Thin light-blue dividers between the items inside the blue strip. */
+.cd-feature-sep {
+  width: 1px; align-self: stretch;
+  background: rgba(204,231,255,0.4);
+}
+/* ASPECT RATIO is a dropdown — button reset + chevron + menu. */
+.cd-ratio-wrap { position: relative; }
+.cd-ratio-btn {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: inherit; font-family: var(--font);
+}
+.cd-ratio-chevron { opacity: 0.85; }
+.cd-ratio-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 200;
+  display: flex; flex-direction: column; min-width: 96px; padding: 4px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 9px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+}
+.cd-ratio-item {
+  text-align: left; padding: 7px 11px; border-radius: 6px;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font); font-size: 12px; font-weight: 700;
+  color: var(--text); letter-spacing: 0.04em;
+  transition: background 0.1s;
+}
+.cd-ratio-item:hover { background: rgba(255,255,255,0.07); }
+.cd-ratio-item.active { background: #006dd4; color: #fff; }
+.cd-ratio-item.active:hover { background: #006dd4; }
 .cd-body { padding: 40px 43px; }
 .cd-body .cd-desc { font-size: 14px; color: #e2e2e2; line-height: 1.6; margin: 0; }
 .cd-header-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
@@ -2367,6 +2398,39 @@ textarea { font-family: var(--font); resize: none; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all;
 }
 [data-theme="dark"] .genlog-btn:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
+
+/* ── Confirm modal (aspect-ratio change → regenerate all, etc.) ── */
+.ww-confirm-backdrop {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center; padding: 32px;
+  animation: slot-shimmer-fade 0.14s ease-out;
+}
+.ww-confirm-modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  width: 100%; max-width: 440px; padding: 22px 24px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+}
+.ww-confirm-eyebrow {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+}
+.ww-confirm-title { font-size: 18px; font-weight: 600; color: var(--text); margin: 0 0 10px; line-height: 1.25; }
+.ww-confirm-body { font-size: 13px; color: var(--muted); line-height: 1.55; margin: 0 0 18px; }
+.ww-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.ww-confirm-cancel,
+.ww-confirm-primary {
+  font-size: 12.5px; font-weight: 600; font-family: var(--font);
+  padding: 0 14px; height: 34px; border-radius: 8px; cursor: pointer;
+}
+.ww-confirm-cancel {
+  background: none; color: var(--text); border: 1px solid var(--border-md);
+}
+.ww-confirm-cancel:hover { background: rgba(255,255,255,0.06); }
+.ww-confirm-primary {
+  background: #006dd4; color: #fff; border: 1px solid #006dd4;
+}
+.ww-confirm-primary:hover { background: #0080f0; border-color: #0080f0; }
 
 /* ── Mobile overrides (must come after all base rules) ─────────── */
 @media (max-width: 640px) {

@@ -1,32 +1,80 @@
+import { useEffect, useRef, useState } from 'react'
 import EditableText from '../EditableText.jsx'
+
+const RATIO_OPTIONS = ['16:9', '9:16', '1:1', '4:5', '4:3', '2:1']
 
 // Matches the Wonder Workshop Figma mockup: a thin BLUE header bar
 // containing the "Creative" label + DURATION + ASPECT RATIO inline,
-// then a single-column dark body with just the prose description.
-// Other fields (keyMessage / toneKeywords / format / shots / location)
-// remain in the brief data — they're surfaced elsewhere (topbar
-// production strip, aspect-ratio dropdown) so the CD card itself stays
-// minimal per the mockup.
-export default function CreativeDirection({ data, update }) {
-  const ratio = data.format || data.aspectRatio || '16:9'
+// separated by thin light-blue vertical dividers. ASPECT RATIO is a
+// dropdown — picking a new ratio fires onAspectRatioChange so the
+// board can prompt the user about regenerating existing images.
+export default function CreativeDirection({ data, update, currentRatio, onAspectRatioChange }) {
+  const ratio = currentRatio || data.format || data.aspectRatio || '16:9'
+  const [menuOpen, setMenuOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDocClick(e) {
+      if (wrapRef.current?.contains(e.target)) return
+      setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [menuOpen])
+
+  function pickRatio(r) {
+    setMenuOpen(false)
+    if (r === ratio) return
+    onAspectRatioChange?.(r)
+  }
 
   return (
     <div className="cd-wrap">
 
       {/* Blue header strip — "Creative" label on the left,
-          metadata pills on the right. */}
+          dividers + DURATION + ASPECT RATIO (dropdown) on the right. */}
       <div className="cd-feature-bar">
         <span className="cd-feature-label">Creative</span>
         <div className="cd-feature-meta">
           {data.duration && (
-            <div className="cd-feature-meta-item">
-              <span className="cd-feature-meta-label">DURATION</span>
-              <span className="cd-feature-meta-val">{data.duration}</span>
-            </div>
+            <>
+              <span className="cd-feature-sep" aria-hidden="true" />
+              <div className="cd-feature-meta-item">
+                <span className="cd-feature-meta-label">DURATION</span>
+                <span className="cd-feature-meta-val">{data.duration}</span>
+              </div>
+            </>
           )}
-          <div className="cd-feature-meta-item">
-            <span className="cd-feature-meta-label">ASPECT RATIO</span>
-            <span className="cd-feature-meta-val">{ratio}</span>
+          <span className="cd-feature-sep" aria-hidden="true" />
+          <div className="cd-ratio-wrap" ref={wrapRef}>
+            <button
+              type="button"
+              className="cd-feature-meta-item cd-ratio-btn"
+              onClick={() => setMenuOpen(o => !o)}
+              title="Change aspect ratio"
+            >
+              <span className="cd-feature-meta-label">ASPECT RATIO</span>
+              <span className="cd-feature-meta-val">
+                {ratio}
+                <svg className="cd-ratio-chevron" width="11" height="11" viewBox="0 0 12 12" fill="none">
+                  <path d="M2.5 4.5l3.5 3.5 3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </span>
+            </button>
+            {menuOpen && (
+              <div className="cd-ratio-menu" onClick={e => e.stopPropagation()}>
+                {RATIO_OPTIONS.map(r => (
+                  <button
+                    key={r}
+                    className={`cd-ratio-item${r === ratio ? ' active' : ''}`}
+                    onClick={() => pickRatio(r)}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -76,6 +76,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [onePagerOpen, setOnePagerOpen] = useState(false)
   const [genLogOpen, setGenLogOpen] = useState(false)
   const [ratioMenuOpen, setRatioMenuOpen] = useState(false)
+  const [pendingRatio, setPendingRatio] = useState(null)
   const [agentPanelOpen, setAgentPanelOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -202,6 +203,19 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: `${label} deleted` } }))
   }
 
+  // Aspect-ratio change from the Creative-section dropdown. Updates the
+  // ratio immediately, then surfaces a confirmation asking whether to
+  // regenerate every existing image to match the new ratio.
+  function handleAspectRatioChange(newRatio) {
+    update('generationSettings.ratio', newRatio)
+    setPendingRatio(newRatio)
+  }
+  function confirmRegenerateAll() {
+    window.dispatchEvent(new CustomEvent('ww-regenerate-all'))
+    window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: 'Regenerating all images at the new ratio…' } }))
+    setPendingRatio(null)
+  }
+
   // Chat-driven regeneration: AgentPanel calls this when the model returns
   // a regenerate_active_image function call. We just rebroadcast as a
   // window event that the targeted ImageSlot is already listening for.
@@ -249,7 +263,12 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
 
   function renderContent(id) {
     switch (id) {
-      case 'cd':  return <CreativeDirection data={brief.creativeDirection} update={update} onGoToShotList={() => scrollToRow(6)} />
+      case 'cd':  return <CreativeDirection
+                            data={brief.creativeDirection}
+                            update={update}
+                            currentRatio={brief.generationSettings?.ratio || brief.creativeDirection?.format || '16:9'}
+                            onAspectRatioChange={handleAspectRatioChange}
+                          />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'mb':  return <MoodBoard data={brief.creativeDirection} />
       case 'loc': return <LocationsSetDesign data={brief.environment} update={update} />
@@ -573,6 +592,26 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       )}
       {genLogOpen && (
         <GenerationLogModal onClose={() => setGenLogOpen(false)} />
+      )}
+      {pendingRatio && (
+        <div className="ww-confirm-backdrop" onClick={() => setPendingRatio(null)}>
+          <div className="ww-confirm-modal" onClick={e => e.stopPropagation()}>
+            <div className="ww-confirm-eyebrow">Aspect ratio changed</div>
+            <h3 className="ww-confirm-title">Regenerate all images at {pendingRatio}?</h3>
+            <p className="ww-confirm-body">
+              Existing images keep their original ratio and fit into the new shape by cropping.
+              Regenerating remakes every image at the new {pendingRatio} dimensions.
+            </p>
+            <div className="ww-confirm-actions">
+              <button className="ww-confirm-cancel" onClick={() => setPendingRatio(null)}>
+                Keep current images
+              </button>
+              <button className="ww-confirm-primary" onClick={confirmRegenerateAll}>
+                Regenerate all
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
