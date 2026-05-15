@@ -16,8 +16,11 @@ function escapeRe(s) {
 
 export function getMentionHandles(brief) {
   const handles = []
-  const character = brief?.character
-  if (character?.name) {
+  // Primary character (brief.character) + any additional characters
+  // (brief.characters[]). Each named character becomes a @handle.
+  const allCharacters = [brief?.character, ...(brief?.characters || [])]
+    .filter(c => c?.name)
+  for (const character of allCharacters) {
     const parts = []
     if (character.description) parts.push(character.description)
     if (character.wardrobe) parts.push(character.wardrobe)

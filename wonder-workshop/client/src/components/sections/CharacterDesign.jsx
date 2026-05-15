@@ -38,15 +38,12 @@ const VIEWS = [
 ]
 
 function closeupPrompt(data, view) {
-  return `${data.description}, ${data.wardrobe}, close-up portrait, head and shoulders, ${view.closeup}, sharp face detail, studio lighting, clean white background, headshot`
+  return `${data?.description || ''}, ${data?.wardrobe || ''}, close-up portrait, head and shoulders, ${view.closeup}, sharp face detail, studio lighting, clean white background, headshot`
 }
 function fullbodyPrompt(data, view) {
-  return `${data.description}, ${data.wardrobe}, ${view.fullbody}, full body shot head to toe, white studio background, professional photography, character reference sheet`
+  return `${data?.description || ''}, ${data?.wardrobe || ''}, ${view.fullbody}, full body shot head to toe, white studio background, professional photography, character reference sheet`
 }
 function referencePrompt(data) {
-  // The reference image — frontal close-up so it doubles as the "main"
-  // face shot. Same prompt the FRONT headshot uses so versions show up
-  // consistently in the variant thumbnails below.
   return `${data?.description || ''}, ${data?.wardrobe || ''}, close-up portrait, head and shoulders, facing directly forward, front view, full face visible, sharp face detail, studio lighting, clean white background, headshot`
 }
 
@@ -80,12 +77,28 @@ function ReferenceThumbs({ slotKey }) {
   )
 }
 
-export default function CharacterDesign({ data, update }) {
-  const seed = hashStr((data?.description || '') + (data?.wardrobe || ''))
-  const refPrompt = referencePrompt(data)
+// One character entity: REFERENCE + NAME + DESCRIPTION on top, then
+// Headshots and Full Body 4-grids below. Used both for the primary
+// character (brief.character) and any additional characters
+// (brief.characters[i]) — the parent passes a setField callback that
+// knows how to write back to the correct path.
+function CharacterBlock({ character, setField, onRemove, label }) {
+  const seed = hashStr((character?.description || '') + (character?.wardrobe || ''))
+  const refPrompt = referencePrompt(character)
 
   return (
-    <div className="character-design">
+    <div className="character-block">
+      {onRemove && (
+        <div className="character-block-header">
+          <span className="character-block-label">{label}</span>
+          <button className="character-block-remove" onClick={onRemove} title="Remove this character">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Bio: reference image on the left, NAME + DESCRIPTION on the right. */}
       <div className="character-bio">
         <div className="character-bio-reference">
@@ -95,7 +108,7 @@ export default function CharacterDesign({ data, update }) {
             ratio="1:1"
             seed={seed}
             prompt={refPrompt}
-            style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10 }}
+            style={{ width: '100%', aspectRatio: '1/1', borderRadius: 7 }}
           />
           <ReferenceThumbs slotKey={refPrompt} />
         </div>
@@ -105,16 +118,16 @@ export default function CharacterDesign({ data, update }) {
           <EditableText
             tag="p"
             className="character-bio-name"
-            value={data?.name}
-            onChange={v => update('character.name', v)}
+            value={character?.name}
+            onChange={v => setField('name', v)}
             placeholder="Character name…"
           />
           <div className="character-bio-label character-bio-label-desc">DESCRIPTION</div>
           <EditableText
             tag="p"
             className="character-bio-description"
-            value={data?.description}
-            onChange={v => update('character.description', v)}
+            value={character?.description}
+            onChange={v => setField('description', v)}
             placeholder="Character description…"
           />
         </div>
@@ -130,7 +143,7 @@ export default function CharacterDesign({ data, update }) {
                 label={v.label}
                 seed={seed}
                 ratio="3:4"
-                prompt={closeupPrompt(data || {}, v)}
+                prompt={closeupPrompt(character || {}, v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
               <div className="character-view-caption">{v.label}</div>
@@ -149,7 +162,7 @@ export default function CharacterDesign({ data, update }) {
                 label={v.label}
                 seed={seed}
                 ratio="3:4"
-                prompt={fullbodyPrompt(data || {}, v)}
+                prompt={fullbodyPrompt(character || {}, v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
               <div className="character-view-caption">{v.label}</div>
@@ -157,6 +170,45 @@ export default function CharacterDesign({ data, update }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+export default function CharacterDesign({
+  primaryCharacter,
+  additionalCharacters,
+  update,
+  addCharacter,
+  updateCharacterAt,
+  removeCharacterAt,
+}) {
+  return (
+    <div className="character-design">
+      {/* Primary character — backed by brief.character (the original
+          single-character schema). */}
+      <CharacterBlock
+        character={primaryCharacter}
+        setField={(field, value) => update(`character.${field}`, value)}
+      />
+
+      {/* Additional characters — backed by brief.characters[i]. */}
+      {(additionalCharacters || []).map((c, idx) => (
+        <CharacterBlock
+          key={idx}
+          character={c}
+          label={c?.name ? `Character — ${c.name}` : `Character ${idx + 2}`}
+          setField={(field, value) => updateCharacterAt?.(idx, field, value)}
+          onRemove={() => removeCharacterAt?.(idx)}
+        />
+      ))}
+
+      {/* Add-character footer bar — same style as other section add bars. */}
+      <button className="char-add-row" onClick={addCharacter} type="button">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+        </svg>
+        <span>Add character</span>
+      </button>
     </div>
   )
 }

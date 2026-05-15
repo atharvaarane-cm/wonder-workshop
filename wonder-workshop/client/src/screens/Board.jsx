@@ -203,6 +203,30 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: `${label} deleted` } }))
   }
 
+  // Multi-character helpers. brief.character stays as the primary
+  // character (backward compat); additional characters live in
+  // brief.characters[] so existing single-character briefs keep working.
+  function addCharacter() {
+    setBrief(prev => ({
+      ...prev,
+      characters: [...(prev.characters || []), { name: '', description: '', wardrobe: '' }],
+    }))
+  }
+  function updateCharacterAt(idx, field, value) {
+    setBrief(prev => {
+      const list = [...(prev.characters || [])]
+      if (!list[idx]) return prev
+      list[idx] = { ...list[idx], [field]: value }
+      return { ...prev, characters: list }
+    })
+  }
+  function removeCharacterAt(idx) {
+    setBrief(prev => {
+      const list = (prev.characters || []).filter((_, i) => i !== idx)
+      return { ...prev, characters: list }
+    })
+  }
+
   // Aspect-ratio change from the Creative-section dropdown. Updates the
   // ratio immediately, then surfaces a confirmation asking whether to
   // regenerate every existing image to match the new ratio.
@@ -273,7 +297,14 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       case 'mb':  return <MoodBoard data={brief.creativeDirection} />
       case 'loc': return <LocationsSetDesign data={brief.environment} update={update} />
       case 'cp':   return <ClothingProps brief={brief} update={update} />
-      case 'char': return <CharacterDesign data={brief.character} update={update} />
+      case 'char': return <CharacterDesign
+                            primaryCharacter={brief.character}
+                            additionalCharacters={brief.characters || []}
+                            update={update}
+                            addCharacter={addCharacter}
+                            updateCharacterAt={updateCharacterAt}
+                            removeCharacterAt={removeCharacterAt}
+                          />
       case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} addShot={addShot} removeShot={removeShot} brief={brief} />
       default:    return null
     }
