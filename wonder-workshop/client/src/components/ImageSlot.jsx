@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react'
-import { ProjectContext } from '../hooks/useProject.js'
+import { ProjectContext, appendImageVersion } from '../hooks/useProject.js'
 import { enqueue } from '../utils/generationQueue.js'
 import { logGeneration } from '../utils/generationLog.js'
 import MentionInput from './MentionInput.jsx'
@@ -223,6 +223,13 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     setQueued(true)
     setError(null)
 
+    // Capture identifiers up-front so the task can persist its result
+    // even if the user navigates away and the component unmounts before
+    // the queue catches up. The queue lives in module memory and keeps
+    // running; appendImageVersion writes to localStorage directly.
+    const persistProjectId = project?.id
+    const persistSlotKey = slotKey || text
+
     await enqueue(async () => {
       setQueued(false)
       bumpLoading(+1)
@@ -303,6 +310,12 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
           source: 'generated',
           createdAt: new Date().toISOString(),
         }
+        // Persist FIRST (synchronous localStorage write) so the result
+        // is durable even if the component is already unmounted — the
+        // setVersions below is a no-op in that case. When mounted, the
+        // existing save-on-state-change useEffect also runs; both writes
+        // are idempotent (saveImage replaces the full slot).
+        appendImageVersion(persistProjectId, persistSlotKey, next)
         setVersions(prev => {
           const updated = [...prev, next]
           setActiveVersion(updated.length - 1)

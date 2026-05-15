@@ -165,6 +165,32 @@ export function saveImageForProject(id, slotKey, data) {
   return all[id]
 }
 
+// Append a freshly-generated version directly to a project's slot in
+// localStorage. Called from the generation queue task so completed
+// images persist even if the user navigated away from the Board
+// before the queue caught up (the component is gone, but the queue
+// keeps running module-side).
+export function appendImageVersion(id, slotKey, version) {
+  if (!id || !slotKey || !version) return null
+  const all = loadAll()
+  if (!all[id]) return null
+  const existing = all[id].images?.[slotKey] || { versions: [], activeVersion: 0 }
+  const nextVersions = [...(existing.versions || []), version]
+  all[id] = {
+    ...all[id],
+    images: {
+      ...all[id].images,
+      [slotKey]: {
+        versions: nextVersions,
+        activeVersion: nextVersions.length - 1,
+      },
+    },
+    updatedAt: Date.now(),
+  }
+  saveAll(all)
+  return all[id]
+}
+
 // Move a generated version from one slot to another. The version is removed
 // from the source slot's versions array and appended to the target slot's,
 // becoming the target's new active version. Versions are identified by
