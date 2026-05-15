@@ -1548,6 +1548,39 @@ textarea { font-family: var(--font); resize: none; }
 /* Info below */
 .shot-info { display: flex; flex-direction: column; gap: 5px; padding: 0 2px; }
 .shot-desc { font-size: 12px; color: var(--text); line-height: 1.45; margin: 0; }
+
+/* Click-to-edit shot description. Idle: tokens with colored, clickable
+   @handle pills that jump to the referenced section. Edit: swap in
+   MentionInput (handled by ShotDescription in ShotList.jsx). */
+.shot-desc-wrap { position: relative; }
+.shot-desc-display {
+  font-size: 12px; line-height: 1.5; color: var(--text);
+  min-height: 24px; padding: 6px 8px; border-radius: 6px;
+  cursor: text; white-space: pre-wrap; word-break: break-word;
+  transition: background 0.12s;
+}
+.shot-desc-display:hover { background: rgba(255,255,255,0.04); }
+.shot-desc-display.empty {
+  color: rgba(255,255,255,0.32); font-style: italic;
+}
+.shot-mention {
+  display: inline; padding: 1px 6px; border-radius: 4px;
+  border: none; cursor: pointer; font-weight: 600;
+  font-family: var(--font); font-size: inherit; line-height: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.shot-mention-character {
+  background: rgba(124,92,252,0.2); color: #B59CFF;
+}
+.shot-mention-character:hover { background: rgba(124,92,252,0.34); color: #D1C2FF; }
+.shot-mention-location {
+  background: rgba(34,160,90,0.22); color: #6FD9A4;
+}
+.shot-mention-location:hover { background: rgba(34,160,90,0.36); color: #97E9C0; }
+.shot-mention-product {
+  background: rgba(224,153,65,0.22); color: #F5C18B;
+}
+.shot-mention-product:hover { background: rgba(224,153,65,0.36); color: #F8D6B2; }
 /* Transparency note — shown when @mentions in a shot description get
    expanded before being sent to the generator. Hover for the full text. */
 .shot-expanded-note {
