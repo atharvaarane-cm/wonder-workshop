@@ -1203,13 +1203,8 @@ textarea { font-family: var(--font); resize: none; }
   color: #46a4ff;
 }
 .cd-feature-meta-val { font-size: 24px; font-weight: 400; color: #cce7ff; }
-.cd-body { padding: 20px 24px 22px; }
-.cd-body .cd-key-message {
-  font-size: 14px; font-style: italic; color: var(--text); line-height: 1.55;
-  margin: 0 0 12px; font-family: var(--font);
-}
-.cd-body .cd-desc { font-size: 14px; color: var(--text); line-height: 1.6; margin: 0; }
-.cd-body .cd-tone-row { margin-top: 12px; }
+.cd-body { padding: 40px 43px; }
+.cd-body .cd-desc { font-size: 14px; color: #e2e2e2; line-height: 1.6; margin: 0; }
 .cd-header-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .cd-brand { font-size: 22px; font-weight: 700; font-family: var(--font); margin: 0; color: var(--text); }
 .cd-eyebrow {
