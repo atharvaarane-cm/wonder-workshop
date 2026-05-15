@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../utils/characterPrompts.js'
 import { expandMentions } from '../utils/mentions.js'
+import { exportPptx } from '../utils/pptxExport.js'
 
 // Resolve a generated image for a given slotKey (= the exact prompt
 // string the corresponding ImageSlot used). Returns the active version's
@@ -117,6 +118,22 @@ export default function OnePager({ brief, images = {}, onClose }) {
     ...((brief?.characters) || []),
   ].filter(Boolean)
 
+  const [exportingPptx, setExportingPptx] = useState(false)
+
+  async function handleExportPptx() {
+    if (exportingPptx) return
+    setExportingPptx(true)
+    try {
+      await exportPptx(brief, images)
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('ww-toast', {
+        detail: { type: 'error', msg: 'Slides export failed' },
+      }))
+    } finally {
+      setExportingPptx(false)
+    }
+  }
+
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -131,6 +148,14 @@ export default function OnePager({ brief, images = {}, onClose }) {
         <div className="onepager-toolbar no-print">
           <span className="onepager-toolbar-title">One Pager Preview</span>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button className="onepager-print-btn" onClick={handleExportPptx} disabled={exportingPptx}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M2 6h12" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M5 9l2 2 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {exportingPptx ? 'Exporting…' : 'Save as Slides (.pptx)'}
+            </button>
             <button className="onepager-print-btn" onClick={() => window.print()}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <rect x="3" y="5" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
