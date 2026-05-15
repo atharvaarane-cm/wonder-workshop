@@ -149,6 +149,9 @@ function injectMentionHandles(brief) {
   if (!brief || !Array.isArray(brief.shotList)) return brief
   const names = []
   if (brief.character?.name) names.push(brief.character.name)
+  for (const c of brief.characters || []) {
+    if (c?.name) names.push(c.name)
+  }
   if (brief.environment?.heroName) names.push(brief.environment.heroName)
   for (const p of brief.productElements || []) {
     if (p?.name) names.push(p.name)
