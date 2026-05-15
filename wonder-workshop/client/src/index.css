@@ -2143,6 +2143,25 @@ textarea { font-family: var(--font); resize: none; }
 .section-collapse-btn.collapsed svg { transform: rotate(-90deg); }
 .section-collapse-btn:hover { background: var(--bg); color: var(--text); }
 .section-card.collapsed .section-header { border-bottom: none; }
+
+/* Section delete — two-click: a quiet trash icon that arms into a red
+   "Delete?" confirm. Only rendered for sections that pass onDelete
+   (Character, Locations). */
+.section-delete-btn {
+  height: 22px; min-width: 22px; padding: 0 5px; border-radius: 6px;
+  border: 1px solid var(--border); background: none; color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+  font-family: var(--font); font-size: 11px; font-weight: 700;
+}
+.section-delete-btn:hover { background: rgba(224,65,65,0.1); color: #E04141; border-color: rgba(224,65,65,0.4); }
+.section-delete-btn.confirm {
+  background: #E04141; color: #fff; border-color: #E04141;
+  padding: 0 9px; letter-spacing: 0.02em;
+}
+.section-delete-btn.confirm:hover { background: #c93636; }
+[data-theme="dark"] .section-delete-btn { border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.45); }
+[data-theme="dark"] .section-delete-btn:hover { background: rgba(224,65,65,0.16); color: #ff6b6b; border-color: rgba(224,65,65,0.5); }
 /* Hide the section-header's border-bottom when a feature bar (like the
    Creative section's blue strip) sits flush below it — avoids the
    visible double-line seam. */
