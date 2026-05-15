@@ -28,7 +28,7 @@ const RATIO_CSS = {
   '2:1':  '2/1',
 }
 
-export default function ImageSlot({ label, prompt, style, className, seed, ratio }) {
+export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false }) {
   const project = useContext(ProjectContext)
   const slotKey = prompt || null
   const initial = slotKey && project?.images?.[slotKey]
@@ -461,6 +461,13 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       ref={slotRef}
       className={`img-slot${isActive ? ' active' : ''}${dropActive ? ' drop-target' : ''} ${className || ''}`}
       style={(() => {
+        // Optional sections (Mood Board / Locations / Elements) stay slim
+        // and collapsed-looking until an image exists — per Ravi. Once a
+        // version lands, the slot expands to its real size.
+        if (slimWhenEmpty && !activeImage) {
+          const { aspectRatio, height, maxHeight, ...rest } = style || {}
+          return { ...rest, height: 100 }
+        }
         if (style?.height || style?.aspectRatio) return style
         const r = ratio || project?.ratio || '16:9'
         const css = RATIO_CSS[r] || '16/9'
