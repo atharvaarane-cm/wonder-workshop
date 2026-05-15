@@ -1068,21 +1068,18 @@ textarea { font-family: var(--font); resize: none; }
 }
 [data-theme="dark"] .board-hero-title { color: #d4d4d4; }
 
-/* AUTO-GENERATE pill in the section header */
+/* AUTO-GENERATE pill in the section header — Figma exact: #292929 bg,
+   #434343 border, 33px tall, 46px radius, 10px Bold uppercase white. */
 .section-autogen-btn {
-  display: flex; align-items: center; gap: 5px;
-  padding: 4px 10px; border-radius: 999px;
-  border: 1px solid var(--border-md); background: transparent;
-  color: var(--muted); font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 14px; height: 33px; border-radius: 46px;
+  border: 1px solid #434343; background: #292929;
+  color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase;
   cursor: pointer; font-family: var(--font); flex-shrink: 0;
-  transition: all 0.12s;
+  transition: background 0.12s, border-color 0.12s;
 }
-.section-autogen-btn:hover {
-  background: #7C5CFC; color: #fff; border-color: #7C5CFC;
-}
+.section-autogen-btn:hover { background: #353535; border-color: #525252; }
 .section-autogen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-[data-theme="dark"] .section-autogen-btn { border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.55); }
-[data-theme="dark"] .section-autogen-btn:hover { background: #9B7DFF; border-color: #9B7DFF; color: #fff; }
 
 /* Project-info row hidden by default — not in the Figma mockup. Fields
    (Project Name / Job Number / Client Name / Brand / Campaign) still
@@ -1132,7 +1129,7 @@ textarea { font-family: var(--font); resize: none; }
 }
 .section-card:hover { border-color: var(--border-md); }
 .section-card.active { border-color: rgba(0,0,0,0.18); box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
-.section-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.section-header { display: flex; align-items: center; gap: 10px; padding: 22px 16px 22px 43px; border-bottom: 1px solid var(--border); }
 .section-num {
   width: 24px; height: 24px; border-radius: 7px; background: rgba(0,0,0,0.07);
   font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
@@ -1164,7 +1161,7 @@ textarea { font-family: var(--font); resize: none; }
   color: var(--green); font-size: 10px; font-weight: 800; letter-spacing: 0.03em;
   flex-shrink: 0;
 }
-.section-body { padding: 18px; min-height: 80px; }
+.section-body { padding: 40px 43px; min-height: 80px; }
 
 /* ── Shimmer skeleton ──────────────────────────────────────────── */
 @keyframes shimmer {
@@ -1316,8 +1313,8 @@ textarea { font-family: var(--font); resize: none; }
 .character-views.character-views-4 { grid-template-columns: repeat(4, 1fr); }
 .character-view { display: flex; flex-direction: column; gap: 6px; }
 .character-view-caption {
-  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--muted);
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  color: #717171;
 }
 .character-icon { font-size: 36px; opacity: 0.15; margin-bottom: 4px; }
 .character-wardrobe { font-size: 12px; color: var(--muted); line-height: 1.5; }
@@ -1402,16 +1399,16 @@ textarea { font-family: var(--font); resize: none; }
 /* Headshots / Full Body — proper sentence-case headings, not tiny
    uppercase labels. Both groups share this so they line up exactly. */
 .character-views-label {
-  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
-  color: var(--text); margin: 0;
+  font-size: 24px; font-weight: 400; letter-spacing: -0.01em;
+  color: #fff; margin: 0;
 }
 .character-bio-label-desc { margin-top: 12px; }
 .character-bio-name {
-  font-size: 22px; font-weight: 700; line-height: 1.2; color: var(--text); margin: 0;
+  font-size: 24px; font-weight: 400; line-height: 1.2; color: #fff; margin: 0;
   font-family: var(--font);
 }
 .character-bio-description {
-  font-size: 13px; color: var(--text); line-height: 1.6; margin: 0;
+  font-size: 12px; color: #fff; line-height: 1.5; margin: 0;
 }
 
 /* Reference variant thumbnails — small clickable thumbs beneath the main
@@ -1815,10 +1812,10 @@ textarea { font-family: var(--font); resize: none; }
 .img-hover-nav {
   position: absolute; top: 8px; left: 50%;
   transform: translateX(-50%) translateY(-4px);
-  z-index: 6; display: flex; align-items: center; gap: 1px;
-  padding: 4px; border-radius: 999px;
-  background: #2F6BFF;
-  box-shadow: 0 8px 22px rgba(0,0,0,0.32);
+  z-index: 6; display: flex; align-items: center; gap: 2px;
+  padding: 6px; height: 48px; border-radius: 37px;
+  background: #006dd4; border: 1px solid #43a3fd;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
   opacity: 0; pointer-events: none;
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
@@ -1828,7 +1825,7 @@ textarea { font-family: var(--font); resize: none; }
   transform: translateX(-50%) translateY(0);
 }
 .ihn-btn {
-  width: 27px; height: 27px; flex-shrink: 0;
+  width: 28px; height: 28px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: #fff; cursor: pointer;
   border-radius: 999px; transition: background 0.12s;
@@ -1837,14 +1834,14 @@ textarea { font-family: var(--font); resize: none; }
 .ihn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ihn-btn-danger:hover:not(:disabled) { background: rgba(255,86,86,0.92); }
 .ihn-edit {
-  display: flex; align-items: center; gap: 5px; height: 27px;
-  padding: 0 11px; border-radius: 999px; border: none;
-  background: rgba(255,255,255,0.16); color: #fff; cursor: pointer;
-  font-family: var(--font); font-size: 11.5px; white-space: nowrap;
-  transition: background 0.12s;
+  display: flex; align-items: center; gap: 6px; height: 29px;
+  padding: 0 12px; border-radius: 32px;
+  background: #00509a; border: 1px solid #43a3fd; color: #fff; cursor: pointer;
+  font-family: var(--font); font-size: 12px; font-weight: 400; line-height: 1.25;
+  white-space: nowrap; transition: background 0.12s;
 }
-.ihn-edit:hover { background: rgba(255,255,255,0.3); }
-.ihn-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.28); margin: 0 3px; flex-shrink: 0; }
+.ihn-edit:hover { background: #0064bd; }
+.ihn-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.28); margin: 0 3px; flex-shrink: 0; }
 
 /* Fast custom tooltips for the hover-nav — native `title` has a ~1s
    browser delay; this shows almost immediately. Sits below the button
@@ -2290,7 +2287,7 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .board-nav-dots { background: rgba(30,30,30,0.92); border-color: rgba(255,255,255,0.08); }
 [data-theme="dark"] .board-dot { background: rgba(255,255,255,0.18); }
 [data-theme="dark"] .board-dot.active { background: #E8E8E8; }
-[data-theme="dark"] .section-card { background: #171717; border-color: rgba(255,255,255,0.07); }
+[data-theme="dark"] .section-card { background: #171717; border-color: #272727; }
 [data-theme="dark"] .section-card:hover { border-color: rgba(255,255,255,0.16); }
 [data-theme="dark"] .section-card.active { border-color: rgba(255,255,255,0.28); }
 [data-theme="dark"] .section-header { border-color: rgba(255,255,255,0.07); }

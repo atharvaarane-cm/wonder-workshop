@@ -129,9 +129,9 @@ export default function CharacterDesign({ data, update }) {
               <ImageSlot
                 label={v.label}
                 seed={seed}
-                ratio="4:5"
+                ratio="3:4"
                 prompt={closeupPrompt(data || {}, v)}
-                style={{ width: '100%', aspectRatio: '4/5', borderRadius: 10 }}
+                style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
               <div className="character-view-caption">{v.label}</div>
             </div>
@@ -150,7 +150,7 @@ export default function CharacterDesign({ data, update }) {
                 seed={seed}
                 ratio="3:4"
                 prompt={fullbodyPrompt(data || {}, v)}
-                style={{ width: '100%', aspectRatio: '3/4', borderRadius: 10 }}
+                style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
               <div className="character-view-caption">{v.label}</div>
             </div>
