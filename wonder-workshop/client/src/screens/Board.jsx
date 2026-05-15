@@ -33,11 +33,11 @@ const ROWS = [
 
 const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'mb', 'loc', 'cp', 'char', 'sl'])
 
-// Sections that fire image generation on a "Generate" run. Mood Board,
-// Locations, and Product / Elements are intentionally excluded — per
-// Ravi, those should stay optional and only generate on explicit
-// request, not as part of the auto-generate burst.
-const AUTO_GENERATE_SECTION_IDS = new Set(['cd', 'bi', 'char', 'sl'])
+// Sections that fire image generation on a "Generate" run, in the
+// order they should run. Per Logan: Location first, then Product /
+// Elements, then Character(s), then Storyboard last so it can reference
+// everything generated before it. Mood Board stays excluded (optional).
+const AUTO_GENERATE_ORDER = ['loc', 'cp', 'char', 'sl']
 
 // Aspect ratios the project can switch to post-creation — mirrors the
 // options on the Discover screen's ratio picker.
@@ -109,13 +109,17 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     // Small delay so every ImageSlot has mounted and registered its
     // ww-generate-section listener before we dispatch.
     const t = setTimeout(() => {
-      ROWS.flat()
-        .filter(sec => AUTO_GENERATE_SECTION_IDS.has(sec.id))
-        .forEach(sec => {
-          window.dispatchEvent(new CustomEvent('ww-generate-section', {
-            detail: { sectionTitle: sec.title },
-          }))
-        })
+      // Dispatch in the exact AUTO_GENERATE_ORDER, not section-display
+      // order — so Location enqueues before Product, both before
+      // Character, and Storyboard last (it can reference the rest).
+      const byId = Object.fromEntries(ROWS.flat().map(s => [s.id, s]))
+      for (const id of AUTO_GENERATE_ORDER) {
+        const sec = byId[id]
+        if (!sec) continue
+        window.dispatchEvent(new CustomEvent('ww-generate-section', {
+          detail: { sectionTitle: sec.title },
+        }))
+      }
       onAutoGenerateConsumed?.()
     }, 350)
     return () => clearTimeout(t)
@@ -142,6 +146,18 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [ratioMenuOpen])
+
+  // Click outside any image slot (and not on the agent panel) deselects
+  // the active image — gives users a way to undo a slot selection.
+  useEffect(() => {
+    function onDocClick(e) {
+      if (e.target.closest('.img-slot, .agent-panel, .img-lightbox, .img-prompt-modal, .ww-confirm-modal, .genlog-modal, .topbar')) return
+      setActiveImageTarget(null)
+      window.dispatchEvent(new CustomEvent('ww-active-image-target', { detail: {} }))
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
 
   useEffect(() => {
     function onActiveImage(e) {

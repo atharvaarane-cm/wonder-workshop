@@ -1433,8 +1433,8 @@ textarea { font-family: var(--font); resize: none; }
   font-weight: 500;
 }
 .prod-add {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  aspect-ratio: 1/1; border-radius: 7px;
+  display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px;
+  height: 66px; align-self: start; border-radius: 7px;
   border: 1px solid #282828; background: #1a1a1a;
   color: #717171; font-family: var(--font); font-size: 12px; font-weight: 600;
   cursor: pointer;
@@ -2190,15 +2190,11 @@ textarea { font-family: var(--font); resize: none; }
   border-radius: 9px; border: 1px solid rgba(255,255,255,0.18);
   background: rgba(12,12,12,0.84); backdrop-filter: blur(8px);
 }
-.img-prompt-editor textarea,
-.empty-prompt-editor {
-  min-width: 0; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--card); color: var(--text);
-  font: 11px/1.35 var(--font); padding: 7px; outline: none; resize: none;
-}
 .img-prompt-editor textarea {
-  flex: 1; min-height: 48px;
-  color: #fff; background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2);
+  flex: 1; min-height: 48px; min-width: 0; resize: none; outline: none;
+  border-radius: 8px; padding: 7px;
+  font: 11px/1.35 var(--font);
+  color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
 }
 .img-prompt-editor button {
   padding: 7px 9px; border-radius: 8px; background: #7C5CFC; color: #fff;
@@ -2212,42 +2208,26 @@ textarea { font-family: var(--font); resize: none; }
   align-items: center; justify-content: center; gap: 6px;
   cursor: pointer; position: relative;
 }
-.img-slot-plus {
-  opacity: 0; transition: opacity 0.15s;
-  display: flex; align-items: center; justify-content: center;
-  color: rgba(0,0,0,0.3);
-}
-.img-slot-empty:hover .img-slot-plus { opacity: 1; }
-.img-slot-empty.menu-open .img-slot-plus { opacity: 0; }
-
-/* Sparkle affordance — idle state on empty slots. Fades OUT on hover /
-   when the menu opens, handing the spotlight to the Upload/Generate
-   buttons. */
+/* Centered + icon — the idle affordance on empty slots. Fades out
+   on hover to hand the spotlight to the Upload / Generate buttons. */
 .img-slot-sparkle {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   color: rgba(0,0,0,0.45);
   transition: opacity 0.15s;
 }
-.img-slot-empty:hover .img-slot-sparkle,
-.img-slot-empty.menu-open .img-slot-sparkle { opacity: 0; }
+.img-slot-empty:hover .img-slot-sparkle { opacity: 0; }
 
-/* Upload / Generate buttons — hidden by default, revealed on hover or
-   when the slot menu is open. Zero clicks to see the options. */
+/* Upload / Generate buttons — hidden by default, revealed on hover. */
 .img-slot-actions {
   opacity: 0; transition: opacity 0.15s;
   pointer-events: none;
 }
-.img-slot-empty:hover .img-slot-actions,
-.img-slot-empty.menu-open .img-slot-actions {
+.img-slot-empty:hover .img-slot-actions {
   opacity: 1; pointer-events: auto;
 }
 [data-theme="dark"] .img-slot-sparkle { color: rgba(255,255,255,0.4); }
 .img-slot-error { font-size: 10px; color: rgba(200,60,60,0.8); margin-top: 2px; }
-.empty-prompt-editor {
-  position: absolute; left: 8px; right: 8px; bottom: 8px;
-  min-height: 44px; width: calc(100% - 16px);
-}
 
 /* ── Section collapse ────────────────────────────────────────── */
 .section-collapse-btn {
@@ -2351,8 +2331,6 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .section-collapse-btn { border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.45); }
 [data-theme="dark"] .section-collapse-btn:hover { background: rgba(255,255,255,0.07); color: #E8E8E8; }
 [data-theme="dark"] .skeleton-line { background: linear-gradient(90deg,#2a2a2a 25%,#333 50%,#2a2a2a 75%); background-size: 600px 100%; }
-[data-theme="dark"] .img-slot { background: #232323; border-color: rgba(255,255,255,0.08); }
-[data-theme="dark"] .img-slot-plus { color: rgba(255,255,255,0.3); }
 [data-theme="dark"] .img-slot-label { color: rgba(255,255,255,0.28); }
 [data-theme="dark"] .img-slot-btn { background: #2A2A2A; border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7); }
 [data-theme="dark"] .img-slot-btn:hover,

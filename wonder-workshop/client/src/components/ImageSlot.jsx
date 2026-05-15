@@ -39,7 +39,6 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   const [loading, setLoading] = useState(false)
   const [queued, setQueued] = useState(false)
   const [error, setError] = useState(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [editingPrompt, setEditingPrompt] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -215,7 +214,6 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       return updated
     })
     setError(null)
-    setMenuOpen(false)
   }
 
   async function generate(e, opts = {}) {
@@ -223,7 +221,6 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     const text = (opts.promptOverride ?? editablePrompt).trim()
     if (!text) return
     setQueued(true)
-    setMenuOpen(false)
     setError(null)
 
     await enqueue(async () => {
@@ -595,10 +592,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
               </div>
             )}
           </>
-        : <div
-            className={`img-slot-empty${menuOpen ? ' menu-open' : ''}`}
-            onClick={e => { e.stopPropagation(); if (!loading && !queued) setMenuOpen(o => !o) }}
-          >
+        : <div className="img-slot-empty">
             {/* Simple + icon — the idle affordance per the Figma mockup.
                 Fades out on hover so the Upload / Generate buttons take
                 center stage. */}
@@ -607,9 +601,8 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
                 <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
               </svg>
             </div>
-            {/* Upload / Generate — always in the DOM, revealed on hover
-                (or when the slot menu is open). Zero clicks to see the
-                options; one click to act. */}
+            {/* Upload / Generate — revealed on hover. Zero clicks to see
+                the options; one click to act. */}
             <div className="img-slot-actions" onClick={e => e.stopPropagation()}>
               <button className="img-slot-btn" onClick={e => { e.stopPropagation(); inputRef.current.click() }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -622,16 +615,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
                 </button>
               )}
             </div>
-            {label && !menuOpen && !loading && !queued && <span className="img-slot-label">{label}</span>}
-            {menuOpen && (
-              <textarea
-                className="empty-prompt-editor"
-                value={editablePrompt}
-                onChange={e => setEditablePrompt(e.target.value)}
-                onClick={e => e.stopPropagation()}
-                placeholder="Edit prompt before generating..."
-              />
-            )}
+            {label && !loading && !queued && <span className="img-slot-label">{label}</span>}
             {error && <span className="img-slot-error">{error}</span>}
           </div>
       }
