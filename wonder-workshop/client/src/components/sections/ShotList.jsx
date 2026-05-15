@@ -107,11 +107,36 @@ function ShotDescription({ value, onChange, brief, placeholder, onJumpToHandle }
   )
 }
 
-export default function ShotList({ data, updateShot, addShot, removeShot, brief, onJumpToHandle }) {
+export default function ShotList({ data, updateShot, addShot, removeShot, reorderShots, brief, onJumpToHandle }) {
   // Storyboard frames follow the project's output ratio — a 4:5 project
   // shouldn't show 16:9 shots. CSS aspect-ratio takes "4/5", so swap the colon.
   const ratio = brief?.generationSettings?.ratio || '16:9'
   const aspectCss = ratio.replace(':', '/')
+  const [dragOverIdx, setDragOverIdx] = useState(null)
+
+  function onShotDragStart(e, idx) {
+    e.dataTransfer.setData('application/x-ww-shot-index', String(idx))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  function onShotCellDragOver(e, idx) {
+    if (!e.dataTransfer.types.includes('application/x-ww-shot-index')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverIdx(idx)
+  }
+  function onShotCellDragLeave() {
+    setDragOverIdx(null)
+  }
+  function onShotCellDrop(e, idx) {
+    setDragOverIdx(null)
+    const raw = e.dataTransfer.getData('application/x-ww-shot-index')
+    if (!raw) return
+    const fromIdx = parseInt(raw, 10)
+    if (Number.isNaN(fromIdx) || fromIdx === idx) return
+    e.preventDefault()
+    reorderShots?.(fromIdx, idx)
+  }
+
   return (
     <div className="shot-grid">
       {(data || []).map((shot, i) => {
@@ -124,7 +149,13 @@ export default function ShotList({ data, updateShot, addShot, removeShot, brief,
         // surface that so it's never a silent rewrite.
         const wasExpanded = expandedDescription !== (shot.description || '')
         return (
-        <div className="shot-cell" key={shot.num}>
+        <div
+          className={`shot-cell${dragOverIdx === i ? ' drag-over' : ''}`}
+          key={shot.num}
+          onDragOver={e => onShotCellDragOver(e, i)}
+          onDragLeave={onShotCellDragLeave}
+          onDrop={e => onShotCellDrop(e, i)}
+        >
 
           {/* Image with overlaid badges */}
           <div className="shot-img-wrap" style={{ aspectRatio: aspectCss }}>
@@ -133,7 +164,14 @@ export default function ShotList({ data, updateShot, addShot, removeShot, brief,
               ratio={ratio}
               style={{ width: '100%', height: '100%', borderRadius: 8 }}
             />
-            <span className="shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
+            <span
+              className="shot-badge-num shot-drag-handle"
+              draggable
+              onDragStart={e => onShotDragStart(e, i)}
+              title="Drag to reorder shots"
+            >
+              {String(shot.num).padStart(2, '0')}
+            </span>
             <span className="shot-badge-framing">{shot.framing}</span>
             <button
               className="shot-remove-btn"

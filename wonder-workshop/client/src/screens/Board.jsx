@@ -211,6 +211,19 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       return { ...prev, shotList: list }
     })
   }
+  function reorderShots(fromIdx, toIdx) {
+    setBrief(prev => {
+      const list = [...(prev.shotList || [])]
+      if (fromIdx < 0 || fromIdx >= list.length) return prev
+      if (toIdx < 0 || toIdx >= list.length) return prev
+      if (fromIdx === toIdx) return prev
+      const [moved] = list.splice(fromIdx, 1)
+      list.splice(toIdx, 0, moved)
+      // Renumber so badges stay sequential after the move.
+      const renumbered = list.map((s, idx) => ({ ...s, num: String(idx + 1).padStart(2, '0') }))
+      return { ...prev, shotList: renumbered }
+    })
+  }
   // Clear a whole entity (character / environment) back to empty. Its
   // image slots rebuild from the now-empty data, so the old generated
   // images simply stop being referenced.
@@ -333,7 +346,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                             updateCharacterAt={updateCharacterAt}
                             removeCharacterAt={removeCharacterAt}
                           />
-      case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} addShot={addShot} removeShot={removeShot} brief={brief} onJumpToHandle={jumpToHandle} />
+      case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} addShot={addShot} removeShot={removeShot} reorderShots={reorderShots} brief={brief} onJumpToHandle={jumpToHandle} />
       default:    return null
     }
   }
