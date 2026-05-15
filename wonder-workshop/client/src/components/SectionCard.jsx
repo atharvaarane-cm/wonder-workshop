@@ -40,12 +40,9 @@ export default function SectionCard({ name, loading, children, active, onClick, 
             disabled={imageLoading}
             title="Generate images for every empty slot in this section"
           >
-            {/* Green check-in-circle, per the Figma auto-generate pill. */}
-            <span className="section-autogen-check">
-              <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                <path d="M2.5 6.2l2.4 2.4L9.5 3.8" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </span>
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
+            </svg>
             <span>AUTO-GENERATE</span>
           </button>
         )}
