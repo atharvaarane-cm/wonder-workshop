@@ -106,6 +106,22 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeImage, editablePrompt])
 
+  // "Regenerate all" — fired from the Creative-section aspect-ratio
+  // dropdown when the user confirms they want every existing image
+  // remade at the new ratio. Only slots that already hold an image
+  // (and aren't currently generating) re-queue themselves.
+  useEffect(() => {
+    function onRegenAll() {
+      if (!activeImage) return
+      if (loading || queued) return
+      if (!editablePrompt) return
+      generate(null, { silent: true })
+    }
+    window.addEventListener('ww-regenerate-all', onRegenAll)
+    return () => window.removeEventListener('ww-regenerate-all', onRegenAll)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeImage, editablePrompt, loading, queued])
+
   // Chat panel can swap the active version by clicking a thumbnail.
   // It fires ww-set-active-version with our slotKey + the desired index.
   useEffect(() => {
