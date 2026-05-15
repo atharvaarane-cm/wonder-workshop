@@ -105,6 +105,26 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeImage, editablePrompt])
 
+  // Section-level FORCE regen — unlike ww-generate-section above
+  // (empty-only), this fires for slots that already hold an image.
+  // Used after the agent updates an entity field (character /
+  // environment / productElements) so every view in that section
+  // re-fires with the new field value baked into the prompt.
+  useEffect(() => {
+    function onSectionRegen(e) {
+      const targetSection = e.detail?.sectionTitle
+      if (!targetSection) return
+      if (loading || queued) return
+      if (!editablePrompt) return
+      const sectionEl = slotRef.current?.closest('[data-section-title]')
+      if (sectionEl?.dataset.sectionTitle !== targetSection) return
+      generate(null, { silent: true })
+    }
+    window.addEventListener('ww-regenerate-section', onSectionRegen)
+    return () => window.removeEventListener('ww-regenerate-section', onSectionRegen)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editablePrompt, loading, queued])
+
   // "Regenerate all" — fired from the Creative-section aspect-ratio
   // dropdown when the user confirms they want every existing image
   // remade at the new ratio. Only slots that already hold an image
