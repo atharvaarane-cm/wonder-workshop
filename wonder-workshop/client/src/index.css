@@ -1619,13 +1619,23 @@ textarea { font-family: var(--font); resize: none; }
 
 /* Active section / image header at the top of the chat panel */
 .panel-active-header {
-  flex-shrink: 0;
-  padding: 14px 16px 13px;
+  flex-shrink: 0; position: relative;
+  padding: 14px 44px 13px 16px;
   background: #111;
   color: #fff;
   display: flex; flex-direction: column; gap: 5px;
   animation: slide-up 0.38s cubic-bezier(0.22,1,0.36,1) both;
 }
+.panel-close-btn {
+  position: absolute; top: 12px; right: 12px;
+  width: 24px; height: 24px; border: none; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.14); color: #fff; cursor: pointer;
+  transition: background 0.12s;
+}
+.panel-close-btn:hover { background: rgba(255,255,255,0.26); }
+[data-theme="dark"] .panel-close-btn { background: rgba(0,0,0,0.08); color: #111; }
+[data-theme="dark"] .panel-close-btn:hover { background: rgba(0,0,0,0.16); }
 .panel-active-label {
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
   color: rgba(255,255,255,0.55);

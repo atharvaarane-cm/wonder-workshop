@@ -556,6 +556,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
             brief={brief}
             onUpdate={update}
             onRegenerateImage={regenerateActiveImage}
+            onClose={() => setAgentPanelOpen(false)}
           />
         )}
       </div>

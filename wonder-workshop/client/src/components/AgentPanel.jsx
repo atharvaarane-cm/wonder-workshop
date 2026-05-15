@@ -49,7 +49,7 @@ function describeAction(action) {
   return `Ran ${action.name}`
 }
 
-export default function AgentPanel({ activeSection, activeImageTarget, brief, onUpdate, onRegenerateImage }) {
+export default function AgentPanel({ activeSection, activeImageTarget, brief, onUpdate, onRegenerateImage, onClose }) {
   // Pull version history for whatever image the user has selected on the
   // left. The chat panel becomes a contextual viewer: thumbnails of all
   // generated versions of the active slot, click any thumbnail to swap
@@ -230,6 +230,13 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     <aside className="agent-panel">
       {/* Active section / image header */}
       <div className="panel-active-header" key={activeSection}>
+        {onClose && (
+          <button className="panel-close-btn" onClick={onClose} title="Close panel">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          </button>
+        )}
         <div className="panel-active-label">Talking about</div>
         <div className="panel-active-section">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
