@@ -16,6 +16,9 @@ export default function ShotList({ data, updateShot, addShot, removeShot, brief 
         // If the user hasn't used any @handles, the description is sent as-is.
         const expandedDescription = expandMentions(shot.description, brief)
         const prompt = `${expandedDescription}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`
+        // The generator gets the expanded text, not what the writer typed —
+        // surface that so it's never a silent rewrite.
+        const wasExpanded = expandedDescription !== (shot.description || '')
         return (
         <div className="shot-cell" key={shot.num}>
 
@@ -49,6 +52,18 @@ export default function ShotList({ data, updateShot, addShot, removeShot, brief 
               rows={3}
               placeholder="Describe this shot — use @Sarah or @Sunset Beach to reference named entities…"
             />
+            {wasExpanded && (
+              <div
+                className="shot-expanded-note"
+                title={`Sent to the image generator:\n\n${expandedDescription}`}
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                  <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.1"/>
+                  <path d="M6 5.2v3M6 3.6v.05" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                </svg>
+                <span>@mentions are expanded to full descriptions on generate</span>
+              </div>
+            )}
             <div className="shot-meta-row">
               <EditableText className="shot-cam" value={shot.camera} onChange={v => updateShot(i, 'camera', v)} />
               <EditableText className="shot-dur" value={shot.duration} onChange={v => updateShot(i, 'duration', v)} />
