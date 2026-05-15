@@ -149,6 +149,20 @@ export default function CharacterDesign({
 }) {
   return (
     <div className="character-design">
+      {/* Honest disclaimer about the current image generator. We're on
+          Pollinations (free, no API key), which is pure text-to-image —
+          it invents a new face per generation and can't lock identity
+          across views, and follows pose instructions loosely. */}
+      <div className="section-limitation-note">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.1"/>
+          <path d="M6 5.2v3M6 3.6v.05" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        </svg>
+        <span>
+          <strong>Image-generator limits:</strong> the current (free) generator can't lock a face across views, so each headshot / full-body may show a slightly different person, and poses (SIDE, BACK) are followed loosely. Identity-preserving generation is on the roadmap.
+        </span>
+      </div>
+
       {/* Primary character — backed by brief.character (the original
           single-character schema). */}
       <CharacterBlock

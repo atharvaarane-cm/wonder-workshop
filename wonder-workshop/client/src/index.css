@@ -1370,6 +1370,17 @@ textarea { font-family: var(--font); resize: none; }
 /* Combined Character Design section: bio + Headshots row + Full Body row. */
 .character-design { display: flex; flex-direction: column; gap: 18px; }
 
+/* Lightweight inline disclaimer at the top of a section that's
+   constrained by the current image-generator's limits. */
+.section-limitation-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 10px 12px; border-radius: 7px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; line-height: 1.45;
+}
+.section-limitation-note svg { flex-shrink: 0; margin-top: 2px; opacity: 0.85; }
+.section-limitation-note strong { color: var(--text); font-weight: 600; }
+
 /* Each character entity stacks within the section. Additional
    characters (beyond the first) get a header strip with a label + a
    remove button, separated from the previous block by a divider. */
