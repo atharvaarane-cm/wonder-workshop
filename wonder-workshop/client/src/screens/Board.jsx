@@ -175,6 +175,25 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   function updateShot(i, field, value) {
     setBrief(prev => ({ ...prev, shotList: prev.shotList.map((s, idx) => idx === i ? { ...s, [field]: value } : s) }))
   }
+  function addShot() {
+    setBrief(prev => {
+      const list = prev.shotList || []
+      const newShot = {
+        num: String(list.length + 1).padStart(2, '0'),
+        framing: 'MS', description: '', camera: 'Handheld', duration: '3s',
+      }
+      return { ...prev, shotList: [...list, newShot] }
+    })
+  }
+  function removeShot(i) {
+    setBrief(prev => {
+      // Renumber after removal so the storyboard stays sequential (01, 02, …).
+      const list = (prev.shotList || [])
+        .filter((_, idx) => idx !== i)
+        .map((s, idx) => ({ ...s, num: String(idx + 1).padStart(2, '0') }))
+      return { ...prev, shotList: list }
+    })
+  }
   // Clear a whole entity (character / environment) back to empty. Its
   // image slots rebuild from the now-empty data, so the old generated
   // images simply stop being referenced.
@@ -236,7 +255,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       case 'loc': return <LocationsSetDesign data={brief.environment} update={update} />
       case 'cp':   return <ClothingProps brief={brief} update={update} />
       case 'char': return <CharacterDesign data={brief.character} update={update} />
-      case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} brief={brief} />
+      case 'sl':   return <ShotList data={brief.shotList} updateShot={updateShot} addShot={addShot} removeShot={removeShot} brief={brief} />
       default:    return null
     }
   }

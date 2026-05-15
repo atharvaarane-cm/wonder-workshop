@@ -3,7 +3,7 @@ import ImageSlot from '../ImageSlot.jsx'
 import MentionInput from '../MentionInput.jsx'
 import { expandMentions } from '../../utils/mentions.js'
 
-export default function ShotList({ data, updateShot, brief }) {
+export default function ShotList({ data, updateShot, addShot, removeShot, brief }) {
   // Storyboard frames follow the project's output ratio — a 4:5 project
   // shouldn't show 16:9 shots. CSS aspect-ratio takes "4/5", so swap the colon.
   const ratio = brief?.generationSettings?.ratio || '16:9'
@@ -28,6 +28,15 @@ export default function ShotList({ data, updateShot, brief }) {
             />
             <span className="shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
             <span className="shot-badge-framing">{shot.framing}</span>
+            <button
+              className="shot-remove-btn"
+              onClick={() => removeShot(i)}
+              title="Remove this shot"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+            </button>
           </div>
 
           {/* Info below image */}
@@ -49,6 +58,18 @@ export default function ShotList({ data, updateShot, brief }) {
         </div>
         )
       })}
+      <div className="shot-cell">
+        <button
+          className="shot-add-cell"
+          style={{ aspectRatio: aspectCss }}
+          onClick={addShot}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+          <span>Add shot</span>
+        </button>
+      </div>
     </div>
   )
 }

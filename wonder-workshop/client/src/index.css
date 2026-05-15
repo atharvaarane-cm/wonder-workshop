@@ -1467,6 +1467,32 @@ textarea { font-family: var(--font); resize: none; }
   padding: 2px 8px; border-radius: 20px; backdrop-filter: blur(4px);
   letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none;
 }
+/* Remove-shot — appears top-right of the frame on hover. */
+.shot-remove-btn {
+  position: absolute; top: 6px; right: 6px; z-index: 6;
+  width: 22px; height: 22px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.6); color: #fff; cursor: pointer; border: none;
+  opacity: 0; transition: opacity 0.12s, background 0.12s;
+}
+.shot-cell:hover .shot-remove-btn { opacity: 1; }
+.shot-remove-btn:hover { background: #E04141; }
+
+/* Add-shot tile — matches the frame aspect, sits at the end of the grid. */
+.shot-add-cell {
+  width: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+  border: 1.5px dashed var(--border-md); border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font-family: var(--font); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.shot-add-cell:hover {
+  border-color: #7C5CFC; color: #7C5CFC; background: rgba(124,92,252,0.06);
+}
+[data-theme="dark"] .shot-add-cell:hover {
+  border-color: #9B7DFF; color: #9B7DFF; background: rgba(155,125,255,0.08);
+}
 
 /* Info below */
 .shot-info { display: flex; flex-direction: column; gap: 5px; padding: 0 2px; }
