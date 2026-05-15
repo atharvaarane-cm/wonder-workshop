@@ -1821,12 +1821,15 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Image slots ───────────────────────────────────────────────── */
 .img-slot {
   background: #1a1a1a; border: 1px solid #282828;
-  border-radius: 7px; overflow: hidden; cursor: pointer;
+  border-radius: 7px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: border-color 0.15s, background 0.15s;
   position: relative;
+  /* No overflow:hidden — the hover nav floats above the slot's top edge.
+     The <img> inside carries its own border-radius for rounded corners. */
 }
 .img-slot:hover { border-color: #3a3a3a; }
+.img-slot > img { border-radius: 7px; }
 /* Selected slot — a bright white glow. The static glow distinguishes
    "selected" from the animated shimmer sweep of the *generating* state
    (per Ravi). The glow is painted as an ::after ring ON TOP of the
@@ -1863,13 +1866,16 @@ textarea { font-family: var(--font); resize: none; }
 /* Blue floating hover-nav pill — Ravi's "hover nav" from the Figma
    canvas. Sits just inside the top edge of the image; fades in on
    hover or when the slot is the chat's active target. */
+/* Floats ABOVE the image, outside the slot's top edge, so its action
+   buttons are visible at any image size. The slot itself no longer
+   uses overflow:hidden — see .img-slot — so this clears the top. */
 .img-hover-nav {
-  position: absolute; top: 8px; left: 50%;
-  transform: translateX(-50%) translateY(-4px);
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%) translateY(4px);
   z-index: 6; display: flex; align-items: center; gap: 2px;
   padding: 6px; height: 48px; border-radius: 37px;
   background: #006dd4; border: 1px solid #43a3fd;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.32);
   opacity: 0; pointer-events: none;
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
@@ -1932,6 +1938,14 @@ textarea { font-family: var(--font); resize: none; }
   max-width: 92vw; max-height: 76vh;
   border-radius: 10px; box-shadow: 0 12px 60px rgba(0,0,0,0.5);
   object-fit: contain;
+}
+/* Same blue pill as .img-hover-nav but persistent (no hover gate) in
+   the lightbox — reaches the same .ihn-btn / .ihn-edit children. */
+.img-lightbox-nav {
+  display: flex; align-items: center; gap: 2px;
+  padding: 6px; height: 48px; border-radius: 37px;
+  background: #006dd4; border: 1px solid #43a3fd;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
 }
 .img-lightbox-caption {
   display: flex; flex-direction: column; gap: 4px; max-width: 720px;

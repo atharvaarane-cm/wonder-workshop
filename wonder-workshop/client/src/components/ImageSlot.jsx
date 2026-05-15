@@ -635,6 +635,30 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     {lightboxOpen && activeImage && (
       <div className="img-lightbox" onClick={() => setLightboxOpen(false)}>
         <div className="img-lightbox-content" onClick={e => e.stopPropagation()}>
+          {/* Same blue pill of options above the image, persistent in the
+              lightbox so they're reachable while inspecting fullsize. */}
+          <div className="img-lightbox-nav">
+            <button className="ihn-btn" onClick={downloadImage} data-tip="Download">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+            <button className="ihn-btn" onClick={e => { e.stopPropagation(); inputRef.current.click() }} data-tip="Replace with an upload">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 14V6M5 9l3-3 3 3M3 3h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+            <button className="ihn-edit" onClick={() => { setLightboxOpen(false); setEditingPrompt(true) }}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Edit with prompt
+            </button>
+            <span className="ihn-sep" />
+            <button className="ihn-btn" onClick={generate} disabled={loading} data-tip="Regenerate">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+            <button className="ihn-btn" onClick={generateVariations} disabled={loading} data-tip="Generate 3 variations">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3z" fill="currentColor"/></svg>
+            </button>
+            <button className="ihn-btn ihn-btn-danger" onClick={e => { deleteImage(e); setLightboxOpen(false) }} data-tip="Delete">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+          </div>
           <img src={activeImage.src} alt={label} />
           {(label || activeImage.prompt) && (
             <div className="img-lightbox-caption">
