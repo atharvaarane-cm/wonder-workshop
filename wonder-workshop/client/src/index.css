@@ -1091,7 +1091,10 @@ textarea { font-family: var(--font); resize: none; }
 }
 .topbar-logo-mark {
   position: relative; height: 18px; width: auto; display: block;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+  /* The source PNG is a black W on transparent bg — flatten to pure
+     white so the mark reads against the rainbow gradient, then add a
+     soft drop-shadow for separation. */
+  filter: brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.45));
 }
 
 /* Project info row — TITLE eyebrow + big title on the left, CLIENT
