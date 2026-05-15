@@ -2154,14 +2154,24 @@ textarea { font-family: var(--font); resize: none; }
 }
 .img-slot-generating::before {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(100deg,
-    transparent 30%, rgba(255,255,255,0.22) 50%, transparent 70%);
-  background-size: 240% 100%;
-  animation: slot-shimmer 1.25s linear infinite;
+  /* Wide gradient (300% of slot) with a thin bright streak in the
+     middle. The animation starts with the streak fully off-right and
+     ends with it fully off-left — so the loop restart is invisible. */
+  background-image: linear-gradient(110deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255,255,255,0.22) 50%,
+    transparent 62%,
+    transparent 100%);
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  animation: slot-shimmer 1.6s linear infinite;
 }
 @keyframes slot-shimmer {
-  0%   { background-position: 180% 0; }
-  100% { background-position: -80% 0; }
+  /* Streak at gradient 50% → at element-x = bg-pos + 150%. */
+  /* At 100%: streak at 250% (off-right). At -200%: streak at -50% (off-left). */
+  0%   { background-position: 100% 0; }
+  100% { background-position: -200% 0; }
 }
 .img-slot-generating-label {
   position: relative; z-index: 1;
