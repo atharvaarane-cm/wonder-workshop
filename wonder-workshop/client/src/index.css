@@ -2162,13 +2162,11 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot-sparkle {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  color: rgba(0,0,0,0.32);
-  opacity: 0.65;
-  transition: opacity 0.15s, color 0.15s, transform 0.18s ease-out;
+  color: rgba(0,0,0,0.45);
+  transition: opacity 0.15s;
 }
 .img-slot-empty:hover .img-slot-sparkle,
 .img-slot-empty.menu-open .img-slot-sparkle { opacity: 0; }
-[data-theme="dark"] .img-slot-sparkle { color: rgba(255,255,255,0.35); }
 
 /* Upload / Generate buttons — hidden by default, revealed on hover or
    when the slot menu is open. Zero clicks to see the options. */
@@ -2180,11 +2178,7 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot-empty.menu-open .img-slot-actions {
   opacity: 1; pointer-events: auto;
 }
-[data-theme="dark"] .img-slot-sparkle { color: rgba(255,255,255,0.35); }
-[data-theme="dark"] .img-slot-empty:hover .img-slot-sparkle {
-  color: #9B7DFF;
-  filter: drop-shadow(0 0 10px rgba(155,125,255,0.45));
-}
+[data-theme="dark"] .img-slot-sparkle { color: rgba(255,255,255,0.4); }
 .img-slot-error { font-size: 10px; color: rgba(200,60,60,0.8); margin-top: 2px; }
 .empty-prompt-editor {
   position: absolute; left: 8px; right: 8px; bottom: 8px;
