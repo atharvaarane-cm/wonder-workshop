@@ -172,6 +172,7 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
             <ImageSlot
               prompt={prompt}
               ratio={ratio}
+              disableImageDrag
               style={{ width: '100%', height: '100%', borderRadius: 8 }}
             />
             <span className="shot-badge-num">
