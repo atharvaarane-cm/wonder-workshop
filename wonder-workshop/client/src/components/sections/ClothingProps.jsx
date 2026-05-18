@@ -34,9 +34,15 @@ export default function ClothingProps({ brief, update }) {
   return (
     <div className="prod-grid">
       {items.map((item, i) => {
-        const prompt = item.description
-          ? item.description
-          : `${item.name || 'product'}, product shot, clean white background, studio lighting, commercial photography`
+        // Build the image prompt from whatever the user has given us.
+        // Preference order: explicit description (the user's own words)
+        // → name + boilerplate → generic placeholder. The boilerplate
+        // tail keeps Pollinations on a clean product-shot aesthetic.
+        const userDesc = (item.description || '').trim()
+        const userName = (item.name || '').trim()
+        const prompt = userDesc
+          ? `${userDesc}, product shot, clean white background, studio lighting, commercial photography`
+          : `${userName || 'product'}, product shot, clean white background, studio lighting, commercial photography`
         return (
           <div className="prod-item" key={i}>
             <ImageSlot
@@ -50,6 +56,13 @@ export default function ClothingProps({ brief, update }) {
               value={item.name}
               onChange={v => updateItem(i, 'name', v)}
               placeholder="Name this product…"
+            />
+            <EditableText
+              tag="p"
+              className="prod-desc"
+              value={item.description}
+              onChange={v => updateItem(i, 'description', v)}
+              placeholder="Describe what this looks like — e.g. red ceramic mug with the Starbucks logo, glossy finish, three-quarter angle…"
             />
           </div>
         )

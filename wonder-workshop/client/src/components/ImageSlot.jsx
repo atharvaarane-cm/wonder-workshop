@@ -554,7 +554,11 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         // Optional sections (Mood Board / Locations / Elements) stay slim
         // and collapsed-looking until an image exists — per Ravi. Once a
         // version lands, the slot expands to its real size.
-        if (slimWhenEmpty && !activeImage) {
+        // Slim collapse only while truly idle. During a generation we
+        // expand to the real size so the shimmer + "Generating…" label
+        // are actually visible (otherwise clicking Generate in a slim
+        // product slot looks like nothing happened).
+        if (slimWhenEmpty && !activeImage && !loading && !queued) {
           const { aspectRatio, height, maxHeight, ...rest } = style || {}
           return { ...rest, height: 66 }
         }

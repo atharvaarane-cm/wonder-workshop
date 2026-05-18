@@ -1675,6 +1675,21 @@ textarea { font-family: var(--font); resize: none; }
   color: var(--faint);
   font-weight: 500;
 }
+/* Free-text description users type to drive the image prompt — the
+   primary "what does this look like" affordance per Ed's complaint
+   that there was no way to type a custom product prompt. */
+.prod-desc {
+  font-size: 11px; line-height: 1.45; color: var(--muted);
+  text-align: center; padding: 4px 6px; margin: 0;
+  border-top: 1px dashed transparent;
+  transition: border-color .12s, color .12s;
+}
+.prod-desc:hover, .prod-desc:focus { color: var(--text); border-top-color: var(--border); outline: none; }
+.prod-desc:empty::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  font-style: italic;
+}
 .prod-add {
   display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px;
   height: 66px; align-self: start; border-radius: 7px;
