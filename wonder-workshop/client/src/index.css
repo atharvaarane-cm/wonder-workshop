@@ -316,6 +316,147 @@ textarea { font-family: var(--font); resize: none; }
 }
 .project-card-actions button:hover { background: rgba(255,255,255,0.28); }
 
+/* ── Folders (Projects page) ───────────────────────────────────────────
+   Two views on the Projects page: a folder grid (drill-in tiles + an
+   "Unfiled" projects section beneath), and a single-folder view reached
+   by clicking a tile. */
+.folders-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
+.folders-unfiled { display: flex; flex-direction: column; gap: 12px; }
+.folders-section-header {
+  display: flex; align-items: center; gap: 10px;
+}
+.folders-section-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--muted); text-transform: uppercase;
+}
+.folders-section-count {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  padding: 2px 8px; border-radius: 999px; background: var(--bg);
+  border: 1px solid var(--border);
+}
+.folders-new-btn {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); font: 600 11px var(--font); letter-spacing: 0.04em;
+  padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.folders-new-btn:hover { background: var(--border-md); }
+.folders-empty-hint {
+  font-size: 12px; color: var(--muted); padding: 12px 0;
+}
+.folders-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px;
+}
+.folder-tile {
+  position: relative;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 18px 14px 14px; min-height: 120px;
+  border-radius: 12px; border: 1px solid var(--border);
+  background: var(--card); cursor: pointer;
+  transition: border-color .12s, background .12s, transform .12s, box-shadow .12s;
+}
+.folder-tile:hover { border-color: var(--border-md); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.10); }
+.folder-tile-drag-over {
+  border-color: #4DA9FF; background: rgba(77,169,255,0.08);
+  box-shadow: 0 0 0 2px rgba(77,169,255,0.35);
+}
+.folder-tile-icon { color: var(--muted); margin-bottom: 4px; }
+.folder-tile-name {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.folder-tile-count {
+  font-size: 11px; color: var(--muted);
+}
+.folder-tile-rename {
+  background: var(--bg); border: 1px solid var(--border-md); border-radius: 6px;
+  color: var(--text); font: 600 13px var(--font); padding: 4px 7px; width: 100%;
+  outline: none;
+}
+.folder-tile-rename:focus { border-color: #4DA9FF; }
+.folder-tile-actions {
+  position: absolute; top: 8px; right: 8px;
+  display: flex; gap: 4px; opacity: 0; transition: opacity .12s;
+}
+.folder-tile:hover .folder-tile-actions { opacity: 1; }
+.folder-tile-actions button {
+  width: 22px; height: 22px; border-radius: 5px; border: none;
+  background: var(--bg); color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.folder-tile-actions button:hover { background: var(--border-md); color: var(--text); }
+.folder-tile-new { border-style: dashed; }
+
+/* Drilled-in folder view */
+.folder-breadcrumb {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+}
+.folder-breadcrumb-back {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font: 600 12px var(--font);
+  padding: 4px 6px; border-radius: 6px;
+}
+.folder-breadcrumb-back:hover { color: var(--text); background: var(--card); }
+.folder-breadcrumb-sep { color: var(--muted); }
+.folder-breadcrumb-name {
+  font: 700 20px var(--font); color: var(--text); letter-spacing: -0.01em;
+}
+.folder-breadcrumb-count {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  padding: 2px 8px; border-radius: 999px; background: var(--bg);
+  border: 1px solid var(--border);
+}
+.folder-breadcrumb-actions { margin-left: auto; display: flex; gap: 6px; }
+.folder-breadcrumb-actions button {
+  width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--card); color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.folder-breadcrumb-actions button:hover { background: var(--border-md); color: var(--text); }
+.folder-breadcrumb-delete:hover { color: #e25998 !important; }
+.folder-rename-input {
+  background: var(--bg); border: 1px solid var(--border-md); border-radius: 6px;
+  color: var(--text); font: 700 20px var(--font); padding: 2px 8px;
+  outline: none; letter-spacing: -0.01em;
+}
+.folder-rename-input:focus { border-color: #4DA9FF; }
+.link-btn {
+  background: none; border: none; padding: 0; color: #4DA9FF;
+  font: inherit; cursor: pointer; text-decoration: underline;
+}
+
+/* Move-to-folder popover (anchored to the triggering button) */
+.move-popover {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+  padding: 8px; min-width: 200px; max-width: 280px;
+}
+.move-popover-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--muted); text-transform: uppercase;
+  padding: 4px 8px 6px;
+}
+.move-popover-list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.move-popover-item {
+  display: flex; align-items: center; gap: 8px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text); font: 500 12px var(--font);
+  padding: 7px 9px; border-radius: 6px; text-align: left; width: 100%;
+}
+.move-popover-item:hover { background: var(--bg); }
+.move-popover-item.active { background: rgba(77,169,255,0.15); color: #4DA9FF; }
+.move-popover-divider { height: 1px; background: var(--border); margin: 6px 0; }
+.move-popover-new { padding: 0 4px 2px; }
+.move-popover-new-input {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px;
+  color: var(--text); font: 500 12px var(--font); outline: none;
+}
+.move-popover-new-input:focus { border-color: #4DA9FF; }
+
 /* Inspiration grid */
 .inspiration-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px;

@@ -2,6 +2,11 @@ import { createContext } from 'react'
 
 const KEY = 'ww_projects'
 const ACTIVE_KEY = 'ww_active_project'
+// Folders that have been created but contain no projects yet. Folders with
+// at least one project don't need to be tracked here — they're derived from
+// the project list. This lets a user create an empty folder and then drop
+// projects into it.
+const FOLDERS_KEY = 'ww_extra_folders'
 
 function loadAll() {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
@@ -112,7 +117,92 @@ export function moveProjectToFolder(id, folder) {
     updatedAt: Date.now(),
   }
   saveAll(all)
+  // If the project just got moved into a folder, remove that folder from
+  // the "empty folders" extras list — it's no longer empty.
+  if (cleaned) {
+    const extras = loadExtraFolders().filter(n => n !== cleaned)
+    saveExtraFolders(extras)
+  }
   return all[id]
+}
+
+function loadExtraFolders() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FOLDERS_KEY) || '[]')
+    return Array.isArray(raw) ? raw.filter(s => typeof s === 'string' && s.trim()) : []
+  } catch { return [] }
+}
+function saveExtraFolders(list) {
+  try { localStorage.setItem(FOLDERS_KEY, JSON.stringify(list)) } catch {}
+}
+
+// Returns [{name, count}] for every folder in use across projects PLUS any
+// empty folders the user created via createFolder(). Sorted alphabetically.
+export function listFolders() {
+  const projectsAll = Object.values(loadAll())
+  const counts = new Map()
+  for (const p of projectsAll) {
+    if (!p?.folder) continue
+    counts.set(p.folder, (counts.get(p.folder) || 0) + 1)
+  }
+  for (const name of loadExtraFolders()) {
+    if (!counts.has(name)) counts.set(name, 0)
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export function createFolder(name) {
+  const cleaned = (name || '').trim()
+  if (!cleaned) return null
+  // No-op if a folder by this name already exists (either via a project
+  // or in the extras list).
+  const existing = listFolders().some(f => f.name === cleaned)
+  if (existing) return cleaned
+  const extras = loadExtraFolders()
+  if (!extras.includes(cleaned)) {
+    extras.push(cleaned)
+    saveExtraFolders(extras)
+  }
+  return cleaned
+}
+
+export function deleteFolder(name) {
+  const cleaned = (name || '').trim()
+  if (!cleaned) return
+  // Unfile every project in this folder.
+  const all = loadAll()
+  let changed = false
+  for (const id of Object.keys(all)) {
+    if (all[id]?.folder === cleaned) {
+      all[id] = { ...all[id], folder: null, updatedAt: Date.now() }
+      changed = true
+    }
+  }
+  if (changed) saveAll(all)
+  // Drop from the extras list as well.
+  saveExtraFolders(loadExtraFolders().filter(n => n !== cleaned))
+}
+
+export function renameFolder(oldName, newName) {
+  const from = (oldName || '').trim()
+  const to = (newName || '').trim()
+  if (!from || !to || from === to) return
+  // Rewrite every project's folder field.
+  const all = loadAll()
+  let changed = false
+  for (const id of Object.keys(all)) {
+    if (all[id]?.folder === from) {
+      all[id] = { ...all[id], folder: to, updatedAt: Date.now() }
+      changed = true
+    }
+  }
+  if (changed) saveAll(all)
+  // Rewrite extras list.
+  const extras = loadExtraFolders().map(n => (n === from ? to : n))
+  // Dedupe in case `to` already existed.
+  saveExtraFolders([...new Set(extras)])
 }
 
 // Deep-clone a project to a new id. Brief, images, name override, and
