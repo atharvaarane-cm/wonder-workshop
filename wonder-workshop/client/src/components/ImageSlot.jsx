@@ -211,10 +211,18 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
 
   // Persist generated versions to the project store. Uploaded blob URLs
   // would not survive a refresh, so they're filtered out.
+  //
+  // IMPORTANT: never auto-persist an empty versions list. The re-hydrate
+  // effect above sets versions to project.images[slotKey]?.versions || [],
+  // so any time slotKey transiently points at a key with no saved data,
+  // versions becomes []. If we then wrote that back, we'd wipe whatever
+  // is saved at slotKey (or, worse, at a key that just had data loaded
+  // into it from a card swap). Explicit deletion paths (removeVersion,
+  // clear) handle their own saves, so silent skip-when-empty is safe.
   useEffect(() => {
     if (!slotKey || !project?.saveImage) return
     const persistable = versions.filter(v => v.source !== 'upload')
-    if (!persistable.length && !project.images?.[slotKey]) return
+    if (!persistable.length) return
     project.saveImage(slotKey, { versions: persistable, activeVersion })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [versions, activeVersion])
@@ -396,7 +404,14 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     const removedIndex = activeVersion
     setVersions(prev => {
       const updated = prev.filter((_, idx) => idx !== removedIndex)
-      setActiveVersion(Math.max(0, Math.min(removedIndex, updated.length - 1)))
+      const nextActive = Math.max(0, Math.min(removedIndex, updated.length - 1))
+      setActiveVersion(nextActive)
+      // The auto-persist effect skips empty lists (to avoid wiping data
+      // during reorder-driven re-hydration). When the user genuinely
+      // deletes the last version, persist the empty state explicitly.
+      if (!updated.length && slotKey && project?.saveImage) {
+        project.saveImage(slotKey, { versions: [], activeVersion: 0 })
+      }
       return updated
     })
     setEditingPrompt(false)
