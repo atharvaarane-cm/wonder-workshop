@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react'
+import ConfirmDialog from './ConfirmDialog.jsx'
 import { ProjectContext, appendImageVersion } from '../hooks/useProject.js'
 import { enqueue } from '../utils/generationQueue.js'
 import { logGeneration } from '../utils/generationLog.js'
@@ -45,6 +46,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   const [dropActive, setDropActive] = useState(false)
   const [brokenSrc, setBrokenSrc] = useState(null)
   const [pendingUndo, setPendingUndo] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [copyState, setCopyState] = useState(null)
   const inputRef = useRef()
   const slotRef = useRef()
@@ -431,8 +433,17 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     }
   }
 
-  function deleteImage(e) {
+  function requestDeleteImage(e) {
     e?.stopPropagation?.()
+    if (!activeImage) return
+    // Always confirm — the only way deleteImage is reachable is when
+    // there's content to lose. Skipping the confirm would be the same
+    // unsafe one-click delete we just removed.
+    setConfirmDelete(true)
+  }
+  function deleteImage() {
+    setConfirmDelete(false)
+    setLightboxOpen(false)
     if (!activeImage) return
     const removed = activeImage
     const removedIndex = activeVersion
@@ -667,7 +678,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
               <button className="ihn-btn" onClick={generateVariations} disabled={loading} data-tip="Generate 3 variations">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3z" fill="currentColor"/></svg>
               </button>
-              <button className="ihn-btn ihn-btn-danger" onClick={deleteImage} data-tip="Delete">
+              <button className="ihn-btn ihn-btn-danger" onClick={requestDeleteImage} data-tip="Delete">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -741,7 +752,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
             <button className="ihn-btn" onClick={generateVariations} disabled={loading} data-tip="Generate 3 variations">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3z" fill="currentColor"/></svg>
             </button>
-            <button className="ihn-btn ihn-btn-danger" onClick={e => { deleteImage(e); setLightboxOpen(false) }} data-tip="Delete">
+            <button className="ihn-btn ihn-btn-danger" onClick={requestDeleteImage} data-tip="Delete">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
           </div>
@@ -820,6 +831,14 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         </div>
       </div>
     )}
+    <ConfirmDialog
+      open={confirmDelete}
+      title="Delete this image?"
+      message="This will remove the current version. You'll have a 5-second undo window after deleting."
+      confirmLabel="Delete image"
+      onConfirm={deleteImage}
+      onCancel={() => setConfirmDelete(false)}
+    />
     </>
   )
 }

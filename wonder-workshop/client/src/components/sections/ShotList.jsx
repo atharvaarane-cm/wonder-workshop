@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
 import MentionInput from '../MentionInput.jsx'
+import ConfirmDialog from '../ConfirmDialog.jsx'
+import { ProjectContext } from '../../hooks/useProject.js'
 import { expandMentions, getMentionHandles } from '../../utils/mentions.js'
 
 function escapeRe(s) {
@@ -113,6 +115,29 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
   const ratio = brief?.generationSettings?.ratio || '16:9'
   const aspectCss = ratio.replace(':', '/')
   const [dragOverIdx, setDragOverIdx] = useState(null)
+  // Shot indices pending confirmation before delete. Skipped (delete
+  // happens immediately) when the shot has no description or image yet.
+  const project = useContext(ProjectContext)
+  const [confirmRemoveIdx, setConfirmRemoveIdx] = useState(null)
+
+  function shotHasContent(shot) {
+    if (!shot) return false
+    if (shot.description?.trim()) return true
+    // Image exists if project.images has at least one version for this slot.
+    const expanded = expandMentions(shot.description, brief)
+    const slotKey = `${expanded}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`
+    const versions = project?.images?.[slotKey]?.versions
+    return !!versions?.length
+  }
+  function requestRemoveShot(i) {
+    if (!shotHasContent(data?.[i])) { removeShot(i); return }
+    setConfirmRemoveIdx(i)
+  }
+  function confirmRemove() {
+    const idx = confirmRemoveIdx
+    setConfirmRemoveIdx(null)
+    if (idx != null) removeShot(idx)
+  }
 
   function onShotDragStart(e, idx) {
     // Don't initiate a card-drag when the user clicks into an interactive
@@ -181,7 +206,7 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
             <span className="shot-badge-framing">{shot.framing}</span>
             <button
               className="shot-remove-btn"
-              onClick={() => removeShot(i)}
+              onClick={() => requestRemoveShot(i)}
               title="Remove this shot"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
@@ -232,6 +257,14 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
           <span>Add shot</span>
         </button>
       </div>
+      <ConfirmDialog
+        open={confirmRemoveIdx != null}
+        title={`Delete shot ${confirmRemoveIdx != null ? data?.[confirmRemoveIdx]?.num : ''}?`}
+        message="This shot has content. The image and description will be removed."
+        confirmLabel="Delete shot"
+        onConfirm={confirmRemove}
+        onCancel={() => setConfirmRemoveIdx(null)}
+      />
     </div>
   )
 }

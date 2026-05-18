@@ -1726,7 +1726,16 @@ textarea { font-family: var(--font); resize: none; }
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 10px;
 }
-.prod-item { display: flex; flex-direction: column; gap: 6px; }
+.prod-item { display: flex; flex-direction: column; gap: 6px; position: relative; }
+.prod-remove {
+  position: absolute; top: 6px; right: 6px; z-index: 4;
+  width: 20px; height: 20px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55); color: #fff; border: none;
+  cursor: pointer; opacity: 0; transition: opacity .12s, background .12s;
+}
+.prod-item:hover .prod-remove { opacity: 1; }
+.prod-remove:hover { background: #E04141; }
 .prod-name {
   font-size: 12px; font-weight: 600; color: var(--text);
   text-align: center; padding: 2px 4px;
@@ -2836,6 +2845,11 @@ textarea { font-family: var(--font); resize: none; }
 .ww-confirm-primary {
   background: #006dd4; color: #fff; border: 1px solid #006dd4;
 }
+.ww-confirm-primary:hover { background: #1075d9; }
+.ww-confirm-primary.ww-confirm-destructive {
+  background: #E04141; border-color: #E04141;
+}
+.ww-confirm-primary.ww-confirm-destructive:hover { background: #c93434; }
 .ww-confirm-primary:hover { background: #0080f0; border-color: #0080f0; }
 
 /* ── Mobile overrides (must come after all base rules) ─────────── */
