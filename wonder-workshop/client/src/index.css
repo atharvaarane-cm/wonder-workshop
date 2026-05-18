@@ -1655,6 +1655,34 @@ textarea { font-family: var(--font); resize: none; }
 }
 .char-add-row:hover { border-color: #3a3a3a; color: #fff; }
 
+/* Multi-location list — mirrors the multi-character block pattern. */
+.loc-list { display: flex; flex-direction: column; gap: 18px; }
+.loc-block { display: flex; flex-direction: column; gap: 12px; }
+.loc-block + .loc-block { border-top: 1px solid var(--border); padding-top: 18px; }
+.loc-block-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.loc-block-label {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--muted);
+}
+.loc-block-remove {
+  width: 24px; height: 24px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-md); background: none; color: var(--muted);
+  cursor: pointer; transition: all 0.12s;
+}
+.loc-block-remove:hover { background: rgba(224,65,65,0.14); border-color: rgba(224,65,65,0.5); color: #E04141; }
+.loc-add-row {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 66px; width: 100%; border-radius: 7px;
+  border: 1px solid #282828; background: #1a1a1a;
+  color: #717171; font-family: var(--font); font-size: 12px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  cursor: pointer; transition: border-color 0.12s, color 0.12s;
+}
+.loc-add-row:hover { border-color: #3a3a3a; color: #fff; }
+
 /* Mood Board — compact: capped-height hero + a row of square tiles. */
 .mb-grid { display: flex; flex-direction: column; gap: 8px; }
 .mb-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }

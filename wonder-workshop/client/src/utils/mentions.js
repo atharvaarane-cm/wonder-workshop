@@ -31,8 +31,11 @@ export function getMentionHandles(brief) {
       expansion: [character.name, ...parts].join(', '),
     })
   }
-  const env = brief?.environment
-  if (env?.heroName) {
+  // Primary location (brief.environment) + any additional locations
+  // (brief.environments[]). Each named location becomes a @handle.
+  const allLocations = [brief?.environment, ...(brief?.environments || [])]
+  for (const env of allLocations) {
+    if (!env?.heroName) continue
     const parts = []
     if (env.heroEnvironment) parts.push(env.heroEnvironment)
     const elements = (env.keyElements || []).slice(0, 3).join(', ')
