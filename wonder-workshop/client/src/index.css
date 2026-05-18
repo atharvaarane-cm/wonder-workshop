@@ -1513,6 +1513,35 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Brand Info — May 13 mockup: logo + BRAND COLORS on the left,
    guidelines on the right ──────────────────────────────────────── */
 .bi-layout { display: grid; grid-template-columns: 240px 1fr; gap: 32px; align-items: start; }
+/* Brand Assets row sits below the two existing columns, spanning the
+   full width of the section body. Compact 1:1 tiles + caption + remove. */
+.bi-assets-col { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.bi-assets-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;
+}
+.bi-asset-item { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.bi-asset-caption {
+  font-size: 11px; color: var(--muted); text-align: center; padding: 2px 4px;
+}
+.bi-asset-caption:empty::before { content: attr(data-placeholder); color: var(--faint); font-style: italic; }
+.bi-asset-remove {
+  position: absolute; top: 6px; right: 6px; z-index: 4;
+  width: 20px; height: 20px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55); color: #fff; border: none;
+  cursor: pointer; opacity: 0; transition: opacity .12s, background .12s;
+}
+.bi-asset-item:hover .bi-asset-remove { opacity: 1; }
+.bi-asset-remove:hover { background: #E04141; }
+.bi-asset-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  aspect-ratio: 1/1; border-radius: 8px;
+  border: 1px dashed #282828; background: #1a1a1a;
+  color: #717171; font-family: var(--font); font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  transition: border-color .12s, color .12s;
+}
+.bi-asset-add:hover { border-color: #3a3a3a; color: #fff; }
 .bi-left-col { display: flex; flex-direction: column; gap: 12px; }
 .bi-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; font-weight: 700; }
 
