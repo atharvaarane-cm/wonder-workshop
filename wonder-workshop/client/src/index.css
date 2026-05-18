@@ -1310,6 +1310,33 @@ textarea { font-family: var(--font); resize: none; }
 .section-regen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .section-regen-btn svg { flex-shrink: 0; opacity: 0.95; }
 
+/* Lock toggle in the section header — small, icon-only by default.
+   Lights up + outlines when the section is locked. */
+.section-lock-btn {
+  width: 28px; height: 28px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid var(--border-md);
+  color: var(--muted); cursor: pointer; flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.section-lock-btn:hover { background: var(--card); border-color: var(--border); color: var(--text); }
+.section-lock-btn.active {
+  background: rgba(45,154,78,0.14); border-color: rgba(45,154,78,0.6); color: #2D9A4E;
+}
+.section-lock-btn.active:hover { background: rgba(45,154,78,0.22); }
+
+/* Compact "LOCKED" badge pinned next to the section name when the
+   section is locked. Reuses the green status color for consistency. */
+.section-lock-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 999px;
+  background: rgba(45,154,78,0.14); color: #2D9A4E;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+}
+/* Locked section card: soft green left-edge indicator + dim the body
+   slightly so the user clocks the state without losing legibility. */
+.section-card.locked { border-left: 3px solid #2D9A4E; }
+
 .board-pair-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .board-full-row { display: block; }
 

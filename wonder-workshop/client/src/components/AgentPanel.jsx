@@ -219,10 +219,23 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
 
       // Fire section regens after a tick so React has propagated the
       // brief update — image slots build their prompts from the new
-      // field values rather than the stale ones.
+      // field values rather than the stale ones. Skip locked sections
+      // (Ed's lock-and-approve workflow — chat-driven edits land in
+      // the brief data, but image gen stays frozen until unlocked).
       if (sectionsToRegen.size > 0) {
+        const lockedTitles = new Set()
+        const sectionIdByTitle = {
+          'Locations / Set Design': 'loc',
+          'Product / Elements': 'cp',
+          'Character Design': 'char',
+          'Storyboard': 'sl',
+        }
+        for (const [title, id] of Object.entries(sectionIdByTitle)) {
+          if (brief?.locks?.[id]) lockedTitles.add(title)
+        }
         setTimeout(() => {
           for (const sectionTitle of sectionsToRegen) {
+            if (lockedTitles.has(sectionTitle)) continue
             window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
               detail: { sectionTitle },
             }))

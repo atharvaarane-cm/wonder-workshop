@@ -655,6 +655,23 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                           detail: { sectionTitle: sec.title },
                         }))
                       }}
+                      // Lock & approve — only entity / output sections.
+                      // When a section is locked, AUTO-GENERATE and
+                      // REGENERATE buttons disable. Storyboard's
+                      // AUTO-GENERATE additionally requires every
+                      // upstream entity section (loc, cp, char) to be
+                      // locked first (Ed's W-01/W-02 workflow gate).
+                      canLock={['loc', 'cp', 'char', 'sl'].includes(sec.id)}
+                      locked={!!brief?.locks?.[sec.id]}
+                      onToggleLock={() => {
+                        update('locks', { ...(brief.locks || {}), [sec.id]: !brief?.locks?.[sec.id] })
+                      }}
+                      disabledReason={
+                        sec.id === 'sl'
+                          && (!brief?.locks?.loc || !brief?.locks?.cp || !brief?.locks?.char)
+                            ? 'Lock Location, Product / Elements, and Character Design first'
+                            : null
+                      }
                       onDelete={
                         sec.id === 'char' ? () => deleteSection('character', 'Character')
                         : sec.id === 'loc' ? () => deleteSection('environment', 'Location')
