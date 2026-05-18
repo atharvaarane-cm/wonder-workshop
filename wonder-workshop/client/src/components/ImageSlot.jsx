@@ -110,20 +110,27 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   // Used after the agent updates an entity field (character /
   // environment / productElements) so every view in that section
   // re-fires with the new field value baked into the prompt.
+  //
+  // IMPORTANT: pass the latest `prompt` prop via promptOverride. The
+  // internal editablePrompt state only re-syncs when versions is empty,
+  // so on a slot that already has an image it still holds the OLD prompt
+  // — calling generate() without the override would silently regen with
+  // the stale text and the user would see "nothing changed."
   useEffect(() => {
     function onSectionRegen(e) {
       const targetSection = e.detail?.sectionTitle
       if (!targetSection) return
       if (loading || queued) return
-      if (!editablePrompt) return
+      if (!prompt) return
       const sectionEl = slotRef.current?.closest('[data-section-title]')
       if (sectionEl?.dataset.sectionTitle !== targetSection) return
-      generate(null, { silent: true })
+      setEditablePrompt(prompt)
+      generate(null, { silent: true, promptOverride: prompt })
     }
     window.addEventListener('ww-regenerate-section', onSectionRegen)
     return () => window.removeEventListener('ww-regenerate-section', onSectionRegen)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editablePrompt, loading, queued])
+  }, [prompt, loading, queued])
 
   // "Regenerate all" — fired from the Creative-section aspect-ratio
   // dropdown when the user confirms they want every existing image
@@ -133,13 +140,16 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     function onRegenAll() {
       if (!activeImage) return
       if (loading || queued) return
-      if (!editablePrompt) return
-      generate(null, { silent: true })
+      if (!prompt) return
+      // Same staleness fix as ww-regenerate-section above — pass the
+      // latest prop directly so we don't regenerate with stale text.
+      setEditablePrompt(prompt)
+      generate(null, { silent: true, promptOverride: prompt })
     }
     window.addEventListener('ww-regenerate-all', onRegenAll)
     return () => window.removeEventListener('ww-regenerate-all', onRegenAll)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeImage, editablePrompt, loading, queued])
+  }, [activeImage, prompt, loading, queued])
 
   // Chat panel can swap the active version by clicking a thumbnail.
   // It fires ww-set-active-version with our slotKey + the desired index.
