@@ -47,6 +47,10 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   const [brokenSrc, setBrokenSrc] = useState(null)
   const [pendingUndo, setPendingUndo] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // VITE_IMAGE_PROVIDER picks the generator (pollinations | gemini) at
+  // build time. Hoisted to component scope so JSX (e.g. the upscale
+  // button) can gate on it.
+  const provider = (import.meta.env.VITE_IMAGE_PROVIDER || 'pollinations').toLowerCase()
   const [copyState, setCopyState] = useState(null)
   const inputRef = useRef()
   const slotRef = useRef()
@@ -293,12 +297,8 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       // object recording exactly which stage succeeded or failed, so the
       // generation log can tell network errors / bad HTTP / missing URL /
       // failed image loads apart.
-      // VITE_IMAGE_PROVIDER picks the generator at build time. Default
-       // is 'pollinations'; set to 'gemini' in .env.local (locally) or
-       // Vercel env vars (prod) to route every generation through Nano
-       // Banana Pro via /api/image-gemini. Endpoint contract is the
-       // same — both return { image: <url-or-data-url> }.
-      const provider = (import.meta.env.VITE_IMAGE_PROVIDER || 'pollinations').toLowerCase()
+      // provider is hoisted above (component scope) so both generate()
+      // and the JSX (upscale button) can reference it.
       const endpoint = provider === 'gemini' ? '/api/image-gemini' : '/api/image'
       const payload = provider === 'gemini'
         ? {
@@ -405,6 +405,70 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     for (let i = 0; i < 3; i++) {
       setTimeout(() => generate(null, { silent: true }), i * 600)
     }
+  }
+
+  // Upscale: Nano Banana Pro supports image conditioning, so "upscale"
+  // here is regenerate-with-the-current-image-as-reference + an
+  // explicit "enhance, preserve details, higher resolution" prompt.
+  // Result is appended as a new version (doesn't overwrite the source).
+  // Only fires when provider=gemini; the button is hidden otherwise.
+  async function upscaleImage(e) {
+    e?.stopPropagation?.()
+    if (!activeImage?.src) return
+    if (provider !== 'gemini') {
+      toast('Upscale requires Nano Banana Pro')
+      return
+    }
+    setQueued(true)
+    setError(null)
+    await enqueue(async () => {
+      setQueued(false)
+      bumpLoading(+1)
+      try {
+        const basePrompt = (editablePrompt || prompt || 'image').trim()
+        const upscalePrompt = `${basePrompt}, upscaled to 4K, enhanced sharpness, preserve every detail and composition exactly, photorealistic high resolution`
+        const effectiveRatio = ratio || project?.ratio || '1:1'
+        const res = await fetch('/api/image-gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: upscalePrompt,
+            ratio: effectiveRatio,
+            referenceImages: [activeImage.src],
+          }),
+        })
+        if (!res.ok) {
+          const body = await res.text().catch(() => '')
+          setError(`Upscale failed (HTTP ${res.status})`)
+          toast(`Upscale failed: ${body.slice(0, 120) || res.status}`, 'error')
+          return
+        }
+        const data = await res.json().catch(() => ({}))
+        if (!data.image) {
+          setError('Upscale: no image returned')
+          toast('Upscale returned no image', 'error')
+          return
+        }
+        const newVersion = {
+          src: data.image,
+          prompt: upscalePrompt,
+          createdAt: Date.now(),
+          source: 'upscale',
+        }
+        setVersions(prev => {
+          const updated = [...prev, newVersion]
+          setActiveVersion(updated.length - 1)
+          return updated
+        })
+        toast('Upscaled')
+      } catch (err) {
+        setError(`Upscale failed: ${err?.message || err}`)
+        toast('Upscale failed — see console', 'error')
+        console.error('[ImageSlot] upscale failed', err)
+      } finally {
+        bumpLoading(-1)
+      }
+    })
   }
 
   async function downloadImage(e) {
@@ -678,6 +742,13 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
               <button className="ihn-btn" onClick={generateVariations} disabled={loading} data-tip="Generate 3 variations">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3z" fill="currentColor"/></svg>
               </button>
+              {provider === 'gemini' && (
+                <button className="ihn-btn" onClick={upscaleImage} disabled={loading} data-tip="Upscale (Nano Banana Pro)">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 6V3h3M13 10v3h-3M3 13l4-4M13 3l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              )}
               <button className="ihn-btn ihn-btn-danger" onClick={requestDeleteImage} data-tip="Delete">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
