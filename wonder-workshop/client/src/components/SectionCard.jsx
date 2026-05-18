@@ -10,7 +10,7 @@ function Skeleton() {
   )
 }
 
-export default function SectionCard({ name, loading, children, active, onClick, imageResolution, imageLoading, canAutoGenerate, onAutoGenerate, onDelete, defaultCollapsed = false }) {
+export default function SectionCard({ name, loading, children, active, onClick, imageResolution, imageLoading, canAutoGenerate, onAutoGenerate, canRegenerate, onRegenerate, onDelete, defaultCollapsed = false }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
   // Two-click delete: first click arms it, second confirms. Auto-disarms
   // after a few seconds so a stray click doesn't leave it primed.
@@ -44,6 +44,20 @@ export default function SectionCard({ name, loading, children, active, onClick, 
               <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
             </svg>
             <span>AUTO-GENERATE</span>
+          </button>
+        )}
+        {canRegenerate && (
+          <button
+            className="section-regen-btn"
+            onClick={e => { e.stopPropagation(); onRegenerate?.() }}
+            disabled={imageLoading}
+            title="Force-regenerate every image in this section (uses the latest prompts)"
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M14 2v4h-4M2 14v-4h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M3.5 8a4.5 4.5 0 0 1 8-2.5L14 8M12.5 8a4.5 4.5 0 0 1-8 2.5L2 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span>REGENERATE</span>
           </button>
         )}
         {onDelete && (

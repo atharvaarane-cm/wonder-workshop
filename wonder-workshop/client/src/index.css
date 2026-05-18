@@ -1295,6 +1295,21 @@ textarea { font-family: var(--font); resize: none; }
 .section-autogen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .section-autogen-btn svg { flex-shrink: 0; opacity: 0.95; }
 
+/* REGENERATE pill — same shape as AUTO-GENERATE but outlined so the
+   two read as distinct affordances (AUTO-GENERATE = fill empties,
+   REGENERATE = force-refresh existing). */
+.section-regen-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 14px; height: 33px; border-radius: 46px;
+  border: 1px solid #434343; background: transparent;
+  color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  cursor: pointer; font-family: var(--font); flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s;
+}
+.section-regen-btn:hover { background: #1e1e1e; border-color: #525252; }
+.section-regen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.section-regen-btn svg { flex-shrink: 0; opacity: 0.95; }
+
 .board-pair-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .board-full-row { display: block; }
 
