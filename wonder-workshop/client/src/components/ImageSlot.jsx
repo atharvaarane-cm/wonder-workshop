@@ -28,7 +28,7 @@ const RATIO_CSS = {
   '2:1':  '2/1',
 }
 
-export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false }) {
+export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false, disableImageDrag = false }) {
   const project = useContext(ProjectContext)
   const slotKey = prompt || null
   const initial = slotKey && project?.images?.[slotKey]
@@ -574,8 +574,8 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: brokenSrc === activeImage.src ? 'default' : 'pointer' }}
               onLoad={() => brokenSrc === activeImage.src && setBrokenSrc(null)}
               onError={() => setBrokenSrc(activeImage.src)}
-              draggable={!!slotKey && brokenSrc !== activeImage.src}
-              onDragStart={onImgDragStart}
+              draggable={!disableImageDrag && !!slotKey && brokenSrc !== activeImage.src}
+              onDragStart={disableImageDrag ? undefined : onImgDragStart}
             />
             {brokenSrc === activeImage.src && (
               <div className="img-slot-broken" onClick={e => e.stopPropagation()}>
