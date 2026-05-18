@@ -192,10 +192,14 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   function updateShot(i, field, value) {
     setBrief(prev => ({ ...prev, shotList: prev.shotList.map((s, idx) => idx === i ? { ...s, [field]: value } : s) }))
   }
+  function makeShotId() {
+    return `shot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+  }
   function addShot() {
     setBrief(prev => {
       const list = prev.shotList || []
       const newShot = {
+        id: makeShotId(),
         num: String(list.length + 1).padStart(2, '0'),
         framing: 'MS', description: '', camera: 'Handheld', duration: '3s',
       }
@@ -205,6 +209,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   function removeShot(i) {
     setBrief(prev => {
       // Renumber after removal so the storyboard stays sequential (01, 02, …).
+      // shot.id is the stable identity used as the React key — never touched.
       const list = (prev.shotList || [])
         .filter((_, idx) => idx !== i)
         .map((s, idx) => ({ ...s, num: String(idx + 1).padStart(2, '0') }))
@@ -219,11 +224,28 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       if (fromIdx === toIdx) return prev
       const [moved] = list.splice(fromIdx, 1)
       list.splice(toIdx, 0, moved)
-      // Renumber so badges stay sequential after the move.
+      // Renumber the display label (badges stay 01, 02, …) but keep
+      // each shot's stable .id so ShotList's React keys don't change —
+      // otherwise ImageSlot's mount-time state stays bound to the wrong
+      // shot and images appear to "stick" while text reorders.
       const renumbered = list.map((s, idx) => ({ ...s, num: String(idx + 1).padStart(2, '0') }))
       return { ...prev, shotList: renumbered }
     })
   }
+
+  // Backfill stable ids on any shots that don't have one yet. Briefs
+  // created before this change (or returned by the LLM) won't have an
+  // .id field, so we lazily add them once after the brief is loaded.
+  useEffect(() => {
+    const list = brief?.shotList
+    if (!list?.length) return
+    if (list.every(s => s.id)) return
+    setBrief(prev => ({
+      ...prev,
+      shotList: prev.shotList.map(s => s.id ? s : { ...s, id: makeShotId() }),
+    }))
+    // Only need to react when the list identity changes — backfill is idempotent.
+  }, [brief?.shotList])
   // Clear a whole entity (character / environment) back to empty. Its
   // image slots rebuild from the now-empty data, so the old generated
   // images simply stop being referenced.
