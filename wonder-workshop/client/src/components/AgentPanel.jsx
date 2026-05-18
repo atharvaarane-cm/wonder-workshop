@@ -202,7 +202,7 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
             // drive image generation directly.
             if (path.startsWith('character.') || path.startsWith('characters.') || path === 'character' || path === 'characters') {
               sectionsToRegen.add('Character Design')
-            } else if (path.startsWith('environment.') || path === 'environment') {
+            } else if (path.startsWith('environment.') || path.startsWith('environments.') || path === 'environment' || path === 'environments') {
               sectionsToRegen.add('Locations / Set Design')
             } else if (path.startsWith('productElements') || path === 'productElements') {
               sectionsToRegen.add('Product / Elements')

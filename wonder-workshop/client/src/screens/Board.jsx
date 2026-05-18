@@ -285,6 +285,31 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     })
   }
 
+  // Mirror of the character pattern for locations. brief.environment is
+  // the primary location (backward compat); additional locations live
+  // in brief.environments[] so existing single-location briefs keep
+  // working. Each location has heroEnvironment + heroName at minimum.
+  function addLocation() {
+    setBrief(prev => ({
+      ...prev,
+      environments: [...(prev.environments || []), { heroEnvironment: '', heroName: '' }],
+    }))
+  }
+  function updateLocationAt(idx, field, value) {
+    setBrief(prev => {
+      const list = [...(prev.environments || [])]
+      if (!list[idx]) return prev
+      list[idx] = { ...list[idx], [field]: value }
+      return { ...prev, environments: list }
+    })
+  }
+  function removeLocationAt(idx) {
+    setBrief(prev => {
+      const list = (prev.environments || []).filter((_, i) => i !== idx)
+      return { ...prev, environments: list }
+    })
+  }
+
   // Aspect-ratio change from the Creative-section dropdown. Updates the
   // ratio immediately, then surfaces a confirmation asking whether to
   // regenerate every existing image to match the new ratio.
@@ -365,7 +390,14 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                           />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'mb':  return <MoodBoard data={brief.creativeDirection} />
-      case 'loc': return <LocationsSetDesign data={brief.environment} update={update} />
+      case 'loc': return <LocationsSetDesign
+        primaryLocation={brief.environment}
+        additionalLocations={brief.environments || []}
+        update={update}
+        addLocation={addLocation}
+        updateLocationAt={updateLocationAt}
+        removeLocationAt={removeLocationAt}
+      />
       case 'cp':   return <ClothingProps brief={brief} update={update} />
       case 'char': return <CharacterDesign
                             primaryCharacter={brief.character}
