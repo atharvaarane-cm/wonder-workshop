@@ -66,9 +66,27 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     }))
   }
 
-  const [messages, setMessages] = useState([
-    { role: 'agent', text: `Here's the creative direction for the ${brief?.creativeDirection?.brand ?? ''} shoot. I've set ${brief?.creativeDirection?.shots ?? 9} shots across ${brief?.creativeDirection?.location ?? 'key locations'} with a strong hero narrative.`, ts: Date.now() }
-  ])
+  // Chat history persists per-project in localStorage so navigating away
+  // (or refreshing) doesn't wipe context. Keyed by project.id; the
+  // shared-link / no-project case stays in-memory only.
+  const chatStorageKey = project?.id ? `ww_chat_${project.id}` : null
+  const [messages, setMessages] = useState(() => {
+    if (chatStorageKey) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(chatStorageKey) || 'null')
+        if (Array.isArray(stored) && stored.length) return stored
+      } catch {}
+    }
+    return [{
+      role: 'agent',
+      text: `Here's the creative direction for the ${brief?.creativeDirection?.brand ?? ''} shoot. I've set ${brief?.creativeDirection?.shots ?? 9} shots across ${brief?.creativeDirection?.location ?? 'key locations'} with a strong hero narrative.`,
+      ts: Date.now(),
+    }]
+  })
+  useEffect(() => {
+    if (!chatStorageKey) return
+    try { localStorage.setItem(chatStorageKey, JSON.stringify(messages)) } catch {}
+  }, [chatStorageKey, messages])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
