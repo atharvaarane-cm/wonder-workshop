@@ -2172,14 +2172,15 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot-empty-placeholder { color: var(--faint); font-size: 11px; }
 
 /* Blue floating hover-nav pill — Ravi's "hover nav" from the Figma
-   canvas. Sits just inside the top edge of the image; fades in on
-   hover or when the slot is the chat's active target. */
-/* Floats ABOVE the image, outside the slot's top edge, so its action
-   buttons are visible at any image size. The slot itself no longer
-   uses overflow:hidden — see .img-slot — so this clears the top. */
+   canvas. Sits just inside the TOP edge of the image (used to float
+   ABOVE the slot, but the parent section-card has overflow:hidden so
+   it was getting clipped on the top edge AND on the left for the
+   leftmost slot in a row). Inside-the-image keeps it visible at any
+   slot position — the strong blue background reads cleanly over any
+   image content. */
 .img-hover-nav {
-  position: absolute; bottom: calc(100% + 8px); left: 50%;
-  transform: translateX(-50%) translateY(4px);
+  position: absolute; top: 8px; left: 50%;
+  transform: translateX(-50%) translateY(-4px);
   z-index: 6; display: flex; align-items: center; gap: 2px;
   padding: 6px; height: 48px; border-radius: 37px;
   background: #006dd4; border: 1px solid #43a3fd;
@@ -2192,6 +2193,11 @@ textarea { font-family: var(--font); resize: none; }
   opacity: 1; pointer-events: auto;
   transform: translateX(-50%) translateY(0);
 }
+/* Slim slots (Product / Elements, Mood Board) shrink to 66px when
+   empty — that's smaller than the 48px-tall hover-nav plus padding,
+   so the pill would clip the bottom of the image. In that case the
+   pill is positioned 2px from the top so it stays fully visible. */
+.img-slot[style*="height: 66px"] .img-hover-nav { top: 2px; height: 38px; }
 .ihn-btn {
   width: 28px; height: 28px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;

@@ -230,9 +230,14 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       })
     } catch (e) {
       if (e.name !== 'AbortError') {
+        // Surface the real failure so we can debug instead of a generic
+        // "Something went wrong" — most of the time it's a Gemini quota /
+        // safety filter / network error and the message tells us which.
+        console.error('[AgentPanel] chat failed', e)
+        const detail = (e?.message || String(e)).slice(0, 240)
         setMessages(prev => {
           const next = [...prev]
-          next[next.length - 1] = { role: 'agent', text: 'Something went wrong. Please try again.', ts: next[next.length - 1].ts }
+          next[next.length - 1] = { role: 'agent', text: `Something went wrong: ${detail}`, ts: next[next.length - 1].ts }
           return next
         })
       }
