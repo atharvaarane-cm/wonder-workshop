@@ -102,6 +102,59 @@ export default function BrandInfo({ data, update }) {
         />
       </div>
 
+      {/* Additional brand reference uploads — drop in brand-book pages,
+          existing campaign shots, mood references, etc. Each slot has a
+          stable id so persistence survives reorder / delete. */}
+      <BrandAssets data={data} update={update} />
+
+    </div>
+  )
+}
+
+function BrandAssets({ data, update }) {
+  const assets = Array.isArray(data.assets) ? data.assets : []
+  function addAsset() {
+    const id = `brand_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+    update('brandInfo.assets', [...assets, { id, caption: '' }])
+  }
+  function updateAsset(idx, field, value) {
+    update('brandInfo.assets', assets.map((a, i) => i === idx ? { ...a, [field]: value } : a))
+  }
+  function removeAsset(idx) {
+    update('brandInfo.assets', assets.filter((_, i) => i !== idx))
+  }
+  return (
+    <div className="bi-assets-col">
+      <div className="bi-section-label">Brand Assets</div>
+      <div className="bi-assets-grid">
+        {assets.map((a, i) => (
+          <div className="bi-asset-item" key={a.id || i}>
+            <ImageSlot
+              ratio="1:1"
+              slimWhenEmpty
+              prompt={`brand-asset:${a.id || `idx-${i}`}`}
+              style={{ width: '100%', aspectRatio: '1/1', borderRadius: 8 }}
+            />
+            <EditableText
+              className="bi-asset-caption"
+              value={a.caption}
+              onChange={v => updateAsset(i, 'caption', v)}
+              placeholder="Caption…"
+            />
+            <button className="bi-asset-remove" onClick={() => removeAsset(i)} title="Remove asset">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+        ))}
+        <button className="bi-asset-add" onClick={addAsset} type="button">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
+          <span>Add asset</span>
+        </button>
+      </div>
     </div>
   )
 }
