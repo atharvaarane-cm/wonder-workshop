@@ -115,6 +115,13 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
   const [dragOverIdx, setDragOverIdx] = useState(null)
 
   function onShotDragStart(e, idx) {
+    // Don't initiate a card-drag when the user clicks into an interactive
+    // child — text editing (.editable-text), the remove button, or any
+    // form control inside the card. Those should still respond normally.
+    if (e.target.closest('.editable-text, .shot-description, .shot-remove-btn, .shot-expanded-note, button, input, textarea, [contenteditable="true"]')) {
+      e.preventDefault()
+      return
+    }
     e.dataTransfer.setData('application/x-ww-shot-index', String(idx))
     e.dataTransfer.effectAllowed = 'move'
   }
@@ -152,9 +159,12 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
         <div
           className={`shot-cell${dragOverIdx === i ? ' drag-over' : ''}`}
           key={shot.num}
+          draggable
+          onDragStart={e => onShotDragStart(e, i)}
           onDragOver={e => onShotCellDragOver(e, i)}
           onDragLeave={onShotCellDragLeave}
           onDrop={e => onShotCellDrop(e, i)}
+          title="Drag this card to reorder shots"
         >
 
           {/* Image with overlaid badges */}
@@ -164,12 +174,7 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
               ratio={ratio}
               style={{ width: '100%', height: '100%', borderRadius: 8 }}
             />
-            <span
-              className="shot-badge-num shot-drag-handle"
-              draggable
-              onDragStart={e => onShotDragStart(e, i)}
-              title="Drag to reorder shots"
-            >
+            <span className="shot-badge-num">
               {String(shot.num).padStart(2, '0')}
             </span>
             <span className="shot-badge-framing">{shot.framing}</span>
@@ -214,7 +219,7 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
         </div>
         )
       })}
-      <div className="shot-cell">
+      <div className="shot-cell shot-cell-add">
         <button
           className="shot-add-cell"
           style={{ aspectRatio: aspectCss }}
