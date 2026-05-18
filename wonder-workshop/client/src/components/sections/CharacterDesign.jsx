@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react'
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
+import ConfirmDialog from '../ConfirmDialog.jsx'
 import { ProjectContext } from '../../hooks/useProject.js'
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../../utils/characterPrompts.js'
 
@@ -77,6 +78,7 @@ function CharacterBlock({ character, setField, onRemove, label }) {
     if (!orderedViews.some(o => o.id === v.id)) orderedViews.push(v)
   }
   const [dragOverIdx, setDragOverIdx] = useState(null)
+  const [confirmRemove, setConfirmRemove] = useState(false)
 
   function onViewDragStart(e, idx) {
     // Don't initiate a card-drag from interactive children (buttons,
@@ -115,13 +117,27 @@ function CharacterBlock({ character, setField, onRemove, label }) {
       {onRemove && (
         <div className="character-block-header">
           <span className="character-block-label">{label}</span>
-          <button className="character-block-remove" onClick={onRemove} title="Remove this character">
+          <button className="character-block-remove" onClick={() => {
+            // Only confirm if there's something to lose. Empty additional
+            // character slots delete instantly.
+            const hasContent = !!(character?.name?.trim() || character?.description?.trim() || character?.wardrobe?.trim())
+            if (hasContent) setConfirmRemove(true)
+            else onRemove()
+          }} title="Remove this character">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
           </button>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmRemove}
+        title={`Delete ${character?.name?.trim() || 'this character'}?`}
+        message="This will remove the character, their reference image, and all generated views."
+        confirmLabel="Delete character"
+        onConfirm={() => { setConfirmRemove(false); onRemove?.() }}
+        onCancel={() => setConfirmRemove(false)}
+      />
 
       {/* Bio: reference image on the left, NAME + DESCRIPTION on the right. */}
       <div className="character-bio">

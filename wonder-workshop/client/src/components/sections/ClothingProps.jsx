@@ -1,5 +1,8 @@
+import { useContext, useState } from 'react'
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
+import ConfirmDialog from '../ConfirmDialog.jsx'
+import { ProjectContext } from '../../hooks/useProject.js'
 
 // Default starter items used when the brief has no productElements yet.
 // Keeps the section from rendering empty for back-compat / new projects.
@@ -30,6 +33,27 @@ export default function ClothingProps({ brief, update }) {
     const next = [...items, { name: '', description: '' }]
     update?.('productElements', next)
   }
+  function removeItem(idx) {
+    update?.('productElements', items.filter((_, i) => i !== idx))
+  }
+
+  const project = useContext(ProjectContext)
+  const [confirmRemoveIdx, setConfirmRemoveIdx] = useState(null)
+  function itemHasContent(item, idx) {
+    if (!item) return false
+    if (item.name?.trim() || item.description?.trim()) return true
+    // Image check: same prompt construction as the renderer.
+    const userDesc = (item.description || '').trim()
+    const userName = (item.name || '').trim()
+    const prompt = userDesc
+      ? `${userDesc}, product shot, clean white background, studio lighting, commercial photography`
+      : `${userName || 'product'}, product shot, clean white background, studio lighting, commercial photography`
+    return !!project?.images?.[prompt]?.versions?.length
+  }
+  function requestRemoveItem(idx) {
+    if (!itemHasContent(items[idx], idx)) removeItem(idx)
+    else setConfirmRemoveIdx(idx)
+  }
 
   return (
     <div className="prod-grid">
@@ -45,6 +69,15 @@ export default function ClothingProps({ brief, update }) {
           : `${userName || 'product'}, product shot, clean white background, studio lighting, commercial photography`
         return (
           <div className="prod-item" key={i}>
+            <button
+              className="prod-remove"
+              onClick={() => requestRemoveItem(i)}
+              title="Remove this product"
+            >
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+            </button>
             <ImageSlot
               ratio="1:1"
               slimWhenEmpty
@@ -73,6 +106,14 @@ export default function ClothingProps({ brief, update }) {
         </svg>
         <span>Add product</span>
       </button>
+      <ConfirmDialog
+        open={confirmRemoveIdx != null}
+        title={`Delete ${items[confirmRemoveIdx]?.name?.trim() || 'this product'}?`}
+        message="This product has content. Its name, description, and image will be removed."
+        confirmLabel="Delete product"
+        onConfirm={() => { const i = confirmRemoveIdx; setConfirmRemoveIdx(null); if (i != null) removeItem(i) }}
+        onCancel={() => setConfirmRemoveIdx(null)}
+      />
     </div>
   )
 }
