@@ -28,7 +28,7 @@ const RATIO_CSS = {
   '2:1':  '2/1',
 }
 
-export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false, disableImageDrag = false }) {
+export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false, disableImageDrag = false, referenceImages = [] }) {
   const project = useContext(ProjectContext)
   const slotKey = prompt || null
   const initial = slotKey && project?.images?.[slotKey]
@@ -294,7 +294,15 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       const provider = (import.meta.env.VITE_IMAGE_PROVIDER || 'pollinations').toLowerCase()
       const endpoint = provider === 'gemini' ? '/api/image-gemini' : '/api/image'
       const payload = provider === 'gemini'
-        ? { prompt: text, ratio: effectiveRatio }
+        ? {
+            prompt: text,
+            ratio: effectiveRatio,
+            // Identity preservation: callers pass the character's
+            // reference image (or other ground-truth refs) here. Gemini
+            // accepts up to 4 inline image inputs. Pollinations doesn't
+            // support image conditioning so this is just dropped there.
+            ...(referenceImages?.length ? { referenceImages } : {}),
+          }
         : { prompt: text, ...dims, ...(seed != null ? { seed } : {}) }
 
       async function attemptOnce() {

@@ -48,8 +48,19 @@ function ReferenceThumbs({ slotKey }) {
 // (brief.characters[i]) — the parent passes a setField callback that
 // knows how to write back to the correct path.
 function CharacterBlock({ character, setField, onRemove, label }) {
+  const project = useContext(ProjectContext)
   const seed = hashStr((character?.description || '') + (character?.wardrobe || ''))
   const refPrompt = referencePrompt(character)
+
+  // Pull the active version of this character's reference image so it
+  // can be passed as conditioning to every Headshots / Full Body view.
+  // Nano Banana Pro uses inline image inputs to preserve identity
+  // across angles — without it, each view comes back as a slightly
+  // different person. Pollinations ignores referenceImages, so this is
+  // a no-op for that provider.
+  const refSlot = project?.images?.[refPrompt]
+  const refActive = refSlot?.versions?.[refSlot?.activeVersion ?? 0]
+  const referenceImages = refActive?.src ? [refActive.src] : []
 
   // View order is stored on the character (default = natural VIEWS order)
   // and SHARED between Headshots and Full Body so a reorder in one grid
@@ -167,6 +178,7 @@ function CharacterBlock({ character, setField, onRemove, label }) {
                 seed={seed}
                 ratio="3:4"
                 disableImageDrag
+                referenceImages={referenceImages}
                 prompt={closeupPrompt(character || {}, v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
@@ -196,6 +208,7 @@ function CharacterBlock({ character, setField, onRemove, label }) {
                 seed={seed}
                 ratio="3:4"
                 disableImageDrag
+                referenceImages={referenceImages}
                 prompt={fullbodyPrompt(character || {}, v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
