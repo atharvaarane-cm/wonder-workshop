@@ -1,4 +1,4 @@
-import { useContext } from 'react'
+import { useContext, useState } from 'react'
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
 import { ProjectContext } from '../../hooks/useProject.js'
@@ -51,6 +51,54 @@ function CharacterBlock({ character, setField, onRemove, label }) {
   const seed = hashStr((character?.description || '') + (character?.wardrobe || ''))
   const refPrompt = referencePrompt(character)
 
+  // View order is stored on the character (default = natural VIEWS order)
+  // and SHARED between Headshots and Full Body so a reorder in one grid
+  // applies to the other — keeps FRONT/SIDE/etc. visually aligned.
+  const viewOrder = (character?.viewOrder?.length
+    ? character.viewOrder
+    : VIEWS.map(v => v.id))
+  const orderedViews = viewOrder
+    .map(id => VIEWS.find(v => v.id === id))
+    .filter(Boolean)
+  // Backfill any missing views (e.g. if VIEWS gets a new entry later, or
+  // the stored order is corrupted) so the grid stays complete.
+  for (const v of VIEWS) {
+    if (!orderedViews.some(o => o.id === v.id)) orderedViews.push(v)
+  }
+  const [dragOverIdx, setDragOverIdx] = useState(null)
+
+  function onViewDragStart(e, idx) {
+    // Don't initiate a card-drag from interactive children (buttons,
+    // editable text, the ImageSlot's hover-nav). Without this guard,
+    // clicking the Expand / Edit prompt / Regenerate / Delete buttons
+    // could start a drag instead of firing the click.
+    if (e.target.closest('button, input, textarea, [contenteditable="true"], .img-slot-hover-nav, .img-prompt-modal, .img-slot-broken')) {
+      e.preventDefault()
+      return
+    }
+    e.dataTransfer.setData('application/x-ww-view-index', String(idx))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  function onViewDragOver(e, idx) {
+    if (!e.dataTransfer.types.includes('application/x-ww-view-index')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverIdx !== idx) setDragOverIdx(idx)
+  }
+  function onViewDragLeave() { setDragOverIdx(null) }
+  function onViewDrop(e, idx) {
+    setDragOverIdx(null)
+    const raw = e.dataTransfer.getData('application/x-ww-view-index')
+    if (!raw) return
+    const fromIdx = parseInt(raw, 10)
+    if (Number.isNaN(fromIdx) || fromIdx === idx) return
+    e.preventDefault()
+    const newOrder = orderedViews.map(v => v.id)
+    const [moved] = newOrder.splice(fromIdx, 1)
+    newOrder.splice(idx, 0, moved)
+    setField('viewOrder', newOrder)
+  }
+
   return (
     <div className="character-block">
       {onRemove && (
@@ -98,16 +146,27 @@ function CharacterBlock({ character, setField, onRemove, label }) {
         </div>
       </div>
 
-      {/* Headshots — 4-view grid */}
+      {/* Headshots — 4-view grid, drag-to-reorder. viewOrder is shared
+          with Full Body below so both grids stay aligned. */}
       <div className="character-views-group">
         <div className="character-views-label">Headshots</div>
         <div className="character-views character-views-4">
-          {VIEWS.map(v => (
-            <div className="character-view" key={`hs-${v.id}`}>
+          {orderedViews.map((v, idx) => (
+            <div
+              className={`character-view${dragOverIdx === idx ? ' drag-over' : ''}`}
+              key={`hs-${v.id}`}
+              draggable
+              onDragStart={e => onViewDragStart(e, idx)}
+              onDragOver={e => onViewDragOver(e, idx)}
+              onDragLeave={onViewDragLeave}
+              onDrop={e => onViewDrop(e, idx)}
+              title="Drag to reorder views"
+            >
               <ImageSlot
                 label={v.label}
                 seed={seed}
                 ratio="3:4"
+                disableImageDrag
                 prompt={closeupPrompt(character || {}, v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
@@ -117,16 +176,26 @@ function CharacterBlock({ character, setField, onRemove, label }) {
         </div>
       </div>
 
-      {/* Full Body — 4-view grid */}
+      {/* Full Body — 4-view grid, drag-to-reorder (shares viewOrder). */}
       <div className="character-views-group">
         <div className="character-views-label">Full Body</div>
         <div className="character-views character-views-4">
-          {VIEWS.map(v => (
-            <div className="character-view" key={`fb-${v.id}`}>
+          {orderedViews.map((v, idx) => (
+            <div
+              className={`character-view${dragOverIdx === idx ? ' drag-over' : ''}`}
+              key={`fb-${v.id}`}
+              draggable
+              onDragStart={e => onViewDragStart(e, idx)}
+              onDragOver={e => onViewDragOver(e, idx)}
+              onDragLeave={onViewDragLeave}
+              onDrop={e => onViewDrop(e, idx)}
+              title="Drag to reorder views"
+            >
               <ImageSlot
                 label={v.label}
                 seed={seed}
                 ratio="3:4"
+                disableImageDrag
                 prompt={fullbodyPrompt(character || {}, v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />

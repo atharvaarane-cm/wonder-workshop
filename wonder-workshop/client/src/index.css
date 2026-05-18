@@ -1553,7 +1553,15 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Character ─────────────────────────────────────────────────── */
 .character-views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 0; }
 .character-views.character-views-4 { grid-template-columns: repeat(4, 1fr); }
-.character-view { display: flex; flex-direction: column; gap: 6px; }
+.character-view {
+  display: flex; flex-direction: column; gap: 6px;
+  cursor: grab;
+  transition: outline-color .12s;
+}
+.character-view:active { cursor: grabbing; }
+.character-view.drag-over { outline: 2px dashed #006dd4; outline-offset: 3px; border-radius: 9px; }
+/* Buttons inside the card (hover-nav, etc.) should stay clickable, not grabby. */
+.character-view button { cursor: pointer; }
 .character-view-caption {
   font-size: 12px; font-weight: 700; text-transform: uppercase;
   color: #717171;
