@@ -1329,7 +1329,7 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Section cards ─────────────────────────────────────────────── */
 .section-card {
   background: var(--card); border-radius: 7px; border: 1px solid var(--border);
-  box-shadow: 0 1px 6px rgba(0,0,0,0.05); overflow: hidden; transition: border-color 0.15s; cursor: pointer;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05); transition: border-color 0.15s; cursor: pointer;
 }
 .section-card:hover { border-color: var(--border-md); }
 .section-card.active { border-color: rgba(0,0,0,0.18); box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
@@ -1395,6 +1395,10 @@ textarea { font-family: var(--font); resize: none; }
   padding: 22px 43px;
   background: #006dd4;
   color: #fff;
+  /* Top corners rounded so the strip still matches the section-card's
+     rounded top — used to come from the parent's overflow:hidden, but
+     that was clipping the floating hover toolbar inside slots. */
+  border-radius: 6px 6px 0 0;
 }
 .cd-feature-label {
   font: 400 20px var(--font);
@@ -2172,15 +2176,13 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot-empty-placeholder { color: var(--faint); font-size: 11px; }
 
 /* Blue floating hover-nav pill — Ravi's "hover nav" from the Figma
-   canvas. Sits just inside the TOP edge of the image (used to float
-   ABOVE the slot, but the parent section-card has overflow:hidden so
-   it was getting clipped on the top edge AND on the left for the
-   leftmost slot in a row). Inside-the-image keeps it visible at any
-   slot position — the strong blue background reads cleanly over any
-   image content. */
+   canvas. Floats ABOVE the image (outside the slot's top edge) so its
+   action buttons don't cover image content. Section-card no longer
+   uses overflow:hidden (see .section-card) so this clears the top and
+   the horizontal edges when the slot is narrow / near a section edge. */
 .img-hover-nav {
-  position: absolute; top: 8px; left: 50%;
-  transform: translateX(-50%) translateY(-4px);
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%) translateY(4px);
   z-index: 6; display: flex; align-items: center; gap: 2px;
   padding: 6px; height: 48px; border-radius: 37px;
   background: #006dd4; border: 1px solid #43a3fd;
@@ -2193,11 +2195,6 @@ textarea { font-family: var(--font); resize: none; }
   opacity: 1; pointer-events: auto;
   transform: translateX(-50%) translateY(0);
 }
-/* Slim slots (Product / Elements, Mood Board) shrink to 66px when
-   empty — that's smaller than the 48px-tall hover-nav plus padding,
-   so the pill would clip the bottom of the image. In that case the
-   pill is positioned 2px from the top so it stays fully visible. */
-.img-slot[style*="height: 66px"] .img-hover-nav { top: 2px; height: 38px; }
 .ihn-btn {
   width: 28px; height: 28px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;

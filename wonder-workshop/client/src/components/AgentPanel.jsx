@@ -230,14 +230,19 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       })
     } catch (e) {
       if (e.name !== 'AbortError') {
-        // Surface the real failure so we can debug instead of a generic
-        // "Something went wrong" — most of the time it's a Gemini quota /
-        // safety filter / network error and the message tells us which.
         console.error('[AgentPanel] chat failed', e)
-        const detail = (e?.message || String(e)).slice(0, 240)
+        // Translate the most common Gemini failure codes into something
+        // a non-technical user can act on — 429 is the rate-limit hit
+        // we keep seeing on the free-tier key.
+        const raw = e?.message || String(e)
+        let friendly
+        if (/\b429\b/.test(raw))      friendly = 'Gemini rate limit hit. Wait a minute and try again — the free-tier quota resets quickly.'
+        else if (/\b401\b|\b403\b/.test(raw)) friendly = 'Gemini API key missing or invalid. Check the GEMINI_API_KEY env var.'
+        else if (/\b5\d\d\b/.test(raw))       friendly = 'Gemini server error. Try again in a few seconds.'
+        else                                   friendly = `Something went wrong: ${raw.slice(0, 200)}`
         setMessages(prev => {
           const next = [...prev]
-          next[next.length - 1] = { role: 'agent', text: `Something went wrong: ${detail}`, ts: next[next.length - 1].ts }
+          next[next.length - 1] = { role: 'agent', text: friendly, ts: next[next.length - 1].ts }
           return next
         })
       }
