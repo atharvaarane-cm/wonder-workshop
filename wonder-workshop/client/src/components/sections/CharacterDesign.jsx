@@ -178,6 +178,7 @@ function CharacterBlock({ character, setField, onRemove, label }) {
                 seed={seed}
                 ratio="3:4"
                 disableImageDrag
+                priority="secondary"
                 referenceImages={referenceImages}
                 prompt={closeupPrompt(character || {}, v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
@@ -208,6 +209,7 @@ function CharacterBlock({ character, setField, onRemove, label }) {
                 seed={seed}
                 ratio="3:4"
                 disableImageDrag
+                priority="secondary"
                 referenceImages={referenceImages}
                 prompt={fullbodyPrompt(character || {}, v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}

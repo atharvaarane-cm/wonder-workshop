@@ -119,8 +119,12 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       for (const id of AUTO_GENERATE_ORDER) {
         const sec = byId[id]
         if (!sec) continue
+        // primaryOnly: in Character Design, only fire the REFERENCE
+        // image so the user can review + approve the face before we
+        // burn tokens generating 8 Headshots/Full Body views. User
+        // hits the section's AUTO-GENERATE button when ready.
         window.dispatchEvent(new CustomEvent('ww-generate-section', {
-          detail: { sectionTitle: sec.title },
+          detail: { sectionTitle: sec.title, primaryOnly: id === 'char' },
         }))
       }
       onAutoGenerateConsumed?.()
