@@ -28,7 +28,7 @@ const RATIO_CSS = {
   '2:1':  '2/1',
 }
 
-export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false, disableImageDrag = false, referenceImages = [] }) {
+export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false, disableImageDrag = false, referenceImages = [], priority = 'primary' }) {
   const project = useContext(ProjectContext)
   const slotKey = prompt || null
   const initial = slotKey && project?.images?.[slotKey]
@@ -96,6 +96,11 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       if (!targetSection) return
       if (activeImage) return // already has a generated/uploaded version
       if (!editablePrompt) return
+      // primaryOnly is set by Board's auto-generate-on-new-project flow
+      // for sections like Character Design where we want only the
+      // REFERENCE (priority=primary) to fire — the user reviews +
+      // approves before triggering the Headshots / Full Body grids.
+      if (e.detail?.primaryOnly && priority !== 'primary') return
       const sectionEl = slotRef.current?.closest('[data-section-title]')
       if (sectionEl?.dataset.sectionTitle !== targetSection) return
       generate(null, { silent: true })
@@ -103,7 +108,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     window.addEventListener('ww-generate-section', onSectionGenerate)
     return () => window.removeEventListener('ww-generate-section', onSectionGenerate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeImage, editablePrompt])
+  }, [activeImage, editablePrompt, priority])
 
   // Section-level FORCE regen — unlike ww-generate-section above
   // (empty-only), this fires for slots that already hold an image.
