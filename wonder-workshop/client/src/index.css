@@ -1720,7 +1720,24 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── Shot List ─────────────────────────────────────────────────── */
 .shot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.shot-cell { display: flex; flex-direction: column; gap: 8px; }
+/* Whole shot card is the drag handle — grab anywhere except the
+   description text / camera-duration fields / remove button (ShotList.jsx
+   suppresses dragstart on those). */
+.shot-cell {
+  display: flex; flex-direction: column; gap: 8px;
+  cursor: grab; transition: opacity .15s;
+}
+.shot-cell:active { cursor: grabbing; }
+.shot-cell.drag-over { outline: 2px dashed #006dd4; outline-offset: 3px; border-radius: 9px; }
+/* Inside the card: interactive zones (editable text, buttons) get their
+   own cursors so users know they can click/type there. */
+.shot-cell .editable-text,
+.shot-cell .shot-description,
+.shot-cell [contenteditable="true"] { cursor: text; }
+.shot-cell button { cursor: pointer; }
+/* "Add shot" cell sits in the shot grid but isn't draggable — drop the
+   grab cursor so it doesn't look interactive in the wrong way. */
+.shot-cell.shot-cell-add { cursor: default; }
 
 /* Image area with overlay badges. aspect-ratio is set inline from the
    project's output ratio — see ShotList.jsx. */
@@ -1736,10 +1753,6 @@ textarea { font-family: var(--font); resize: none; }
   padding: 2px 7px; border-radius: 20px; backdrop-filter: blur(4px);
   letter-spacing: 0.04em;
 }
-/* The shot-num badge doubles as the drag handle for reordering. */
-.shot-drag-handle { cursor: grab; user-select: none; }
-.shot-drag-handle:active { cursor: grabbing; background: rgba(0,109,212,0.85); }
-.shot-cell.drag-over { outline: 2px dashed #006dd4; outline-offset: 3px; border-radius: 9px; }
 .shot-badge-framing {
   position: absolute; bottom: 8px; left: 8px;
   font-size: 10px; font-weight: 700; font-family: var(--font);
