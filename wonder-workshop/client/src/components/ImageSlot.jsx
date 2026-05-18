@@ -286,15 +286,26 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       // object recording exactly which stage succeeded or failed, so the
       // generation log can tell network errors / bad HTTP / missing URL /
       // failed image loads apart.
+      // VITE_IMAGE_PROVIDER picks the generator at build time. Default
+       // is 'pollinations'; set to 'gemini' in .env.local (locally) or
+       // Vercel env vars (prod) to route every generation through Nano
+       // Banana Pro via /api/image-gemini. Endpoint contract is the
+       // same — both return { image: <url-or-data-url> }.
+      const provider = (import.meta.env.VITE_IMAGE_PROVIDER || 'pollinations').toLowerCase()
+      const endpoint = provider === 'gemini' ? '/api/image-gemini' : '/api/image'
+      const payload = provider === 'gemini'
+        ? { prompt: text, ratio: effectiveRatio }
+        : { prompt: text, ...dims, ...(seed != null ? { seed } : {}) }
+
       async function attemptOnce() {
         const started = performance.now()
         const ms = () => Math.round(performance.now() - started)
         let res
         try {
-          res = await fetch('/api/image', {
+          res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: text, ...dims, ...(seed != null ? { seed } : {}) }),
+            body: JSON.stringify(payload),
           })
         } catch (err) {
           return { url: null, stage: 'fetch-threw', detail: String(err?.message || err), ms: ms() }
@@ -310,7 +321,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         return new Promise(resolve => {
           const probe = new Image()
           probe.onload = () => resolve({ url: data.image, stage: 'ok', status: res.status, imageUrl: data.image, ms: ms() })
-          probe.onerror = () => resolve({ url: null, stage: 'probe-failed', status: res.status, imageUrl: data.image, detail: 'Pollinations image URL failed to load in the browser', ms: ms() })
+          probe.onerror = () => resolve({ url: null, stage: 'probe-failed', status: res.status, imageUrl: data.image, detail: `${provider} image URL failed to load in the browser`, ms: ms() })
           probe.src = data.image
         })
       }
