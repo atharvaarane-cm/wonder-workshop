@@ -62,8 +62,22 @@ const CARD_GRADIENTS = [
   'linear-gradient(135deg,#0a1a2e,#1a4060)',
 ]
 
-export default function Discover({ onGenerate, onStartBlank, projects = [], onOpenProject, onDeleteProject, onRenameProject, onMoveProjectToFolder, onDuplicateProject, theme, toggleTheme }) {
+export default function Discover({ onGenerate, onStartBlank, projects = [], folders: folderList = [], onOpenProject, onDeleteProject, onRenameProject, onMoveProjectToFolder, onDuplicateProject, onCreateFolder, onDeleteFolder, onRenameFolder, theme, toggleTheme }) {
   const [activePage, setActivePage] = useState('home')
+  // Drilled-in folder name (string) or null for the folder list view.
+  // Reset to null whenever the user navigates away from the Projects page
+  // so coming back lands on the folder grid rather than the last folder.
+  const [viewingFolder, setViewingFolder] = useState(null)
+  // Inline "New folder" creation states.
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  // Rename target for folder headers.
+  const [renamingFolder, setRenamingFolder] = useState(null)
+  const [folderRenameValue, setFolderRenameValue] = useState('')
+  // Per-card move-to-folder popover { projectId, anchorRect }
+  const [movePopover, setMovePopover] = useState(null)
+  // Folder tile receiving a drag-over highlight.
+  const [dragOverFolder, setDragOverFolder] = useState(null)
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [sidebarExpanded, setSidebarExpanded] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(220)
@@ -118,15 +132,55 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], onOp
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [menuOpenId])
 
-  function promptMoveToFolder(p) {
+  // Open the move-to-folder popover anchored to the triggering button.
+  // Replaces the old window.prompt — lets users pick from existing folders
+  // or create a new one inline.
+  function openMovePopover(p, event) {
     setMenuOpenId(null)
-    const folder = window.prompt(
-      `Move "${p.name || 'project'}" to which folder? (leave blank to clear)`,
-      p.folder || '',
-    )
-    if (folder == null) return // cancelled
-    onMoveProjectToFolder?.(p.id, folder.trim())
+    const target = event?.currentTarget || event?.target
+    const rect = target?.getBoundingClientRect?.() || { left: 0, top: 0, bottom: 0, right: 0 }
+    setMovePopover({
+      projectId: p.id,
+      currentFolder: p.folder || null,
+      anchor: { left: rect.left, top: rect.bottom + 6, right: rect.right },
+    })
   }
+  function closeMovePopover() { setMovePopover(null); setNewFolderName('') }
+
+  function commitNewFolder() {
+    const cleaned = (newFolderName || '').trim()
+    if (!cleaned) { setCreatingFolder(false); setNewFolderName(''); return }
+    onCreateFolder?.(cleaned)
+    setCreatingFolder(false)
+    setNewFolderName('')
+  }
+  function commitFolderRename() {
+    const from = renamingFolder
+    const to = (folderRenameValue || '').trim()
+    if (from && to && from !== to) onRenameFolder?.(from, to)
+    setRenamingFolder(null)
+    setFolderRenameValue('')
+  }
+  function handleDeleteFolder(name) {
+    if (!window.confirm(`Delete folder "${name}"? Projects inside will move to Unfiled.`)) return
+    onDeleteFolder?.(name)
+    if (viewingFolder === name) setViewingFolder(null)
+  }
+
+  // Close the move popover on outside click / escape.
+  useEffect(() => {
+    if (!movePopover) return
+    function onDocClick(e) {
+      if (!e.target.closest('.move-popover')) closeMovePopover()
+    }
+    function onKey(e) { if (e.key === 'Escape') closeMovePopover() }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [movePopover])
 
   function onDragHandleMouseDown(e) {
     e.preventDefault()
@@ -254,7 +308,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], onOp
             <div
               key={item.id}
               className={`nav-item${activePage === item.id ? ' active' : ''}`}
-              onClick={() => setActivePage(item.id)}
+              onClick={() => { setActivePage(item.id); setViewingFolder(null) }}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -347,7 +401,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], onOp
                             <div className="sidebar-recent-menu" onClick={e => e.stopPropagation()}>
                               <button onClick={e => { setMenuOpenId(null); startRename(p, e) }}>Rename</button>
                               <button onClick={() => { setMenuOpenId(null); onDuplicateProject?.(p.id) }}>Duplicate</button>
-                              <button onClick={() => promptMoveToFolder(p)}>Move to folder…</button>
+                              <button onClick={e => openMovePopover(p, e)}>Move to folder…</button>
                               <button
                                 className="sidebar-recent-menu-danger"
                                 onClick={() => { setMenuOpenId(null); onDeleteProject?.(p.id) }}
@@ -405,65 +459,303 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], onOp
         {/* ── Projects page ── */}
         {activePage === 'projects' && (
           <main className="discover-page">
-            <div className="page-header">
-              <h2 className="page-title">Projects</h2>
-              <span className="page-count">{projects.length} brief{projects.length !== 1 ? 's' : ''}</span>
-            </div>
-            {projects.length === 0 ? (
-              <div className="page-empty">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.3"/><path d="M3 9h18" stroke="currentColor" strokeWidth="1.3"/></svg>
-                <p>No projects yet. Generate your first brief from Home.</p>
-                <button className="page-empty-btn" onClick={() => setActivePage('home')}>Go to Home</button>
-              </div>
-            ) : (
-              <div className="projects-by-folder">
-                {folders.map(([folderName, folderProjects], folderIdx) => {
-                  const filtered = folderProjects.filter(p => !discoverSearch
-                    || p.name?.toLowerCase().includes(discoverSearch.toLowerCase())
-                    || p.brief?.creativeDirection?.brand?.toLowerCase().includes(discoverSearch.toLowerCase()))
-                  if (!filtered.length) return null
-                  // Skip the folder header when "Projects" is the only bucket —
-                  // keeps the page clean for users without custom folders.
-                  const showHeader = folders.length > 1
-                  return (
-                    <div className="projects-folder" key={folderName}>
-                      {showHeader && (
-                        <div className="projects-folder-header">
-                          <span className="projects-folder-name">{folderName}</span>
-                          <span className="projects-folder-count">{filtered.length}</span>
+            {(() => {
+              // Search filter applies in both modes (folder grid + drilled-in).
+              const q = discoverSearch.trim().toLowerCase()
+              const matchesQuery = p => !q
+                || p.name?.toLowerCase().includes(q)
+                || p.brief?.creativeDirection?.brand?.toLowerCase().includes(q)
+
+              // Unfiled = projects with no folder, drilled-in folder = projects in that folder.
+              const visibleProjects = projects.filter(matchesQuery)
+              const unfiledProjects = visibleProjects.filter(p => !p.folder)
+              const inFolderProjects = viewingFolder
+                ? visibleProjects.filter(p => p.folder === viewingFolder)
+                : []
+
+              // Card renderer — shared between folder view and Unfiled section.
+              function renderCard(p, i) {
+                return (
+                  <div
+                    key={p.id}
+                    className="project-card"
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData('text/ww-project-id', String(p.id))
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onClick={() => onOpenProject(p)}
+                  >
+                    <div className="project-card-bg" style={{ background: CARD_GRADIENTS[i % CARD_GRADIENTS.length] }}>
+                      <span className="project-card-brand">{p.brief?.creativeDirection?.brand || p.name}</span>
+                    </div>
+                    <div className="project-card-body">
+                      <div className="project-card-name">{p.name}</div>
+                      <div className="project-card-meta">
+                        {p.brief?.creativeDirection?.format && <span>{p.brief.creativeDirection.format}</span>}
+                        {p.brief?.creativeDirection?.shots && <span>{p.brief.creativeDirection.shots} shots</span>}
+                        {p.createdAt && <span>{new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                      </div>
+                    </div>
+                    <div className="project-card-actions" onClick={e => e.stopPropagation()}>
+                      <button onClick={e => { e.stopPropagation(); startRename(p, e) }} title="Rename">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 8.5V10h1.5l5-5L7 3.5l-5 5zM7.7 2.8l1.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); openMovePopover(p, e) }} title="Move to folder…">
+                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 4a1 1 0 011-1h3l1 1h4a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); onDeleteProject?.(p.id) }} title="Delete">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                )
+              }
+
+              // Drilled-in folder view: breadcrumb back + folder name +
+              // grid of just that folder's projects.
+              if (viewingFolder) {
+                return (
+                  <>
+                    <div className="folder-breadcrumb">
+                      <button className="folder-breadcrumb-back" onClick={() => setViewingFolder(null)}>
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                          <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        Projects
+                      </button>
+                      <span className="folder-breadcrumb-sep">/</span>
+                      {renamingFolder === viewingFolder ? (
+                        <input
+                          autoFocus
+                          className="folder-rename-input"
+                          value={folderRenameValue}
+                          onChange={e => setFolderRenameValue(e.target.value)}
+                          onBlur={commitFolderRename}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); commitFolderRename() }
+                            if (e.key === 'Escape') { e.preventDefault(); setRenamingFolder(null) }
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="folder-breadcrumb-name"
+                          title="Double-click to rename"
+                          onDoubleClick={() => { setRenamingFolder(viewingFolder); setFolderRenameValue(viewingFolder) }}
+                        >
+                          {viewingFolder}
+                        </span>
+                      )}
+                      <span className="folder-breadcrumb-count">{inFolderProjects.length}</span>
+                      <div className="folder-breadcrumb-actions">
+                        <button onClick={() => { setRenamingFolder(viewingFolder); setFolderRenameValue(viewingFolder) }} title="Rename folder">
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 8.5V10h1.5l5-5L7 3.5l-5 5zM7.7 2.8l1.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </button>
+                        <button className="folder-breadcrumb-delete" onClick={() => handleDeleteFolder(viewingFolder)} title="Delete folder">
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                    {inFolderProjects.length === 0 ? (
+                      <div className="page-empty">
+                        <p>No projects in this folder yet. Drag a project tile here from <button className="link-btn" onClick={() => setViewingFolder(null)}>Projects</button>.</p>
+                      </div>
+                    ) : (
+                      <div className="projects-grid">
+                        {inFolderProjects.map(renderCard)}
+                      </div>
+                    )}
+                  </>
+                )
+              }
+
+              // Folder grid view: folder tiles on top + Unfiled below.
+              if (projects.length === 0 && folderList.length === 0) {
+                return (
+                  <>
+                    <div className="page-header">
+                      <h2 className="page-title">Projects</h2>
+                      <span className="page-count">0 briefs</span>
+                    </div>
+                    <div className="page-empty">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.3"/><path d="M3 9h18" stroke="currentColor" strokeWidth="1.3"/></svg>
+                      <p>No projects yet. Generate your first brief from Home.</p>
+                      <button className="page-empty-btn" onClick={() => setActivePage('home')}>Go to Home</button>
+                    </div>
+                  </>
+                )
+              }
+
+              return (
+                <>
+                  <div className="page-header">
+                    <h2 className="page-title">Projects</h2>
+                    <span className="page-count">{projects.length} brief{projects.length !== 1 ? 's' : ''}</span>
+                  </div>
+
+                  {/* Folder tiles row */}
+                  <div className="folders-section">
+                    <div className="folders-section-header">
+                      <span className="folders-section-label">FOLDERS</span>
+                      <button
+                        className="folders-new-btn"
+                        onClick={() => { setCreatingFolder(true); setNewFolderName('') }}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                          <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                        </svg>
+                        New folder
+                      </button>
+                    </div>
+                    <div className="folders-grid">
+                      {creatingFolder && (
+                        <div className="folder-tile folder-tile-new">
+                          <div className="folder-tile-icon">
+                            <svg width="34" height="28" viewBox="0 0 34 28" fill="none">
+                              <path d="M2 6a2 2 0 012-2h8l3 3h15a2 2 0 012 2v15a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                            </svg>
+                          </div>
+                          <input
+                            autoFocus
+                            className="folder-tile-rename"
+                            placeholder="Folder name…"
+                            value={newFolderName}
+                            onChange={e => setNewFolderName(e.target.value)}
+                            onBlur={commitNewFolder}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') { e.preventDefault(); commitNewFolder() }
+                              if (e.key === 'Escape') { e.preventDefault(); setCreatingFolder(false); setNewFolderName('') }
+                            }}
+                          />
                         </div>
                       )}
-                      <div className="projects-grid">
-                        {filtered.map((p, i) => (
-                          <div key={p.id} className="project-card" onClick={() => onOpenProject(p)}>
-                            <div className="project-card-bg" style={{ background: CARD_GRADIENTS[(folderIdx * 3 + i) % CARD_GRADIENTS.length] }}>
-                              <span className="project-card-brand">{p.brief?.creativeDirection?.brand || p.name}</span>
+                      {folderList.map(f => {
+                        const isOver = dragOverFolder === f.name
+                        return (
+                          <div
+                            key={f.name}
+                            className={`folder-tile${isOver ? ' folder-tile-drag-over' : ''}`}
+                            onClick={() => setViewingFolder(f.name)}
+                            onDragOver={e => {
+                              if (e.dataTransfer.types.includes('text/ww-project-id')) {
+                                e.preventDefault()
+                                e.dataTransfer.dropEffect = 'move'
+                                if (dragOverFolder !== f.name) setDragOverFolder(f.name)
+                              }
+                            }}
+                            onDragLeave={() => { if (dragOverFolder === f.name) setDragOverFolder(null) }}
+                            onDrop={e => {
+                              e.preventDefault()
+                              const id = Number(e.dataTransfer.getData('text/ww-project-id'))
+                              if (id) onMoveProjectToFolder?.(id, f.name)
+                              setDragOverFolder(null)
+                            }}
+                          >
+                            <div className="folder-tile-icon">
+                              <svg width="34" height="28" viewBox="0 0 34 28" fill="none">
+                                <path d="M2 6a2 2 0 012-2h8l3 3h15a2 2 0 012 2v15a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                              </svg>
                             </div>
-                            <div className="project-card-body">
-                              <div className="project-card-name">{p.name}</div>
-                              <div className="project-card-meta">
-                                {p.brief?.creativeDirection?.format && <span>{p.brief.creativeDirection.format}</span>}
-                                {p.brief?.creativeDirection?.shots && <span>{p.brief.creativeDirection.shots} shots</span>}
-                                {p.createdAt && <span>{new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
-                              </div>
-                            </div>
-                            <div className="project-card-actions" onClick={e => e.stopPropagation()}>
-                              <button onClick={e => { e.stopPropagation(); startRename(p, e) }} title="Rename">
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 8.5V10h1.5l5-5L7 3.5l-5 5zM7.7 2.8l1.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            {renamingFolder === f.name ? (
+                              <input
+                                autoFocus
+                                className="folder-tile-rename"
+                                value={folderRenameValue}
+                                onChange={e => setFolderRenameValue(e.target.value)}
+                                onBlur={commitFolderRename}
+                                onClick={e => e.stopPropagation()}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') { e.preventDefault(); commitFolderRename() }
+                                  if (e.key === 'Escape') { e.preventDefault(); setRenamingFolder(null) }
+                                }}
+                              />
+                            ) : (
+                              <span className="folder-tile-name" onDoubleClick={e => { e.stopPropagation(); setRenamingFolder(f.name); setFolderRenameValue(f.name) }}>
+                                {f.name}
+                              </span>
+                            )}
+                            <span className="folder-tile-count">{f.count}</span>
+                            <div className="folder-tile-actions" onClick={e => e.stopPropagation()}>
+                              <button onClick={() => { setRenamingFolder(f.name); setFolderRenameValue(f.name) }} title="Rename">
+                                <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 8.5V10h1.5l5-5L7 3.5l-5 5zM7.7 2.8l1.5 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                               </button>
-                              <button onClick={e => { e.stopPropagation(); promptMoveToFolder(p) }} title="Move to folder…">
-                                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 4a1 1 0 011-1h3l1 1h4a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
-                              </button>
-                              <button onClick={e => { e.stopPropagation(); onDeleteProject?.(p.id) }} title="Delete">
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                              <button onClick={() => handleDeleteFolder(f.name)} title="Delete folder">
+                                <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                               </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        )
+                      })}
+                      {folderList.length === 0 && !creatingFolder && (
+                        <div className="folders-empty-hint">No folders yet. Use “New folder” to create one — then drag projects in.</div>
+                      )}
                     </div>
-                  )
-                })}
+                  </div>
+
+                  {/* Unfiled section */}
+                  <div className="folders-unfiled">
+                    <div className="folders-section-header">
+                      <span className="folders-section-label">UNFILED</span>
+                      <span className="folders-section-count">{unfiledProjects.length}</span>
+                    </div>
+                    {unfiledProjects.length === 0 ? (
+                      <div className="folders-empty-hint">All projects are filed into folders.</div>
+                    ) : (
+                      <div className="projects-grid">
+                        {unfiledProjects.map(renderCard)}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )
+            })()}
+
+            {/* Move-to-folder popover, anchored to the triggering button. */}
+            {movePopover && (
+              <div
+                className="move-popover"
+                style={{ position: 'fixed', left: movePopover.anchor.left, top: movePopover.anchor.top, zIndex: 400 }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="move-popover-label">Move to folder</div>
+                <div className="move-popover-list">
+                  <button
+                    className={`move-popover-item${!movePopover.currentFolder ? ' active' : ''}`}
+                    onClick={() => { onMoveProjectToFolder?.(movePopover.projectId, ''); closeMovePopover() }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                    Unfiled
+                  </button>
+                  {folderList.map(f => (
+                    <button
+                      key={f.name}
+                      className={`move-popover-item${movePopover.currentFolder === f.name ? ' active' : ''}`}
+                      onClick={() => { onMoveProjectToFolder?.(movePopover.projectId, f.name); closeMovePopover() }}
+                    >
+                      <svg width="13" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 3a1 1 0 011-1h3.5l1 1H12a1 1 0 011 1v5a1 1 0 01-1 1H2a1 1 0 01-1-1V3z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+                      {f.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="move-popover-divider" />
+                <div className="move-popover-new">
+                  <input
+                    className="move-popover-new-input"
+                    placeholder="New folder…"
+                    value={newFolderName}
+                    onChange={e => setNewFolderName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const cleaned = (newFolderName || '').trim()
+                        if (!cleaned) return
+                        onCreateFolder?.(cleaned)
+                        onMoveProjectToFolder?.(movePopover.projectId, cleaned)
+                        closeMovePopover()
+                      }
+                    }}
+                  />
+                </div>
               </div>
             )}
           </main>

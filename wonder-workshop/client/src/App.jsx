@@ -14,6 +14,10 @@ import {
   renameProject,
   moveProjectToFolder,
   duplicateProject,
+  listFolders,
+  createFolder,
+  deleteFolder,
+  renameFolder,
 } from './hooks/useProject.js'
 
 function parseShareHash() {
@@ -32,6 +36,7 @@ export default function App() {
   const [shareData] = useState(() => parseShareHash())
   const [project, setProject] = useState(() => shareData ? null : getActiveProject())
   const [projects, setProjects] = useState(() => listProjects())
+  const [folders, setFolders] = useState(() => listFolders())
   // Set when a project is created via "Generate" (not "Start blank" or
   // opening an existing one). Board reads it on mount and fires
   // image generation across every section, per Ravi's "it should
@@ -49,7 +54,10 @@ export default function App() {
     setTheme(t => t === 'light' ? 'dark' : 'light')
   }
 
-  function refreshList() { setProjects(listProjects()) }
+  function refreshList() {
+    setProjects(listProjects())
+    setFolders(listFolders())
+  }
 
   function handleGenerate(brief) {
     const p = createProject(brief)
@@ -116,6 +124,20 @@ export default function App() {
   function handleDuplicateProject(id) {
     const copy = duplicateProject(id)
     if (!copy) return
+    refreshList()
+  }
+
+  function handleCreateFolder(name) {
+    const cleaned = createFolder(name)
+    if (cleaned) refreshList()
+    return cleaned
+  }
+  function handleDeleteFolder(name) {
+    deleteFolder(name)
+    refreshList()
+  }
+  function handleRenameFolder(oldName, newName) {
+    renameFolder(oldName, newName)
     refreshList()
   }
 
@@ -197,11 +219,15 @@ export default function App() {
       onGenerate={handleGenerate}
       onStartBlank={handleStartBlank}
       projects={projects}
+      folders={folders}
       onOpenProject={handleOpenProject}
       onDeleteProject={handleDeleteProject}
       onRenameProject={handleRenameProject}
       onMoveProjectToFolder={handleMoveProjectToFolder}
       onDuplicateProject={handleDuplicateProject}
+      onCreateFolder={handleCreateFolder}
+      onDeleteFolder={handleDeleteFolder}
+      onRenameFolder={handleRenameFolder}
       theme={theme}
       toggleTheme={toggleTheme}
     />
