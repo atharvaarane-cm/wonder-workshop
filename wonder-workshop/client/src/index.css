@@ -1163,7 +1163,7 @@ textarea { font-family: var(--font); resize: none; }
 .topbar-desc-cancel:hover { background: rgba(0,0,0,0.04); }
 .topbar-desc-regen {
   font-size: 12px; padding: 0 14px; height: 30px; border-radius: 7px;
-  border: none; background: var(--dark); color: #fff;
+  border: none; background: var(--dark); color: var(--card);
   font-family: var(--font); cursor: pointer;
 }
 .topbar-desc-regen:hover:not(:disabled) { opacity: 0.85; }
