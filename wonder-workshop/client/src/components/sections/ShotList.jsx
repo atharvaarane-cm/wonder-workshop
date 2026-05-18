@@ -158,7 +158,7 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
         return (
         <div
           className={`shot-cell${dragOverIdx === i ? ' drag-over' : ''}`}
-          key={shot.num}
+          key={shot.id || shot.num}
           draggable
           onDragStart={e => onShotDragStart(e, i)}
           onDragOver={e => onShotCellDragOver(e, i)}
