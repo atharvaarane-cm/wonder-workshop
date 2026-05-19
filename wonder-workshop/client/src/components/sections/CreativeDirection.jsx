@@ -32,51 +32,46 @@ export default function CreativeDirection({ data, update, currentRatio, onAspect
   return (
     <div className="cd-wrap">
 
-      {/* Blue header strip — "Creative" left, DURATION + ASPECT RATIO
-          right-aligned per the Figma mockup. Vertical separators sit
-          between each item (Creative | Duration | Aspect Ratio). */}
+      {/* Blue header strip — three columns split by full-height dividers
+          per the Figma spec (node 20:20). Grid columns are 5fr 1px 2fr
+          1px 5fr so Creative occupies the wide left chunk, Duration the
+          narrow middle, and Aspect Ratio the wide right chunk. */}
       <div className="cd-feature-bar">
-        <span className="cd-feature-label">Creative</span>
-        <div className="cd-feature-meta">
-          {data.duration && (
-            <>
-              <span className="cd-feature-sep" aria-hidden="true" />
-              <div className="cd-feature-meta-item">
-                <span className="cd-feature-meta-label">DURATION</span>
-                <span className="cd-feature-meta-val">{data.duration}</span>
-              </div>
-            </>
+        <div className="cd-feature-label">Creative</div>
+        <span className="cd-feature-sep" aria-hidden="true" />
+        <div className="cd-feature-meta-item">
+          <span className="cd-feature-meta-label">DURATION</span>
+          <span className="cd-feature-meta-val">{data.duration || '—'}</span>
+        </div>
+        <span className="cd-feature-sep" aria-hidden="true" />
+        <div className="cd-ratio-wrap" ref={wrapRef}>
+          <button
+            type="button"
+            className="cd-feature-meta-item cd-ratio-btn"
+            onClick={() => setMenuOpen(o => !o)}
+            title="Change aspect ratio"
+          >
+            <span className="cd-feature-meta-label">ASPECT RATIO</span>
+            <span className="cd-feature-meta-val">
+              {ratio}
+              <svg className="cd-ratio-chevron" width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 4.5l3.5 3.5 3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+          </button>
+          {menuOpen && (
+            <div className="cd-ratio-menu" onClick={e => e.stopPropagation()}>
+              {RATIO_OPTIONS.map(r => (
+                <button
+                  key={r}
+                  className={`cd-ratio-item${r === ratio ? ' active' : ''}`}
+                  onClick={() => pickRatio(r)}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
           )}
-          <span className="cd-feature-sep" aria-hidden="true" />
-          <div className="cd-ratio-wrap" ref={wrapRef}>
-            <button
-              type="button"
-              className="cd-feature-meta-item cd-ratio-btn"
-              onClick={() => setMenuOpen(o => !o)}
-              title="Change aspect ratio"
-            >
-              <span className="cd-feature-meta-label">ASPECT RATIO</span>
-              <span className="cd-feature-meta-val">
-                {ratio}
-                <svg className="cd-ratio-chevron" width="11" height="11" viewBox="0 0 12 12" fill="none">
-                  <path d="M2.5 4.5l3.5 3.5 3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </span>
-            </button>
-            {menuOpen && (
-              <div className="cd-ratio-menu" onClick={e => e.stopPropagation()}>
-                {RATIO_OPTIONS.map(r => (
-                  <button
-                    key={r}
-                    className={`cd-ratio-item${r === ratio ? ' active' : ''}`}
-                    onClick={() => pickRatio(r)}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
