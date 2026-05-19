@@ -19,6 +19,7 @@ import {
   deleteFolder,
   renameFolder,
 } from './hooks/useProject.js'
+import { hydrate as hydrateImages, isHydrated as imagesReady, subscribe as subscribeImages, getImagesForProject } from './hooks/imageStore.js'
 
 function parseShareHash() {
   try {
@@ -34,9 +35,34 @@ function parseShareHash() {
 
 export default function App() {
   const [shareData] = useState(() => parseShareHash())
+  const [imagesHydrated, setImagesHydrated] = useState(() => imagesReady())
   const [project, setProject] = useState(() => shareData ? null : getActiveProject())
   const [projects, setProjects] = useState(() => listProjects())
   const [folders, setFolders] = useState(() => listFolders())
+
+  // Hydrate images from IndexedDB on first mount, then re-pull the active
+  // project and the project list so they reflect the loaded image data.
+  // Components read images via project.images, which is synthesised from
+  // the imageStore cache — until hydration completes, those reads return
+  // empty objects and the UI shows empty slots.
+  useEffect(() => {
+    if (imagesHydrated) return
+    hydrateImages().then(() => {
+      setImagesHydrated(true)
+      // Refresh project + list now that images are populated
+      setProject(p => p ? { ...p, images: getImagesForProject(p.id) } : p)
+      setProjects(listProjects())
+    })
+  }, [imagesHydrated])
+
+  // Re-render whenever the imageStore reports a change (e.g. when a slot
+  // image saves) so components reading project.images via context pick up
+  // the new data.
+  useEffect(() => {
+    return subscribeImages(() => {
+      setProject(p => p ? { ...p, images: getImagesForProject(p.id) } : p)
+    })
+  }, [])
   // Set when a project is created via "Generate" (not "Start blank" or
   // opening an existing one). Board reads it on mount and fires
   // image generation across every section, per Ravi's "it should
