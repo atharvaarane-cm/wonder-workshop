@@ -15,8 +15,16 @@ export default async function handler(req, res) {
   const systemMsg = messages.find(m => m.role === 'system')
   const chatMsgs  = messages.filter(m => m.role !== 'system')
 
-  // Convert to Gemini history format (all but last message)
-  const history = chatMsgs.slice(0, -1).map(m => ({
+  // Convert to Gemini history format (all but last message). Gemini
+  // requires the history to START with a 'user' role, so drop any
+  // leading assistant messages (the AgentPanel seeds the chat with an
+  // opening agent line that persists to localStorage — if not stripped,
+  // Gemini returns "First content should be with role 'user'").
+  let rawHistory = chatMsgs.slice(0, -1)
+  while (rawHistory.length && rawHistory[0].role === 'assistant') {
+    rawHistory = rawHistory.slice(1)
+  }
+  const history = rawHistory.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }))
