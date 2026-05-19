@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   const lastMsg = chatMsgs[chatMsgs.length - 1]?.content ?? ''
 
   const modelConfig = {
-    model: 'gemini-2.0-flash',
+    model: process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash',
     ...(systemMsg ? { systemInstruction: systemMsg.content } : {}),
   }
   // Tool calling forces non-streaming. Streaming function-call responses are
