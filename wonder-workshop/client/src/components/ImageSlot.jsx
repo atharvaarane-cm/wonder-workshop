@@ -47,6 +47,13 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   const [brokenSrc, setBrokenSrc] = useState(null)
   const [pendingUndo, setPendingUndo] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // "Improve with AI" popover state. Lets the user type a modification
+  // instruction (e.g. "more cinematic lighting") and re-runs the slot
+  // through the image generator with the current image as a reference
+  // input. Image-conditioned regen is Gemini-only; Pollinations falls
+  // back to a text-only regen with the augmented prompt.
+  const [improveOpen, setImproveOpen] = useState(false)
+  const [improveText, setImproveText] = useState('')
   // VITE_IMAGE_PROVIDER picks the generator (pollinations | gemini) at
   // build time. Hoisted to component scope so JSX (e.g. the upscale
   // button) can gate on it.
@@ -471,6 +478,73 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     })
   }
 
+  // "Improve with AI" — user supplies a short instruction
+  // ("more cinematic", "warmer lighting", "tighter composition") and
+  // we re-run the slot through the generator with that addendum.
+  // When provider=gemini, the current image is passed as a reference
+  // input so the result iterates on what's already there rather than
+  // starting from scratch. Result lands as a new version on the slot.
+  async function runImprove(instruction) {
+    setImproveOpen(false)
+    const tidy = (instruction || '').trim()
+    if (!tidy) return
+    if (!activeImage?.src) return
+    setQueued(true)
+    setError(null)
+    await enqueue(async () => {
+      setQueued(false)
+      bumpLoading(+1)
+      try {
+        const basePrompt = (editablePrompt || prompt || 'image').trim()
+        // Build a prompt that keeps the original subject + adds the
+        // user's improvement instruction. Phrasing nudges the model
+        // to apply the tweak as a refinement, not a rewrite.
+        const improvedPrompt = `${basePrompt}. Refined: ${tidy}. Keep the same subject and composition; apply the refinement.`
+        const effectiveRatio = ratio || project?.ratio || '16:9'
+        const endpoint = provider === 'gemini' ? '/api/image-gemini' : '/api/image'
+        const body = provider === 'gemini'
+          ? { prompt: improvedPrompt, ratio: effectiveRatio, referenceImages: [activeImage.src] }
+          : { prompt: improvedPrompt, ...(RATIO_DIMS[effectiveRatio] || RATIO_DIMS['16:9']) }
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const text = await res.text().catch(() => '')
+          setError(`Improve failed (HTTP ${res.status})`)
+          toast(`Improve failed: ${text.slice(0, 120) || res.status}`, 'error')
+          return
+        }
+        const data = await res.json().catch(() => ({}))
+        if (!data.image) {
+          setError('Improve: no image returned')
+          toast('Improve returned no image', 'error')
+          return
+        }
+        const newVersion = {
+          src: data.image,
+          prompt: improvedPrompt,
+          createdAt: Date.now(),
+          source: 'improve',
+        }
+        setVersions(prev => {
+          const updated = [...prev, newVersion]
+          setActiveVersion(updated.length - 1)
+          return updated
+        })
+        setImproveText('')
+        toast('Improved')
+      } catch (err) {
+        setError(`Improve failed: ${err?.message || err}`)
+        toast('Improve failed — see console', 'error')
+        console.error('[ImageSlot] improve failed', err)
+      } finally {
+        bumpLoading(-1)
+      }
+    })
+  }
+
   async function downloadImage(e) {
     e?.stopPropagation?.()
     if (!activeImage) return
@@ -731,6 +805,18 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
               <button className="ihn-btn" onClick={e => { e.stopPropagation(); inputRef.current.click() }} data-tip="Replace with an upload">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 14V6M5 9l3-3 3 3M3 3h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
+              <button
+                className="ihn-btn ihn-btn-improve"
+                onClick={e => { e.stopPropagation(); setImproveOpen(o => !o) }}
+                disabled={loading}
+                data-tip="Improve with AI"
+              >
+                {/* Pencil + sparkle — the "AI improve" affordance */}
+                <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
+                  <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                  <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
+                </svg>
+              </button>
               <button className="ihn-edit" onClick={e => { e.stopPropagation(); setEditingPrompt(true) }}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Edit with prompt
@@ -753,6 +839,28 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
+            {improveOpen && (
+              <div className="img-improve-popover" onClick={e => e.stopPropagation()}>
+                <div className="img-improve-label">Improve with AI</div>
+                <input
+                  autoFocus
+                  className="img-improve-input"
+                  placeholder="e.g. more cinematic lighting / tighter composition / cleaner background"
+                  value={improveText}
+                  onChange={e => setImproveText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); runImprove(improveText) }
+                    if (e.key === 'Escape') { e.preventDefault(); setImproveOpen(false) }
+                  }}
+                />
+                <div className="img-improve-actions">
+                  <button className="img-improve-cancel" onClick={() => setImproveOpen(false)}>Cancel</button>
+                  <button className="img-improve-go" disabled={!improveText.trim()} onClick={() => runImprove(improveText)}>
+                    Improve
+                  </button>
+                </div>
+              </div>
+            )}
             {pendingUndo && (
               <div className="img-slot-undo" onClick={e => e.stopPropagation()}>
                 <span>Deleted</span>
