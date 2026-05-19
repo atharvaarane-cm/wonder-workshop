@@ -68,9 +68,9 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     return () => document.removeEventListener('mousedown', onDoc)
   }, [upscaleMenuOpen])
   // VITE_IMAGE_PROVIDER picks the generator (pollinations | gemini) at
-  // build time. Hoisted to component scope so JSX (e.g. the upscale
-  // button) can gate on it.
-  const provider = (import.meta.env.VITE_IMAGE_PROVIDER || 'pollinations').toLowerCase()
+  // build time. Default is Gemini Nano Banana Pro — set the env var to
+  // 'pollinations' to fall back to the legacy provider.
+  const provider = (import.meta.env.VITE_IMAGE_PROVIDER || 'gemini').toLowerCase()
   const [copyState, setCopyState] = useState(null)
   const inputRef = useRef()
   const slotRef = useRef()
