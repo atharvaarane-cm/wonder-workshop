@@ -67,6 +67,23 @@ export default function BrandInfo({ data, update }) {
           }
         </div>
 
+        {/* Paste a brand website URL — we derive the logo from the
+            site's favicon (s2/faviconV2 endpoints). If the user provides
+            an explicit logoUrl that takes priority; otherwise the domain
+            from sourceUrl is used. */}
+        <div className="bi-source-input-wrap">
+          <input
+            type="url"
+            className="bi-source-input"
+            placeholder="Paste brand URL (e.g. nike.com) to pull the logo…"
+            value={sourceUrl}
+            onChange={e => {
+              setSrcIdx(0); setLogoFailed(false)
+              update('brandInfo.sourceUrl', e.target.value)
+            }}
+          />
+        </div>
+
         {sourceUrl && (
           <a href={sourceUrl} target="_blank" rel="noreferrer" className="bi-source-link">
             {domain || 'Visit site'} ↗

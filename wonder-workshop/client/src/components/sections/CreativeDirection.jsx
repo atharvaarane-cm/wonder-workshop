@@ -32,21 +32,19 @@ export default function CreativeDirection({ data, update, currentRatio, onAspect
   return (
     <div className="cd-wrap">
 
-      {/* Blue header strip — "Creative" label on the left,
-          dividers + DURATION + ASPECT RATIO (dropdown) on the right. */}
+      {/* Blue header strip — "Creative" label on the LEFT, DURATION +
+          ASPECT RATIO right-justified per the Figma mockup. No dividers
+          between items; values are white (not the muted light blue we
+          had before). */}
       <div className="cd-feature-bar">
         <span className="cd-feature-label">Creative</span>
         <div className="cd-feature-meta">
           {data.duration && (
-            <>
-              <span className="cd-feature-sep" aria-hidden="true" />
-              <div className="cd-feature-meta-item">
-                <span className="cd-feature-meta-label">DURATION</span>
-                <span className="cd-feature-meta-val">{data.duration}</span>
-              </div>
-            </>
+            <div className="cd-feature-meta-item">
+              <span className="cd-feature-meta-label">DURATION</span>
+              <span className="cd-feature-meta-val">{data.duration}</span>
+            </div>
           )}
-          <span className="cd-feature-sep" aria-hidden="true" />
           <div className="cd-ratio-wrap" ref={wrapRef}>
             <button
               type="button"
