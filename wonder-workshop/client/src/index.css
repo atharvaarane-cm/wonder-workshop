@@ -1629,6 +1629,20 @@ textarea { font-family: var(--font); resize: none; }
 }
 .bi-source-input:focus { border-color: #006dd4; }
 .bi-source-input::placeholder { color: var(--faint); }
+.bi-source-input:disabled { opacity: 0.6; cursor: progress; }
+.bi-source-input-wrap { position: relative; }
+.bi-lookup-spinner {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: #006dd4;
+  animation: bi-spin .7s linear infinite;
+  pointer-events: none;
+}
+@keyframes bi-spin { to { transform: translateY(-50%) rotate(360deg); } }
+.bi-lookup-error {
+  display: block; margin-top: 4px;
+  font-size: 11px; color: #e25998;
+}
 
 /* BRAND COLORS — joined strip of color blocks, no gaps. Hex code fades in
    on hover. Click to copy. Matches the May 13 mockup. */
@@ -1839,17 +1853,21 @@ textarea { font-family: var(--font); resize: none; }
 .prod-add:hover { border-color: #3a3a3a; color: #fff; }
 /* Bio area: REFERENCE column on the left (1:1 portrait + variant thumbs),
    NAME + DESCRIPTION column on the right. Matches the May 13 mockup. */
+/* Figma node 22:31: reference column = 184px (matches the 184x184
+   reference image), gap ~30px, right column flexes. */
 .character-bio {
-  display: grid; grid-template-columns: 160px 1fr; gap: 22px;
+  display: grid; grid-template-columns: 184px 1fr; gap: 30px;
   padding-bottom: 18px; margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
   align-items: start;
 }
 .character-bio-reference { display: flex; flex-direction: column; gap: 8px; }
 .character-bio-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* Figma label color #717171, 12px bold uppercase. */
 .character-bio-label {
   font-size: 12px; font-weight: 700; text-transform: uppercase;
-  color: var(--muted); margin-bottom: 4px;
+  letter-spacing: 0.04em;
+  color: #717171; margin-bottom: 4px;
 }
 /* Headshots / Full Body — proper sentence-case headings, not tiny
    uppercase labels. Both groups share this so they line up exactly. */
@@ -1873,8 +1891,10 @@ textarea { font-family: var(--font); resize: none; }
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
 }
 .char-ref-thumb {
-  padding: 0; aspect-ratio: 1/1; border-radius: 6px; overflow: hidden;
-  border: 1px solid var(--border); background: var(--bg); cursor: pointer;
+  /* Figma: 57x57 (responsive via aspect-ratio), 7px radius,
+     border #282828 matching the rest of the dark-card slot style. */
+  padding: 0; aspect-ratio: 1/1; border-radius: 7px; overflow: hidden;
+  border: 1px solid #282828; background: var(--bg); cursor: pointer;
   transition: border-color 0.12s, transform 0.12s;
 }
 .char-ref-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }

@@ -47,6 +47,45 @@ export default function BrandInfo({ data, update }) {
   ].filter(Boolean)
   const [srcIdx, setSrcIdx] = useState(0)
   const [logoFailed, setLogoFailed] = useState(false)
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupError, setLookupError] = useState(null)
+
+  // Pull brand metadata (logo, colors, guidelines) from the URL the
+  // user typed. Hits /api/brand.js which has a known-brand table and
+  // a DuckDuckGo fallback. Extracts the brand name from the domain —
+  // "starbucks.com" → "starbucks" — so the endpoint can match.
+  async function lookupBrand(rawInput) {
+    const input = (rawInput || '').trim()
+    if (!input) return
+    let brand = input
+    try {
+      const normalized = /^https?:\/\//i.test(input) ? input : `https://${input}`
+      const url = new URL(normalized)
+      const host = url.hostname.replace(/^www\./, '')
+      brand = host.split('.')[0]
+    } catch {}
+    setLookupLoading(true)
+    setLookupError(null)
+    try {
+      const res = await fetch('/api/brand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand }),
+      })
+      const payload = await res.json()
+      if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`)
+      if (payload.sourceUrl) update('brandInfo.sourceUrl', payload.sourceUrl)
+      if (payload.logoUrl) update('brandInfo.logoUrl', payload.logoUrl)
+      if (payload.colors?.length) update('brandInfo.colors', payload.colors)
+      if (payload.rules) update('brandInfo.rules', payload.rules)
+      if (payload.brand) update('creativeDirection.brand', payload.brand)
+      setSrcIdx(0); setLogoFailed(false)
+    } catch (e) {
+      setLookupError(e?.message || 'Lookup failed')
+    } finally {
+      setLookupLoading(false)
+    }
+  }
 
   function handleError() {
     if (srcIdx + 1 < fallbacks.length) setSrcIdx(srcIdx + 1)
@@ -75,13 +114,27 @@ export default function BrandInfo({ data, update }) {
           <input
             type="url"
             className="bi-source-input"
-            placeholder="Paste brand URL (e.g. nike.com) to pull the logo…"
+            placeholder="Paste brand URL (e.g. nike.com) — press Enter to fetch"
             value={sourceUrl}
+            disabled={lookupLoading}
             onChange={e => {
               setSrcIdx(0); setLogoFailed(false)
               update('brandInfo.sourceUrl', e.target.value)
             }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); lookupBrand(e.currentTarget.value) }
+            }}
+            onBlur={e => {
+              // Fire on blur too — only if the field has a value AND the
+              // user hasn't already populated colors/rules (avoids
+              // re-fetching on every blur in an existing brief).
+              const v = e.currentTarget.value?.trim()
+              const alreadyPopulated = !!(data.colors?.length || data.rules)
+              if (v && !alreadyPopulated) lookupBrand(v)
+            }}
           />
+          {lookupLoading && <span className="bi-lookup-spinner" aria-hidden="true" />}
+          {lookupError && <span className="bi-lookup-error" title={lookupError}>Lookup failed</span>}
         </div>
 
         {sourceUrl && (
