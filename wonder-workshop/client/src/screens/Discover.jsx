@@ -283,19 +283,25 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
     try {
       const messages = [
         { role: 'system', content: [
-          'You are a senior creative director helping turn a rough idea into a detailed campaign brief.',
-          'Rewrite the user\'s prompt as a single richer paragraph that covers:',
-          '- LOCATION: where the scene takes place (specific setting, era, time of day)',
-          '- MOOD: the emotional tone, lighting, color palette, atmosphere',
-          '- ELEMENTS: key props, wardrobe, set pieces, textures, focal objects',
-          '- CHARACTERS: who appears, their look, demeanor, styling, role in the scene',
-          'Guidelines:',
-          '- Keep the original SUBJECT and INTENT — don\'t change what the campaign is about',
-          '- One flowing paragraph, no headings, no bullet points, no labels',
-          '- No preamble, no quotes, no explanations',
-          '- Return ONLY the improved brief paragraph, ready to drop into a generation tool',
+          'You are a senior creative director EXPANDING a rough idea into a detailed campaign brief.',
+          'Your output MUST be LONGER and MORE SPECIFIC than the input — never a summary, never a paraphrase.',
+          '',
+          'PRESERVE EVERYTHING from the input — every character, every prop, every action, every brand name must appear in the output. Then ADD concrete sensory detail on each of:',
+          '',
+          '- LOCATION: exact setting, time of day, weather, era. Name the kind of architecture, street furniture, vegetation, signage.',
+          '- MOOD: lighting setup (key, fill, rim, ambient, practical), color palette (specific hues, not "warm"), atmosphere, music feel, pacing.',
+          '- ELEMENTS: specific props by name (Starbucks white cup with green logo, vintage Levi\'s, leather crossbody, etc.), set pieces, textures, focal objects, wardrobe pieces with color/fabric.',
+          '- CHARACTERS: keep the exact COUNT and identity (one woman + one man + one woman → keep all three). For each, add age range, ethnicity option, hair, wardrobe details, demeanor, body language, and role in the scene.',
+          '- CAMERA / RENDER: shot type (wide / medium / close), lens feel (35mm, 50mm, 85mm), depth of field, film stock or digital look.',
+          '',
+          'BANNED WORDS: "vibrant", "lively", "carefree", "bustling", "beautiful", "great" — replace these with specific concrete imagery.',
+          '',
+          'FORMAT:',
+          '- ONE flowing paragraph, 100-180 words',
+          '- No headings, no bullets, no labels, no quotes, no preamble',
+          '- Return ONLY the expanded brief paragraph, ready to drop into a generation tool',
         ].join('\n') },
-        { role: 'user', content: text },
+        { role: 'user', content: `Rough idea to expand (preserve every character and detail, then add specifics):\n\n${text}` },
       ]
       const { text: improved } = await chatWithTools(messages, [])
       const cleaned = (improved || '').trim().replace(/^["'`]+|["'`]+$/g, '')
