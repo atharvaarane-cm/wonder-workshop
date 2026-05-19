@@ -165,6 +165,10 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         : [
             `The user has selected a SECTION (no specific image). The focus is "${activeSection}".`,
             `When the user says "the prompt" or asks ambiguous questions, they mean fields within this section, not the project description.`,
+            ``,
+            `IMPORTANT — NO ACTIVE IMAGE: regenerate_active_image WILL FAIL because no slot is selected. Do NOT call it.`,
+            `If the user asks to generate or change a specific image, REPLY IN PLAIN TEXT telling them to click the image slot first, then ask again. Do not emit any tool-call syntax (not as a function call, not as text).`,
+            `If the user asks to change section-level data (a character description, a location description, the brand, etc.), use update_brief_field — that does work without a selected image.`,
           ].join('\n'),
       ``,
       `# Full brief (for path resolution and broader context — use sparingly):`,
@@ -190,6 +194,9 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       // view should regenerate with the new description baked in).
       const applied = []
       const sectionsToRegen = new Set()
+      // Collect blocker reasons so we can surface them to the user in
+      // the chat instead of silently dropping their request.
+      const blockers = []
       for (const a of actions) {
         if (a.name === 'update_brief_field' && onUpdate) {
           const { path, value } = a.args || {}
@@ -210,10 +217,30 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
           }
         } else if (a.name === 'regenerate_active_image' && onRegenerateImage) {
           const { new_prompt } = a.args || {}
-          if (new_prompt && activeImageTarget?.slotKey) {
+          if (!new_prompt) {
+            blockers.push('I tried to regenerate the image but no prompt was provided.')
+          } else if (!activeImageTarget?.slotKey) {
+            blockers.push('Click on the image you want me to change first, then ask again. I can only target a slot you\'ve selected — section context alone isn\'t enough.')
+          } else {
             const ok = onRegenerateImage(new_prompt)
             if (ok) applied.push(a)
+            else blockers.push('I tried to regenerate the image but the slot didn\'t accept the request.')
           }
+        }
+      }
+
+      // Gemini 2.0 Flash sometimes hallucinates tool calls as plaintext
+      // in the message body instead of emitting structured function
+      // calls. Detect the pattern and surface guidance — otherwise the
+      // user sees raw `regenerate_active_image({"..."})` syntax with
+      // no actual side effect.
+      const looksLikeStringifiedCall = !actions.length
+        && /\b(regenerate_active_image|update_brief_field)\s*\(/.test(replyText || '')
+      if (looksLikeStringifiedCall) {
+        if (!activeImageTarget?.slotKey) {
+          blockers.push('Click on the image you want me to change first — I can\'t target a slot from the section context alone.')
+        } else {
+          blockers.push('Something went wrong calling that tool. Try rephrasing — e.g. "regenerate this image with [new full description]".')
         }
       }
 
@@ -245,9 +272,16 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
 
       // Assemble the agent's reply. If Gemini sent text, use it; if there
       // were applied actions but no text, synthesise a short summary.
+      // Blockers override everything — if the user's request couldn't
+      // fire, the chat shows why instead of pretending it worked.
       const actionSummaries = applied.map(describeAction).filter(Boolean)
       let finalText = (replyText || '').trim()
-      if (!finalText && actionSummaries.length) {
+      // Strip out hallucinated tool-call plaintext so the user doesn't
+      // see raw function syntax in the bubble.
+      finalText = finalText.replace(/\b(regenerate_active_image|update_brief_field)\s*\([^)]*\)\s*/g, '').trim()
+      if (blockers.length) {
+        finalText = blockers.join('\n\n')
+      } else if (!finalText && actionSummaries.length) {
         finalText = actionSummaries.join(' · ')
       } else if (actionSummaries.length && !finalText.includes(actionSummaries[0])) {
         finalText = `${finalText}\n\n${actionSummaries.map(s => `↳ ${s}`).join('\n')}`
