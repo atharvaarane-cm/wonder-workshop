@@ -1,6 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+// One Gemini API key can call any Gemini model (text + image), so we
+// accept either env var and fall back. Means setting just one of the
+// two on Vercel is enough to unlock the whole app.
+const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_IMAGE_API_KEY
+const genAI = new GoogleGenerativeAI(apiKey)
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
