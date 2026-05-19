@@ -2754,8 +2754,17 @@ textarea { font-family: var(--font); resize: none; }
 .section-card:has(.cd-wrap) .section-header { display: none; }
 /* Creative section gets a blue card border (per the Figma mockup
    closeup) so it reads as one cohesive bordered box around the blue
-   strip + dark body. */
-.section-card:has(.cd-wrap) { border-color: #006dd4; }
+   strip + dark body. Specificity has to beat .section-card:hover,
+   .section-card.active, AND the dark-theme overrides below — so we
+   repeat the :has() qualifier on each state. */
+.section-card:has(.cd-wrap),
+.section-card:has(.cd-wrap):hover,
+.section-card:has(.cd-wrap).active,
+[data-theme="dark"] .section-card:has(.cd-wrap),
+[data-theme="dark"] .section-card:has(.cd-wrap):hover,
+[data-theme="dark"] .section-card:has(.cd-wrap).active {
+  border-color: #006dd4;
+}
 
 /* ── Board prompt bar ────────────────────────────────────────── */
 .board-prompt-bar {
