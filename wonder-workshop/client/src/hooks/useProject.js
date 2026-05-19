@@ -11,8 +11,51 @@ const FOLDERS_KEY = 'ww_extra_folders'
 function loadAll() {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
 }
+// localStorage has a ~5-10MB origin quota. Base64-encoded Gemini images run
+// ~1-2MB each; a handful of projects with full storyboards blows past that.
+// When saves fail, we prune the OLDEST projects' images (keeping the brief
+// metadata intact) until the write succeeds — better to lose the oldest
+// generated images than the current one the user is working on.
 function saveAll(map) {
-  try { localStorage.setItem(KEY, JSON.stringify(map)) } catch {}
+  try {
+    localStorage.setItem(KEY, JSON.stringify(map))
+    return
+  } catch (err) {
+    if (err?.name !== 'QuotaExceededError' && !String(err).includes('exceeded')) {
+      console.error('[useProject] saveAll failed (non-quota)', err)
+      throw err
+    }
+    // Quota hit — drop oldest projects' images until write fits, oldest
+    // first by updatedAt. Brief metadata is preserved so projects still
+    // appear in the sidebar; they just lose their generated images.
+    const sorted = Object.values(map)
+      .filter(p => p?.images && Object.keys(p.images).length > 0)
+      .sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0))
+    for (const victim of sorted) {
+      const slots = Object.keys(victim.images || {})
+      console.warn('[useProject] localStorage quota exceeded — dropping images from project', { id: victim.id, name: victim.name, slots: slots.length })
+      victim.images = {}
+      try {
+        localStorage.setItem(KEY, JSON.stringify(map))
+        // Notify the user once
+        try {
+          window.dispatchEvent(new CustomEvent('ww-toast', { detail: {
+            type: 'error',
+            msg: `Storage full — cleared images from older project "${victim.name}" to make room. Consider deleting old projects.`,
+          } }))
+        } catch {}
+        return
+      } catch { /* try the next victim */ }
+    }
+    // Last resort: nothing freed enough space. Surface loudly.
+    console.error('[useProject] saveAll: localStorage quota exceeded and no projects could be pruned')
+    try {
+      window.dispatchEvent(new CustomEvent('ww-toast', { detail: {
+        type: 'error',
+        msg: 'Storage full. Delete old projects to free space — new images can\'t be saved.',
+      } }))
+    } catch {}
+  }
 }
 
 // One-time migration: convert legacy ww_recents → projects.
