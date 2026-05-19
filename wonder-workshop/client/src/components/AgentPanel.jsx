@@ -300,11 +300,25 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         // a non-technical user can act on — 429 is the rate-limit hit
         // we keep seeing on the free-tier key.
         const raw = e?.message || String(e)
+        const status = e?.status
+        const body = typeof e?.body === 'string' ? e.body : (e?.body ? JSON.stringify(e.body) : '')
+        // Surface the actual Gemini error body — most 5xx responses
+        // include a useful message (model not found, content blocked,
+        // quota exceeded, etc.) that's lost behind a generic label.
         let friendly
-        if (/\b429\b/.test(raw))      friendly = 'Gemini rate limit hit. Wait a minute and try again — the free-tier quota resets quickly.'
-        else if (/\b401\b|\b403\b/.test(raw)) friendly = 'Gemini API key missing or invalid. Check the GEMINI_API_KEY env var.'
-        else if (/\b5\d\d\b/.test(raw))       friendly = 'Gemini server error. Try again in a few seconds.'
-        else                                   friendly = `Something went wrong: ${raw.slice(0, 200)}`
+        if (status === 429 || /\b429\b/.test(raw)) {
+          friendly = 'Gemini rate limit hit. Wait ~60s and try again.'
+        } else if (status === 401 || status === 403 || /\b401\b|\b403\b/.test(raw)) {
+          friendly = `Auth failed (${status || '401/403'}). Gemini API key may be invalid.${body ? ` Detail: ${body.slice(0, 200)}` : ''}`
+        } else if ((status >= 500 && status < 600) || /\b5\d\d\b/.test(raw)) {
+          friendly = body
+            ? `Gemini server error (${status}): ${body.slice(0, 300)}`
+            : 'Gemini server error. Try again in a few seconds.'
+        } else if (status === 400) {
+          friendly = `Bad request (400): ${body.slice(0, 300) || raw}`
+        } else {
+          friendly = `Something went wrong: ${raw.slice(0, 300)}`
+        }
         setMessages(prev => {
           const next = [...prev]
           next[next.length - 1] = { role: 'agent', text: friendly, ts: next[next.length - 1].ts }
