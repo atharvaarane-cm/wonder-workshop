@@ -1,4 +1,10 @@
 import { createContext } from 'react'
+import {
+  saveSlotImage,
+  deleteAllForProject as deleteImagesForProject,
+  getImagesForProject,
+  getSlotImage,
+} from './imageStore.js'
 
 const KEY = 'ww_projects'
 const ACTIVE_KEY = 'ww_active_project'
@@ -10,6 +16,15 @@ const FOLDERS_KEY = 'ww_extra_folders'
 
 function loadAll() {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+}
+
+// Attach images from the in-memory imageStore cache. The localStorage
+// project record no longer carries image data (we strip it on migration);
+// components keep reading `project.images[slotKey]` via the context,
+// which now reflects whatever's in IndexedDB.
+function withImages(project) {
+  if (!project) return project
+  return { ...project, images: getImagesForProject(project.id) }
 }
 // localStorage has a ~5-10MB origin quota. Base64-encoded Gemini images run
 // ~1-2MB each; a handful of projects with full storyboards blows past that.
@@ -86,7 +101,9 @@ function saveAll(map) {
 })()
 
 export function listProjects() {
-  return Object.values(loadAll()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  return Object.values(loadAll())
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .map(withImages)
 }
 
 function deriveName(brief) {
@@ -110,13 +127,14 @@ export function createProject(brief) {
   all[now] = project
   saveAll(all)
   localStorage.setItem(ACTIVE_KEY, String(now))
-  return project
+  return withImages(project)
 }
 
 export function getActiveProject() {
   const id = Number(localStorage.getItem(ACTIVE_KEY) || 0)
   if (!id) return null
-  return loadAll()[id] || null
+  const p = loadAll()[id]
+  return p ? withImages(p) : null
 }
 
 export function setActiveProject(id) {
@@ -128,6 +146,7 @@ export function deleteProject(id) {
   const all = loadAll()
   delete all[id]
   saveAll(all)
+  deleteImagesForProject(id)
   if (Number(localStorage.getItem(ACTIVE_KEY) || 0) === id) {
     localStorage.removeItem(ACTIVE_KEY)
   }
@@ -147,7 +166,7 @@ export function updateProjectBrief(id, brief) {
     updatedAt: Date.now(),
   }
   saveAll(all)
-  return all[id]
+  return withImages(all[id])
 }
 
 export function moveProjectToFolder(id, folder) {
@@ -166,7 +185,7 @@ export function moveProjectToFolder(id, folder) {
     const extras = loadExtraFolders().filter(n => n !== cleaned)
     saveExtraFolders(extras)
   }
-  return all[id]
+  return withImages(all[id])
 }
 
 function loadExtraFolders() {
@@ -249,9 +268,8 @@ export function renameFolder(oldName, newName) {
 }
 
 // Deep-clone a project to a new id. Brief, images, name override, and
-// folder placement all carry across. Image versions are copied by
-// reference (they're just URL strings + metadata), so duplicating doesn't
-// re-fetch anything from Pollinations.
+// folder placement all carry across. Images live in IndexedDB now —
+// duplicate each slot under the new id so the copy is self-contained.
 export function duplicateProject(id) {
   const all = loadAll()
   const src = all[id]
@@ -264,18 +282,23 @@ export function duplicateProject(id) {
     nameOverride: true,
     createdAt: now,
     updatedAt: now,
-    images: JSON.parse(JSON.stringify(src.images || {})),
+    images: {},
   }
   all[now] = copy
   saveAll(all)
-  return copy
+  // Copy each slot from the source's images cache into the new project.
+  const srcImages = getImagesForProject(id)
+  for (const [slotKey, data] of Object.entries(srcImages)) {
+    saveSlotImage(now, slotKey, JSON.parse(JSON.stringify(data)))
+  }
+  return withImages(copy)
 }
 
 export function renameProject(id, name) {
   const all = loadAll()
   if (!all[id]) return null
   const trimmed = (name || '').trim()
-  if (!trimmed) return all[id]
+  if (!trimmed) return withImages(all[id])
   all[id] = {
     ...all[id],
     name: trimmed,
@@ -283,9 +306,12 @@ export function renameProject(id, name) {
     updatedAt: Date.now(),
   }
   saveAll(all)
-  return all[id]
+  return withImages(all[id])
 }
 
+// Image data now lives in IndexedDB via imageStore. The legacy localStorage
+// `project.images` field is kept on the returned object only as a synthesised
+// view so existing components don't need to change.
 export function saveImageForProject(id, slotKey, data) {
   if (!id || !slotKey) {
     console.error('[useProject] saveImageForProject: missing id or slotKey', { id, slotKey })
@@ -296,13 +322,12 @@ export function saveImageForProject(id, slotKey, data) {
     console.error('[useProject] saveImageForProject: project not found in localStorage', { id, slotKey, knownIds: Object.keys(all) })
     return null
   }
-  all[id] = {
-    ...all[id],
-    images: { ...all[id].images, [slotKey]: data },
-    updatedAt: Date.now(),
-  }
+  saveSlotImage(id, slotKey, data)
+  // Touch the project's updatedAt for sorting freshness, but no longer
+  // serialize image data into localStorage.
+  all[id] = { ...all[id], images: {}, updatedAt: Date.now() }
   saveAll(all)
-  return all[id]
+  return { ...all[id], images: getImagesForProject(id) }
 }
 
 // Append a freshly-generated version directly to a project's slot in
@@ -320,22 +345,13 @@ export function appendImageVersion(id, slotKey, version) {
     console.error('[useProject] appendImageVersion: project not found in localStorage', { id, slotKey, knownIds: Object.keys(all) })
     return null
   }
-  const existing = all[id].images?.[slotKey] || { versions: [], activeVersion: 0 }
+  const existing = getSlotImage(id, slotKey) || { versions: [], activeVersion: 0 }
   const nextVersions = [...(existing.versions || []), version]
-  all[id] = {
-    ...all[id],
-    images: {
-      ...all[id].images,
-      [slotKey]: {
-        versions: nextVersions,
-        activeVersion: nextVersions.length - 1,
-      },
-    },
-    updatedAt: Date.now(),
-  }
+  const next = { versions: nextVersions, activeVersion: nextVersions.length - 1 }
+  saveSlotImage(id, slotKey, next)
+  all[id] = { ...all[id], images: {}, updatedAt: Date.now() }
   saveAll(all)
-  console.log('[useProject] appendImageVersion saved', { id, slotKey, versionCount: nextVersions.length })
-  return all[id]
+  return { ...all[id], images: getImagesForProject(id) }
 }
 
 // Move a generated version from one slot to another. The version is removed
@@ -347,9 +363,8 @@ export function moveImageBetweenSlots(id, fromSlotKey, toSlotKey, version) {
   const all = loadAll()
   const project = all[id]
   if (!project) return null
-  const images = { ...(project.images || {}) }
 
-  const fromEntry = images[fromSlotKey]
+  const fromEntry = getSlotImage(id, fromSlotKey)
   if (fromEntry?.versions?.length) {
     const idx = fromEntry.versions.findIndex(
       v => v.src === version.src && v.createdAt === version.createdAt,
@@ -357,20 +372,20 @@ export function moveImageBetweenSlots(id, fromSlotKey, toSlotKey, version) {
     if (idx >= 0) {
       const nextVersions = fromEntry.versions.filter((_, i) => i !== idx)
       const nextActive = Math.max(0, Math.min(fromEntry.activeVersion ?? 0, nextVersions.length - 1))
-      images[fromSlotKey] = { versions: nextVersions, activeVersion: nextActive }
+      saveSlotImage(id, fromSlotKey, { versions: nextVersions, activeVersion: nextActive })
     }
   }
 
-  const toEntry = images[toSlotKey] || { versions: [], activeVersion: 0 }
+  const toEntry = getSlotImage(id, toSlotKey) || { versions: [], activeVersion: 0 }
   const nextToVersions = [...(toEntry.versions || []), version]
-  images[toSlotKey] = {
+  saveSlotImage(id, toSlotKey, {
     versions: nextToVersions,
     activeVersion: nextToVersions.length - 1,
-  }
+  })
 
-  all[id] = { ...project, images, updatedAt: Date.now() }
+  all[id] = { ...project, images: {}, updatedAt: Date.now() }
   saveAll(all)
-  return all[id]
+  return { ...all[id], images: getImagesForProject(id) }
 }
 
 export const ProjectContext = createContext(null)
