@@ -732,15 +732,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
             </div>
           </div>
 
-          <div className="board-nav-dots">
-            {ROWS.map((row, ri) => (
-              <button
-                key={ri}
-                className={`board-dot${ri === activeRowIdx ? ' active' : ''}`}
-                onClick={() => scrollToRow(ri)}
-              />
-            ))}
-          </div>
         </div>
 
         {!readOnly && agentPanelOpen && (
