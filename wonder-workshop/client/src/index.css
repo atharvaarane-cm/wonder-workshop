@@ -1067,15 +1067,23 @@ textarea { font-family: var(--font); resize: none; }
 /* ── Board ─────────────────────────────────────────────────────── */
 .board-screen { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .topbar {
-  height: 52px; flex-shrink: 0; display: flex; align-items: center;
-  padding: 0 20px; gap: 10px; background: var(--card); border-bottom: 1px solid var(--border);
+  /* Figma spec (node 13:3): the topbar is the rainbow gradient itself.
+     Pills (Back / Project / Export) and the W mark sit on top with
+     their own backgrounds. Height: 64px. */
+  height: 64px; flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 18px; gap: 10px;
+  background: linear-gradient(90deg,
+    #FF6A1A 0%, #FFB300 22%, #FF4F8A 46%, #B454FF 68%, #4DA9FF 100%
+  );
 }
 /* Back button — dark pill with chevron, per the Figma mockup. */
 .topbar-back {
+  /* Figma: #171717 bg, #272727 border, 7px radius, 33px tall,
+     13px regular #888 text. */
   display: flex; align-items: center; gap: 6px; flex-shrink: 0;
   height: 33px; padding: 0 14px; border-radius: 7px;
   background: #171717; border: 1px solid #272727;
-  color: #b8b8b8; font: 500 13px var(--font); cursor: pointer;
+  color: #888; font: 400 13px var(--font); cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 .topbar-back:hover { background: #1f1f1f; color: #fff; }
@@ -1084,10 +1092,12 @@ textarea { font-family: var(--font); resize: none; }
    original-prompt popover for renaming / regenerating the brief. */
 .topbar-project-pill-wrap { position: relative; flex-shrink: 0; }
 .topbar-project-pill {
+  /* Figma: #141414 bg (slightly darker than Back), no visible border,
+     188px wide, 33px tall, 7px radius, 13px regular #888 text. */
   display: flex; align-items: center; gap: 8px; max-width: 240px;
   height: 33px; padding: 0 14px; border-radius: 7px;
-  background: #171717; border: 1px solid #272727;
-  color: #d4d4d4; font: 500 13px var(--font); cursor: pointer;
+  background: #141414; border: 1px solid transparent;
+  color: #888; font: 400 13px var(--font); cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 .topbar-project-pill:hover { background: #1f1f1f; color: #fff; }
@@ -1111,13 +1121,13 @@ textarea { font-family: var(--font); resize: none; }
   flex-shrink: 0;
   width: 33px; height: 33px; border-radius: 7px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: 1px solid var(--border-md);
-  color: var(--text); cursor: pointer;
+  /* Sits on the rainbow — needs a contrast plate. Mirror the Back
+     pill: #171717 bg, #272727 border. */
+  background: #171717; border: 1px solid #272727;
+  color: #888; cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.topbar-theme-toggle:hover {
-  background: var(--card); border-color: var(--border);
-}
+.topbar-theme-toggle:hover { background: #1f1f1f; color: #fff; }
 .topbar-desc-btn {
   display: flex; align-items: center; gap: 4px; font-size: 12px; font-family: var(--font);
   padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border-md);
@@ -1218,23 +1228,19 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .prod-ratio-item:hover { background: rgba(255,255,255,0.07); }
 .prod-ratio-item.active { background: #7C5CFC; color: #fff; }
 .prod-ratio-item.active:hover { background: #7C5CFC; }
+/* Center the W mark inside the topbar. The topbar itself owns the
+   gradient now, so this wrap just flex-centers the logo. */
 .topbar-gradient-wrap {
-  flex: 1; min-width: 60px; position: relative;
+  flex: 1; min-width: 60px;
   display: flex; align-items: center; justify-content: center;
-  align-self: stretch;
 }
-.topbar-gradient {
-  position: absolute; left: 0; right: 0; top: 4px; bottom: 4px;
-  border-radius: 999px;
-  background: linear-gradient(90deg,
-    #FF6A1A 0%, #FFB300 22%, #FF4F8A 46%, #B454FF 68%, #4DA9FF 100%
-  );
-}
+/* Old thin pill is no longer rendered as a background — kept the
+   selector so prior overrides don't break, but it paints nothing. */
+.topbar-gradient { display: none; }
 .topbar-logo-mark {
-  position: relative; height: 18px; width: auto; display: block;
-  /* The source PNG is a black W on transparent bg — flatten to pure
-     white so the mark reads against the rainbow gradient, then add a
-     soft drop-shadow for separation. */
+  /* Figma: 32x23 white mark, centered on the rainbow. The PNG ships
+     a black W on transparent bg — flatten to pure white. */
+  height: 23px; width: auto; display: block;
   filter: brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.45));
 }
 
@@ -2857,7 +2863,8 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .topbar-back { color: rgba(255,255,255,0.42); }
 [data-theme="dark"] .topbar-back:hover { color: #E8E8E8; }
 [data-theme="dark"] .topbar-desc-btn { background: #232323; border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.5); }
-[data-theme="dark"] .topbar-logo-mark { background: #171717; }
+/* W mark no longer has a card-colored plate behind it — it sits
+   directly on the topbar's rainbow gradient. */
 [data-theme="dark"] .btn-outline { background: #232323; border-color: rgba(255,255,255,0.12); color: #E8E8E8; }
 [data-theme="dark"] .btn-dark { background: #E8E8E8; color: #111111; }
 [data-theme="dark"] .board-prompt-bar { background: #171717; border-color: rgba(255,255,255,0.07); }
