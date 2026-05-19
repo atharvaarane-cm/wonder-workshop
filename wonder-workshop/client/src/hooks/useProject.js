@@ -244,8 +244,15 @@ export function renameProject(id, name) {
 }
 
 export function saveImageForProject(id, slotKey, data) {
+  if (!id || !slotKey) {
+    console.error('[useProject] saveImageForProject: missing id or slotKey', { id, slotKey })
+    return null
+  }
   const all = loadAll()
-  if (!all[id]) return null
+  if (!all[id]) {
+    console.error('[useProject] saveImageForProject: project not found in localStorage', { id, slotKey, knownIds: Object.keys(all) })
+    return null
+  }
   all[id] = {
     ...all[id],
     images: { ...all[id].images, [slotKey]: data },
@@ -261,9 +268,15 @@ export function saveImageForProject(id, slotKey, data) {
 // before the queue caught up (the component is gone, but the queue
 // keeps running module-side).
 export function appendImageVersion(id, slotKey, version) {
-  if (!id || !slotKey || !version) return null
+  if (!id || !slotKey || !version) {
+    console.error('[useProject] appendImageVersion: missing arg', { id, slotKey, hasVersion: !!version })
+    return null
+  }
   const all = loadAll()
-  if (!all[id]) return null
+  if (!all[id]) {
+    console.error('[useProject] appendImageVersion: project not found in localStorage', { id, slotKey, knownIds: Object.keys(all) })
+    return null
+  }
   const existing = all[id].images?.[slotKey] || { versions: [], activeVersion: 0 }
   const nextVersions = [...(existing.versions || []), version]
   all[id] = {
@@ -278,6 +291,7 @@ export function appendImageVersion(id, slotKey, version) {
     updatedAt: Date.now(),
   }
   saveAll(all)
+  console.log('[useProject] appendImageVersion saved', { id, slotKey, versionCount: nextVersions.length })
   return all[id]
 }
 
