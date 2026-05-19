@@ -2307,6 +2307,49 @@ textarea { font-family: var(--font); resize: none; }
 .ihn-edit:hover { background: #0064bd; }
 .ihn-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.28); margin: 0 3px; flex-shrink: 0; }
 
+/* "Improve with AI" popover — appears below the hover toolbar with an
+   input for the user's improvement instruction. */
+.img-improve-popover {
+  position: absolute; top: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  min-width: 320px; max-width: 420px;
+  background: var(--card); border: 1px solid var(--border-md);
+  border-radius: 10px; padding: 12px;
+  box-shadow: 0 14px 40px rgba(0,0,0,0.45);
+}
+.img-improve-label {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 8px;
+}
+.img-improve-input {
+  width: 100%; padding: 8px 10px; border-radius: 7px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); font: 13px var(--font); outline: none;
+}
+.img-improve-input:focus { border-color: #006dd4; }
+.img-improve-input::placeholder { color: var(--faint); font-style: italic; }
+.img-improve-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.img-improve-cancel,
+.img-improve-go {
+  font-size: 12px; font-weight: 600; font-family: var(--font);
+  padding: 0 12px; height: 30px; border-radius: 7px; cursor: pointer;
+}
+.img-improve-cancel {
+  background: none; color: var(--text); border: 1px solid var(--border-md);
+}
+.img-improve-cancel:hover { background: rgba(255,255,255,0.06); }
+.img-improve-go {
+  background: #006dd4; color: #fff; border: 1px solid #006dd4;
+}
+.img-improve-go:hover:not(:disabled) { background: #1075d9; }
+.img-improve-go:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Subtle highlight on the improve toolbar button so users notice the
+   AI affordance. */
+.ihn-btn-improve { color: #FFC857 !important; }
+.ihn-btn-improve:hover:not(:disabled) { background: rgba(255,200,87,0.18) !important; }
+
 /* Fast custom tooltips for the hover-nav — native `title` has a ~1s
    browser delay; this shows almost immediately. Sits below the button
    so it stays inside the image area. */
