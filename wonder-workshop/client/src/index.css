@@ -1441,6 +1441,13 @@ textarea { font-family: var(--font); resize: none; }
   font-size: 20px; font-weight: 400; color: #ffffff;
   display: inline-flex; align-items: center; gap: 4px;
 }
+/* Thin vertical separators between Creative / Duration / Aspect Ratio
+   — subtle semi-transparent light blue, matches mockup. */
+.cd-feature-sep {
+  width: 1px; height: 30px;
+  background: rgba(170,210,255,0.35);
+  flex-shrink: 0;
+}
 /* ASPECT RATIO is a dropdown — button reset + chevron + menu. */
 .cd-ratio-wrap { position: relative; }
 .cd-ratio-btn {
@@ -2745,6 +2752,10 @@ textarea { font-family: var(--font); resize: none; }
 /* The CD card's blue strip IS its header — hide the default text
    header above it so we don't render two stacked headers. */
 .section-card:has(.cd-wrap) .section-header { display: none; }
+/* Creative section gets a blue card border (per the Figma mockup
+   closeup) so it reads as one cohesive bordered box around the blue
+   strip + dark body. */
+.section-card:has(.cd-wrap) { border-color: #006dd4; }
 
 /* ── Board prompt bar ────────────────────────────────────────── */
 .board-prompt-bar {
