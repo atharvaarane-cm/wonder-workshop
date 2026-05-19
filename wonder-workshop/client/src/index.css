@@ -1253,17 +1253,21 @@ textarea { font-family: var(--font); resize: none; }
   align-items: start;
 }
 .board-info-title-block { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* Figma spec (node 19:27): 10px bold uppercase, color #686868. Used
+   for TITLE / CLIENT / PROJECT eyebrows above each value. */
 .board-info-eyebrow {
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--muted);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: #686868;
 }
 .board-info-meta {
   display: flex; flex-direction: column; gap: 14px;
   min-width: 180px;
 }
 .board-info-meta-item { display: flex; flex-direction: column; gap: 4px; }
+/* Figma: 12px regular, color #d4d4d4. The values under CLIENT and
+   PROJECT eyebrows. */
 .board-info-meta-value {
-  font-size: 14px; font-weight: 500; color: var(--text);
+  font-size: 12px; font-weight: 400; color: #d4d4d4;
   outline: none; cursor: text;
 }
 .board-info-meta-value:empty::before {
