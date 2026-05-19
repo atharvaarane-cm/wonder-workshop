@@ -1556,7 +1556,10 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── Brand Info — May 13 mockup: logo + BRAND COLORS on the left,
    guidelines on the right ──────────────────────────────────────── */
-.bi-layout { display: grid; grid-template-columns: 240px 1fr; gap: 32px; align-items: start; }
+/* Figma spec (node 20:52): left column = 184px wide (matches the
+   logo + brand-colors strip), right column flexes to fill, ~23-30px
+   gap between them. */
+.bi-layout { display: grid; grid-template-columns: 184px 1fr; gap: 30px; align-items: start; }
 /* Brand Assets row sits below the two existing columns, spanning the
    full width of the section body. Compact 1:1 tiles + caption + remove. */
 .bi-assets-col { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
@@ -1586,17 +1589,23 @@ textarea { font-family: var(--font); resize: none; }
   transition: border-color .12s, color .12s;
 }
 .bi-asset-add:hover { border-color: #3a3a3a; color: #fff; }
-.bi-left-col { display: flex; flex-direction: column; gap: 12px; }
-.bi-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; font-weight: 700; }
+.bi-left-col { display: flex; flex-direction: column; gap: 29px; align-items: flex-start; }
+/* Figma spec: 12px bold uppercase, color #717171. Used for
+   BRAND GUIDELINES and BRAND COLORS. */
+.bi-section-label {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: #717171; margin-bottom: 10px;
+}
 
 .bi-logo-wrap {
   /* Empty state — let the inner ImageSlot govern look so it matches
      other empty slots (dark + sparkle in dark mode). */
-  width: 100%; aspect-ratio: 1/1; border-radius: 14px;
+  width: 184px; height: 184px; border-radius: 7px;
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 /* When an actual logo is loaded, switch to the white photo-mat
-   treatment so the logo always reads correctly. */
+   treatment so the logo always reads correctly. Per Figma the box is
+   184x184, 7px radius, solid white. */
 .bi-logo-wrap.has-logo {
   background: #fff; border: 1px solid var(--border); padding: 22px;
 }
@@ -1624,17 +1633,18 @@ textarea { font-family: var(--font); resize: none; }
 /* BRAND COLORS — joined strip of color blocks, no gaps. Hex code fades in
    on hover. Click to copy. Matches the May 13 mockup. */
 .bi-colors { display: flex; flex-direction: column; }
+/* Figma: 184px wide × 48px tall strip, 4 swatches × 46px each (no
+   gap), rounded outer corners only. Width matches the logo above. */
 .bi-swatches-strip {
   display: flex; flex-direction: row;
-  border-radius: 6px; overflow: hidden;
-  height: 48px;
-  border: 1px solid var(--border);
+  border-radius: 7px; overflow: hidden;
+  width: 184px; height: 48px;
 }
 .bi-swatch {
   flex: 1; border: none; padding: 0; cursor: pointer;
   position: relative;
   transition: transform 0.14s;
-  min-width: 0;
+  min-width: 0; width: 46px;
 }
 .bi-swatch:hover { transform: translateY(-1px); }
 .bi-swatch:active { transform: translateY(0); }
@@ -1652,7 +1662,9 @@ textarea { font-family: var(--font); resize: none; }
   opacity: 1; background: rgba(45,154,78,0.85);
 }
 
-.bi-rules-text { font-size: 13px; color: var(--muted); line-height: 1.65; }
+/* Figma: 14px regular, color #e2e2e2 (NOT muted gray — full readable
+   white-ish), normal line-height. */
+.bi-rules-text { font-size: 14px; color: #e2e2e2; line-height: 1.55; }
 
 /* ── Character ─────────────────────────────────────────────────── */
 .character-views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 0; }
