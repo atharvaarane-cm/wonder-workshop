@@ -1418,41 +1418,56 @@ textarea { font-family: var(--font); resize: none; }
   overflow: hidden;
 }
 .cd-feature-bar {
-  /* Mockup spec: shorter strip, Creative LEFT, meta block RIGHT-justified,
-     no dividers, white values. */
-  display: flex; align-items: center; justify-content: space-between; gap: 24px;
-  padding: 14px 28px;
+  /* Figma spec (node 20:20):
+     - 70px tall, #006dd4 bg, rounded top corners
+     - Three columns split by full-height 1px dividers
+     - Column ratio 5fr / 2fr / 5fr (matches the Figma percentages:
+       Creative 0-41.67%, Duration 41.67-58.33%, Aspect Ratio 58.33-100%) */
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) 1px minmax(0, 2fr) 1px minmax(0, 5fr);
+  height: 70px;
   background: #006dd4;
   color: #fff;
   border-radius: 6px 6px 0 0;
 }
 .cd-feature-label {
-  font: 400 18px var(--font);
+  display: flex; align-items: center;
+  padding-left: 43px;
+  font: 400 20px var(--font);
   letter-spacing: -0.01em;
+  color: #fff;
 }
-.cd-feature-meta { display: flex; align-items: center; gap: 40px; }
-.cd-feature-meta-item { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.cd-feature-meta-item {
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 2px;
+  padding-left: 24px;
+  min-width: 0;
+}
 .cd-feature-meta-label {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: rgba(255,255,255,0.7);
+  color: #46a4ff;
 }
 .cd-feature-meta-val {
-  font-size: 20px; font-weight: 400; color: #ffffff;
-  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 24px; font-weight: 400; color: #cce7ff;
+  display: inline-flex; align-items: center; gap: 6px;
+  line-height: 1;
 }
-/* Thin vertical separators between Creative / Duration / Aspect Ratio
-   — subtle semi-transparent light blue, matches mockup. */
+/* Full-height divider between columns. Grid template reserves the 1px
+   column; this element paints it. */
 .cd-feature-sep {
-  width: 1px; height: 30px;
+  align-self: stretch;
   background: rgba(170,210,255,0.35);
-  flex-shrink: 0;
 }
 /* ASPECT RATIO is a dropdown — button reset + chevron + menu. */
-.cd-ratio-wrap { position: relative; }
+/* The ratio dropdown wrap is now a grid cell itself (third column in
+   .cd-feature-bar). Stretch so the inner button fills it. */
+.cd-ratio-wrap { position: relative; display: flex; }
 .cd-ratio-btn {
-  background: none; border: none; padding: 0; cursor: pointer;
+  background: none; border: none; cursor: pointer;
   color: inherit; font-family: var(--font);
+  /* Inherit .cd-feature-meta-item layout (padding, flex column). */
+  text-align: left; width: 100%;
 }
 .cd-ratio-chevron { opacity: 0.85; }
 .cd-ratio-menu {
