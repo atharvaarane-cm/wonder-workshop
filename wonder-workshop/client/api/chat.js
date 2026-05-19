@@ -1,39 +1,66 @@
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
+// One Gemini API key can call any Gemini model (text + image), so we
+// accept either env var and fall back. Means setting just one of the
+// two on Vercel is enough to unlock the whole app.
+const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_IMAGE_API_KEY
+const genAI = new GoogleGenerativeAI(apiKey)
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  if (!process.env.GROQ_API_KEY) {
-    return res.status(500).json({ error: 'GROQ_API_KEY not set in environment variables' })
+  const { messages = [], stream = false, tools = [] } = req.body
+
+  // Separate system instruction from chat messages
+  const systemMsg = messages.find(m => m.role === 'system')
+  const chatMsgs  = messages.filter(m => m.role !== 'system')
+
+  // Convert to Gemini history format (all but last message)
+  const history = chatMsgs.slice(0, -1).map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+  const lastMsg = chatMsgs[chatMsgs.length - 1]?.content ?? ''
+
+  const modelConfig = {
+    model: 'gemini-2.0-flash',
+    ...(systemMsg ? { systemInstruction: systemMsg.content } : {}),
+  }
+  // Tool calling forces non-streaming. Streaming function-call responses are
+  // more complex than the marginal UX win is worth for our use case.
+  if (tools.length > 0) {
+    modelConfig.tools = [{ functionDeclarations: tools }]
   }
 
-  let body = req.body
-  if (typeof body === 'string') {
-    try { body = JSON.parse(body) } catch { return res.status(400).json({ error: 'Invalid JSON' }) }
-  }
-
-  const { messages = [] } = body ?? {}
+  const model = genAI.getGenerativeModel(modelConfig)
 
   try {
-    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages,
-        temperature: 0.9,
-        max_tokens: 8192,
-      }),
-    })
+    if (stream && tools.length === 0) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      res.setHeader('Transfer-Encoding', 'chunked')
 
-    const data = await groqRes.json()
-    if (!groqRes.ok) return res.status(groqRes.status).json({ error: data?.error?.message ?? 'Groq error' })
+      const chat   = model.startChat({ history })
+      const result = await chat.sendMessageStream(lastMsg)
 
-    const text = data?.choices?.[0]?.message?.content ?? ''
-    res.json({ message: { content: text } })
+      for await (const chunk of result.stream) {
+        const token = chunk.text()
+        if (token) res.write(JSON.stringify({ message: { content: token } }) + '\n')
+      }
+      res.end()
+    } else {
+      const chat   = model.startChat({ history })
+      const result = await chat.sendMessage(lastMsg)
+      const response = result.response
+      const text   = response.text()
+      const functionCalls = (typeof response.functionCalls === 'function')
+        ? (response.functionCalls() || [])
+        : []
+      res.json({
+        message: { content: text },
+        functionCalls,
+      })
+    }
   } catch (err) {
-    console.error('chat error:', err.message)
     if (!res.headersSent) res.status(500).json({ error: err.message })
   }
 }
