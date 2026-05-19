@@ -116,17 +116,23 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       // order — so Location enqueues before Product, both before
       // Character, and Storyboard last (it can reference the rest).
       const byId = Object.fromEntries(ROWS.flat().map(s => [s.id, s]))
-      for (const id of AUTO_GENERATE_ORDER) {
+      // Stagger section dispatches by 3s so we don't trip Gemini's per-
+      // minute image quota with a burst of 8-15 simultaneous requests.
+      // Each ImageSlot inside a section still fires in parallel within
+      // its own section.
+      AUTO_GENERATE_ORDER.forEach((id, idx) => {
         const sec = byId[id]
-        if (!sec) continue
-        // primaryOnly: in Character Design, only fire the REFERENCE
-        // image so the user can review + approve the face before we
-        // burn tokens generating 8 Headshots/Full Body views. User
-        // hits the section's AUTO-GENERATE button when ready.
-        window.dispatchEvent(new CustomEvent('ww-generate-section', {
-          detail: { sectionTitle: sec.title, primaryOnly: id === 'char' },
-        }))
-      }
+        if (!sec) return
+        setTimeout(() => {
+          // primaryOnly: in Character Design, only fire the REFERENCE
+          // image so the user can review + approve the face before we
+          // burn tokens generating 8 Headshots/Full Body views. User
+          // hits the section's AUTO-GENERATE button when ready.
+          window.dispatchEvent(new CustomEvent('ww-generate-section', {
+            detail: { sectionTitle: sec.title, primaryOnly: id === 'char' },
+          }))
+        }, idx * 3000)
+      })
       onAutoGenerateConsumed?.()
     }, 350)
     return () => clearTimeout(t)

@@ -367,6 +367,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       // slot permanently. Every attempt is logged for diagnosis.
       const MAX_ATTEMPTS = 3
       let loadedUrl = null
+      let lastFailure = null
       for (let attempt = 1; attempt <= MAX_ATTEMPTS && !loadedUrl; attempt++) {
         const r = await attemptOnce()
         logGeneration({
@@ -382,8 +383,13 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
           ms: r.ms,
         })
         if (r.url) { loadedUrl = r.url; break }
+        lastFailure = r
+        // Back off longer on rate-limit hits so the next attempt has a
+        // chance of landing in a fresh quota window.
         if (attempt < MAX_ATTEMPTS) {
-          await new Promise(r => setTimeout(r, 2500 * attempt))
+          const isRateLimit = r.status === 429
+          const wait = isRateLimit ? 15000 * attempt : 2500 * attempt
+          await new Promise(r => setTimeout(r, wait))
         }
       }
 
@@ -409,9 +415,35 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         bumpLoading(-1)
         if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New image version created')
       } else {
-        setError('Image generator unreachable')
+        // Surface the actual failure mode so the user knows whether to
+        // wait (rate limit), rephrase (safety refusal), or escalate
+        // (config error). Was previously a generic "unreachable" message.
+        const stage = lastFailure?.stage || 'unknown'
+        const status = lastFailure?.status
+        const detail = (lastFailure?.detail || '').trim()
+        let friendly
+        if (status === 429) {
+          friendly = 'Rate limited — too many requests. Wait a minute, then click Regenerate.'
+        } else if (status === 401 || status === 403) {
+          friendly = `Auth failed (${status}). Gemini API key may be invalid or missing.`
+        } else if (stage === 'no-image-field' && /safety|policy|block/i.test(detail)) {
+          friendly = `Safety refusal: ${detail.slice(0, 200)}`
+        } else if (status >= 500) {
+          friendly = `Server error ${status}. Click Regenerate to retry.`
+        } else if (status === 404) {
+          friendly = 'Image endpoint not found (404). API may not be deployed.'
+        } else if (stage === 'fetch-threw') {
+          friendly = `Network error: ${detail.slice(0, 200)}`
+        } else if (stage === 'probe-failed') {
+          friendly = 'Image returned but failed to load. Try Regenerate.'
+        } else if (detail) {
+          friendly = `${stage} (${status || '?'}): ${detail.slice(0, 200)}`
+        } else {
+          friendly = `Generation failed (${stage}${status ? `, ${status}` : ''})`
+        }
+        setError(friendly)
         bumpLoading(-1)
-        if (!opts.silent) toast('Generation failed', 'error')
+        if (!opts.silent) toast(friendly, 'error')
       }
     })
   }
