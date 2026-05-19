@@ -2385,8 +2385,22 @@ textarea { font-family: var(--font); resize: none; }
   opacity: 0; pointer-events: none;
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
+/* Invisible bridge that fills the 8px gap between the toolbar and the
+   image. Without it the cursor leaves the slot's bounding box mid-
+   flight, .img-slot:hover ends, and the toolbar disappears before the
+   cursor reaches it. The bridge is part of the toolbar element for
+   :hover purposes, so once the cursor crosses into the gap, the
+   .img-hover-nav:hover rule below keeps it visible. */
+.img-hover-nav::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: -8px; right: -8px;
+  height: 14px;
+}
 .img-slot:hover .img-hover-nav,
-.img-slot.active .img-hover-nav {
+.img-slot.active .img-hover-nav,
+.img-hover-nav:hover {
   opacity: 1; pointer-events: auto;
   transform: translateX(-50%) translateY(0);
 }
