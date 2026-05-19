@@ -307,7 +307,20 @@ export async function chatWithTools(messages, tools, signal) {
     body: JSON.stringify({ messages, tools, stream: false }),
   })
 
-  if (!res.ok) throw new Error(`Server error: ${res.status}`)
+  if (!res.ok) {
+    // Include the response body so callers can show the real cause
+    // (e.g. Gemini's "model not available" / "safety filter" / etc.)
+    // instead of a generic status code.
+    let body = ''
+    try {
+      const text = await res.text()
+      try { body = JSON.parse(text)?.error || text } catch { body = text }
+    } catch {}
+    const err = new Error(`Server error: ${res.status}${body ? ` — ${String(body).slice(0, 300)}` : ''}`)
+    err.status = res.status
+    err.body = body
+    throw err
+  }
 
   const data = await res.json()
   const text = data.message?.content ?? ''
