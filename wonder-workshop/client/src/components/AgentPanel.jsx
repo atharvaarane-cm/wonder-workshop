@@ -9,6 +9,35 @@ function timeAgo(ts) {
   return `${diff} min ago`
 }
 
+// Strip large/binary fields from the brief before stringifying for the
+// chat system prompt. Without this, base64 data: URLs (logos, uploaded
+// brand assets, accidentally-pasted screenshots) leak into the prompt
+// and Gemini interprets the data as malformed inline images, returning
+// "SuppliedImagesAreInvalid". Also caps long text fields so the system
+// prompt stays manageable.
+function sanitizeBriefForChat(brief) {
+  function clean(value) {
+    if (typeof value === 'string') {
+      // Replace inline base64 data with a placeholder so paths stay valid
+      if (/^data:[^;]+;base64,/.test(value)) return '[image data omitted]'
+      // Cap very long strings — model only needs a hint, not every word
+      return value.length > 2000 ? value.slice(0, 2000) + '…[truncated]' : value
+    }
+    if (Array.isArray(value)) return value.map(clean)
+    if (value && typeof value === 'object') {
+      const out = {}
+      for (const [k, v] of Object.entries(value)) out[k] = clean(v)
+      return out
+    }
+    return value
+  }
+  try {
+    return JSON.stringify(clean(brief))
+  } catch {
+    return '{}'
+  }
+}
+
 // Tool definitions exposed to Gemini — the model picks one when the user
 // asks to change something. Schemas use Gemini's functionDeclarations format.
 const TOOLS = [
@@ -172,7 +201,7 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
           ].join('\n'),
       ``,
       `# Full brief (for path resolution and broader context — use sparingly):`,
-      JSON.stringify(brief ?? {}),
+      sanitizeBriefForChat(brief ?? {}),
     ].join('\n')
 
     const history = [
