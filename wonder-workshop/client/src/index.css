@@ -2423,6 +2423,27 @@ textarea { font-family: var(--font); resize: none; }
 .ihn-edit:hover { background: #0064bd; }
 .ihn-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.28); margin: 0 3px; flex-shrink: 0; }
 
+/* Upscale dropdown — 2K / 4K choices anchored below the toolbar
+   button. Sits above the hover-nav z-index so clicks register. */
+.ihn-upscale-wrap { position: relative; display: inline-flex; }
+.ihn-upscale-menu {
+  position: absolute; top: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex; flex-direction: column; gap: 2px; padding: 4px;
+  min-width: 80px;
+  background: var(--card); border: 1px solid var(--border-md);
+  border-radius: 9px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+}
+.ihn-upscale-menu button {
+  background: transparent; border: none; cursor: pointer;
+  font: 600 12px var(--font); color: var(--text);
+  padding: 7px 10px; border-radius: 6px; text-align: center;
+  transition: background 0.1s;
+}
+.ihn-upscale-menu button:hover { background: var(--bg); }
+
 /* "Improve with AI" popover — appears below the hover toolbar with an
    input for the user's improvement instruction. */
 .img-improve-popover {

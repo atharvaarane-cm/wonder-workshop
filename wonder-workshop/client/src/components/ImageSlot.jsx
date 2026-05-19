@@ -58,6 +58,15 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   // Sends the current prompt to Gemini and asks it to rewrite as a
   // richer, more specific image prompt — then replaces the textarea.
   const [improvingPrompt, setImprovingPrompt] = useState(false)
+  const [upscaleMenuOpen, setUpscaleMenuOpen] = useState(false)
+  useEffect(() => {
+    if (!upscaleMenuOpen) return
+    function onDoc(e) {
+      if (!e.target.closest('.ihn-upscale-wrap')) setUpscaleMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [upscaleMenuOpen])
   // VITE_IMAGE_PROVIDER picks the generator (pollinations | gemini) at
   // build time. Hoisted to component scope so JSX (e.g. the upscale
   // button) can gate on it.
@@ -423,13 +432,13 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   // explicit "enhance, preserve details, higher resolution" prompt.
   // Result is appended as a new version (doesn't overwrite the source).
   // Only fires when provider=gemini; the button is hidden otherwise.
-  async function upscaleImage(e) {
-    e?.stopPropagation?.()
+  async function upscaleImage(targetRes = '4k') {
     if (!activeImage?.src) return
     if (provider !== 'gemini') {
       toast('Upscale requires Nano Banana Pro')
       return
     }
+    setUpscaleMenuOpen(false)
     setQueued(true)
     setError(null)
     await enqueue(async () => {
@@ -437,7 +446,8 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       bumpLoading(+1)
       try {
         const basePrompt = (editablePrompt || prompt || 'image').trim()
-        const upscalePrompt = `${basePrompt}, upscaled to 4K, enhanced sharpness, preserve every detail and composition exactly, photorealistic high resolution`
+        const label = targetRes.toUpperCase()
+        const upscalePrompt = `${basePrompt}, upscaled to ${label} resolution, enhanced sharpness, preserve every detail and composition exactly, photorealistic high resolution`
         const effectiveRatio = ratio || project?.ratio || '1:1'
         const res = await fetch('/api/image-gemini', {
           method: 'POST',
@@ -464,14 +474,14 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
           src: data.image,
           prompt: upscalePrompt,
           createdAt: Date.now(),
-          source: 'upscale',
+          source: `upscale-${targetRes}`,
         }
         setVersions(prev => {
           const updated = [...prev, newVersion]
           setActiveVersion(updated.length - 1)
           return updated
         })
-        toast('Upscaled')
+        toast(`Upscaled to ${label}`)
       } catch (err) {
         setError(`Upscale failed: ${err?.message || err}`)
         toast('Upscale failed — see console', 'error')
@@ -868,11 +878,24 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3z" fill="currentColor"/></svg>
               </button>
               {provider === 'gemini' && (
-                <button className="ihn-btn" onClick={upscaleImage} disabled={loading} data-tip="Upscale (Nano Banana Pro)">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 6V3h3M13 10v3h-3M3 13l4-4M13 3l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
+                <div className="ihn-upscale-wrap">
+                  <button
+                    className="ihn-btn"
+                    onClick={e => { e.stopPropagation(); setUpscaleMenuOpen(o => !o) }}
+                    disabled={loading}
+                    data-tip="Upscale"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 6V3h3M13 10v3h-3M3 13l4-4M13 3l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                  {upscaleMenuOpen && (
+                    <div className="ihn-upscale-menu" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => upscaleImage('2k')}>2K</button>
+                      <button onClick={() => upscaleImage('4k')}>4K</button>
+                    </div>
+                  )}
+                </div>
               )}
               <button className="ihn-btn ihn-btn-danger" onClick={requestDeleteImage} data-tip="Delete">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
