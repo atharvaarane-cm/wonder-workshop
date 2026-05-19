@@ -1807,6 +1807,37 @@ textarea { font-family: var(--font); resize: none; }
 /* Mood Board — compact: capped-height hero + a row of square tiles. */
 .mb-grid { display: flex; flex-direction: column; gap: 8px; }
 .mb-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+/* Multi-mood layout (mirrors loc-list / character-block pattern). */
+.mb-list { display: flex; flex-direction: column; gap: 18px; }
+.mb-item {
+  position: relative;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mb-item + .mb-item { padding-top: 18px; border-top: 1px solid var(--border); }
+.mb-item-caption {
+  font-size: 12px; color: var(--muted); line-height: 1.5;
+  padding: 4px 2px;
+}
+.mb-item-caption:empty::before { content: attr(data-placeholder); color: var(--faint); font-style: italic; }
+.mb-item-remove {
+  position: absolute; top: 6px; right: 6px; z-index: 4;
+  width: 20px; height: 20px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55); color: #fff; border: none;
+  cursor: pointer; opacity: 0; transition: opacity .12s, background .12s;
+}
+.mb-item:hover .mb-item-remove { opacity: 1; }
+.mb-item-remove:hover { background: #E04141; }
+.mb-add-row {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 66px; width: 100%; border-radius: 7px;
+  border: 1px solid #282828; background: #1a1a1a;
+  color: #717171; font-family: var(--font); font-size: 12px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  cursor: pointer; transition: border-color 0.12s, color 0.12s;
+}
+.mb-add-row:hover { border-color: #3a3a3a; color: #fff; }
 @media (max-width: 720px) {
   .mb-tiles { grid-template-columns: 1fr 1fr; }
 }
