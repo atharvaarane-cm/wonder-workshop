@@ -267,7 +267,10 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
         },
       })
     } catch (e) {
-      setError(e.message)
+      const msg = e?.message || String(e)
+      setError(/\b429\b/.test(msg)
+        ? 'Gemini rate limit hit (5 requests / min). Wait ~60 seconds and click Generate again — your prompt is preserved.'
+        : msg)
       setLoading(false)
     }
   }
