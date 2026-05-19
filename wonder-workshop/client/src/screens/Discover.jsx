@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { generateBrief } from '../hooks/useBrief.js'
+import { generateBrief, chatWithTools } from '../hooks/useBrief.js'
 
 const QUICK_START_PROMPTS = [
   {
@@ -229,6 +229,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
 
   const [prompt, setPrompt]         = useState('')
   const [loading, setLoading]       = useState(false)
+  const [improving, setImproving]   = useState(false)
   const [error, setError]           = useState(null)
   const [ratio, setRatio]           = useState('16:9')
   const [resolution, setResolution] = useState('1K')
@@ -268,6 +269,43 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
     } catch (e) {
       setError(e.message)
       setLoading(false)
+    }
+  }
+
+  // Expand the user's rough idea into a richer creative brief covering
+  // location, mood, key elements, and characters. Mirrors the modal
+  // "Improve with AI" pattern in ImageSlot.jsx — same /api/chat path,
+  // different system prompt tuned for a discovery-phase brief.
+  async function improvePrompt() {
+    const text = prompt.trim()
+    if (!text || improving || loading) return
+    setImproving(true); setError(null)
+    try {
+      const messages = [
+        { role: 'system', content: [
+          'You are a senior creative director helping turn a rough idea into a detailed campaign brief.',
+          'Rewrite the user\'s prompt as a single richer paragraph that covers:',
+          '- LOCATION: where the scene takes place (specific setting, era, time of day)',
+          '- MOOD: the emotional tone, lighting, color palette, atmosphere',
+          '- ELEMENTS: key props, wardrobe, set pieces, textures, focal objects',
+          '- CHARACTERS: who appears, their look, demeanor, styling, role in the scene',
+          'Guidelines:',
+          '- Keep the original SUBJECT and INTENT — don\'t change what the campaign is about',
+          '- One flowing paragraph, no headings, no bullet points, no labels',
+          '- No preamble, no quotes, no explanations',
+          '- Return ONLY the improved brief paragraph, ready to drop into a generation tool',
+        ].join('\n') },
+        { role: 'user', content: text },
+      ]
+      const { text: improved } = await chatWithTools(messages, [])
+      const cleaned = (improved || '').trim().replace(/^["'`]+|["'`]+$/g, '')
+      if (cleaned) setPrompt(cleaned)
+      else setError('AI returned no text')
+    } catch (e) {
+      const msg = e?.message || String(e)
+      setError(/\b429\b/.test(msg) ? 'Gemini rate limit hit. Try again in a minute.' : `Improve failed: ${msg}`)
+    } finally {
+      setImproving(false)
     }
   }
 
@@ -875,7 +913,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
               onKeyDown={onKey}
-              disabled={loading}
+              disabled={loading || improving}
               autoFocus
               rows={4}
             />
@@ -966,14 +1004,27 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
                 )}
               </div>
               <button
+                className="discover-improve-btn"
+                onClick={improvePrompt}
+                disabled={!prompt.trim() || improving || loading}
+                title="Expand this prompt into a richer brief — location, mood, elements, characters"
+                type="button"
+              >
+                <svg width="13" height="13" viewBox="0 0 18 18" fill="none">
+                  <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                  <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
+                </svg>
+                {improving ? 'Improving…' : 'Improve with AI'}
+              </button>
+              <button
                 className="start-blank-btn"
                 onClick={() => onStartBlank?.({ ratio, resolution })}
-                disabled={loading}
+                disabled={loading || improving}
                 title="Start from a blank board — skip AI autofill"
               >
                 Start blank
               </button>
-              <button className="generate-btn" onClick={handleSend} disabled={!prompt.trim() || loading}>
+              <button className="generate-btn" onClick={handleSend} disabled={!prompt.trim() || loading || improving}>
                 {loading
                   ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2.5" strokeDasharray="28" strokeDashoffset="8"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.75s" repeatCount="indefinite"/></circle></svg>
                   : <>Generate <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 14L14 8 2 2v4.5l8 1.5-8 1.5V14z" fill="#fff"/></svg></>

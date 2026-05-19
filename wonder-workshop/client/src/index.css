@@ -612,6 +612,24 @@ textarea { font-family: var(--font); resize: none; }
   border: 1px solid var(--border-md); cursor: pointer;
   transition: background 0.14s, color 0.14s, border-color 0.14s;
 }
+/* "Improve with AI" — sits before Start blank, yellow outlined to match
+   the modal's improve affordance. The first margin-left:auto absorbs
+   the gap; Start blank loses its auto when Improve is present. */
+.discover-improve-btn {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 18px;
+  border: 1px solid rgba(255,200,87,0.5); background: rgba(255,200,87,0.10);
+  color: #FFC857; font-size: 12px; font-weight: 700; font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, opacity 0.14s;
+}
+.discover-improve-btn:hover:not(:disabled) {
+  background: rgba(255,200,87,0.18); border-color: rgba(255,200,87,0.7);
+}
+.discover-improve-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.discover-improve-btn + .start-blank-btn { margin-left: 8px; }
+.discover-improve-btn + .start-blank-btn + .generate-btn { margin-left: 8px; }
 .start-blank-btn:hover {
   background: var(--bg); color: var(--text); border-color: var(--text);
 }
