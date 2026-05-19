@@ -310,6 +310,32 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     })
   }
 
+  // Mood Board items — each has a stable id (for slot persistence) and
+  // a free-text caption that doubles as the generation prompt seed.
+  function makeMoodId() {
+    return `mood_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  }
+  function addMoodItem() {
+    setBrief(prev => ({
+      ...prev,
+      moodBoard: [...(prev.moodBoard || []), { id: makeMoodId(), caption: '' }],
+    }))
+  }
+  function updateMoodItemAt(idx, field, value) {
+    setBrief(prev => {
+      const list = [...(prev.moodBoard || [])]
+      if (!list[idx]) return prev
+      list[idx] = { ...list[idx], [field]: value }
+      return { ...prev, moodBoard: list }
+    })
+  }
+  function removeMoodItemAt(idx) {
+    setBrief(prev => {
+      const list = (prev.moodBoard || []).filter((_, i) => i !== idx)
+      return { ...prev, moodBoard: list }
+    })
+  }
+
   // Aspect-ratio change from the Creative-section dropdown. Updates the
   // ratio immediately, then surfaces a confirmation asking whether to
   // regenerate every existing image to match the new ratio.
@@ -389,7 +415,13 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                             onAspectRatioChange={handleAspectRatioChange}
                           />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
-      case 'mb':  return <MoodBoard data={brief.creativeDirection} />
+      case 'mb':  return <MoodBoard
+        items={brief.moodBoard || []}
+        creative={brief.creativeDirection}
+        addMoodItem={addMoodItem}
+        updateMoodItemAt={updateMoodItemAt}
+        removeMoodItemAt={removeMoodItemAt}
+      />
       case 'loc': return <LocationsSetDesign
         primaryLocation={brief.environment}
         additionalLocations={brief.environments || []}
