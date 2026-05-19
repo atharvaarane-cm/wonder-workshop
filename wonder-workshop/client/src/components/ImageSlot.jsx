@@ -939,12 +939,18 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
                 <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
               </svg>
             </div>
-            {/* Upload / Generate — revealed on hover. Zero clicks to see
-                the options; one click to act. */}
+            {/* Upload / Edit prompt / Generate — revealed on hover. The
+                "Edit prompt" button opens the same modal used for existing
+                images so the user can write or refine a custom prompt
+                (with Improve with AI) before firing the first generation. */}
             <div className="img-slot-actions" onClick={e => e.stopPropagation()}>
               <button className="img-slot-btn" onClick={e => { e.stopPropagation(); inputRef.current.click() }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Upload
+              </button>
+              <button className="img-slot-btn" onClick={e => { e.stopPropagation(); setEditingPrompt(true) }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Edit prompt
               </button>
               {editablePrompt && (
                 <button className="img-slot-btn generate" onClick={generate}>
@@ -1078,7 +1084,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
               onClick={() => generate()}
               disabled={loading || !editablePrompt.trim()}
             >
-              {loading ? 'Generating…' : '✦ Regenerate'}
+              {loading ? 'Generating…' : (versions.length === 0 ? '✦ Generate' : '✦ Regenerate')}
             </button>
           </div>
         </div>
