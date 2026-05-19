@@ -2585,7 +2585,20 @@ textarea { font-family: var(--font); resize: none; }
 }
 .img-prompt-modal-regen:hover:not(:disabled) { background: #6c4af2; border-color: #6c4af2; }
 .img-prompt-modal-regen:disabled,
-.img-prompt-modal-cancel:disabled { opacity: 0.45; cursor: not-allowed; }
+.img-prompt-modal-cancel:disabled,
+.img-prompt-modal-improve:disabled { opacity: 0.45; cursor: not-allowed; }
+/* "Improve with AI" — outlined yellow button to match the hover-nav
+   improve affordance. Sits between Cancel and Regenerate. */
+.img-prompt-modal-improve {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 14px; border-radius: 9px;
+  border: 1px solid rgba(255,200,87,0.5); background: rgba(255,200,87,0.10);
+  color: #FFC857; font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.img-prompt-modal-improve:hover:not(:disabled) {
+  background: rgba(255,200,87,0.18); border-color: rgba(255,200,87,0.7);
+}
 [data-theme="dark"] .img-prompt-modal-content { background: #1e1e1e; }
 [data-theme="dark"] .img-prompt-modal-textarea { background: #161616; border-color: rgba(255,255,255,0.12); }
 

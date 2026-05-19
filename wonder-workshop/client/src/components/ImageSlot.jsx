@@ -54,6 +54,10 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   // back to a text-only regen with the augmented prompt.
   const [improveOpen, setImproveOpen] = useState(false)
   const [improveText, setImproveText] = useState('')
+  // "Improve prompt with AI" button inside the Edit Image Prompt modal.
+  // Sends the current prompt to Gemini and asks it to rewrite as a
+  // richer, more specific image prompt — then replaces the textarea.
+  const [improvingPrompt, setImprovingPrompt] = useState(false)
   // VITE_IMAGE_PROVIDER picks the generator (pollinations | gemini) at
   // build time. Hoisted to component scope so JSX (e.g. the upscale
   // button) can gate on it.
@@ -545,6 +549,41 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     })
   }
 
+  // Send the editing prompt to Gemini and ask it to rewrite as a
+  // richer, more specific image-generation prompt. Replaces the
+  // textarea so the user can review before regenerating.
+  async function improvePromptWithAI() {
+    const text = (editablePrompt || '').trim()
+    if (!text || improvingPrompt) return
+    setImprovingPrompt(true)
+    try {
+      const messages = [
+        { role: 'system', content: [
+          'You are a senior image-prompt engineer for cinematic / editorial photography.',
+          'Take the user\'s rough prompt and rewrite it as a single richer prompt that:',
+          '- Keeps the same SUBJECT and INTENT (don\'t change what\'s being shown)',
+          '- Adds specific visual detail: lighting, mood, composition, framing, lens, color palette, texture',
+          '- Stays in one paragraph, no lists or headings',
+          '- Does NOT include preamble, quotes, or explanations',
+          '- Returns ONLY the improved prompt text, ready to paste into an image generator',
+        ].join('\n') },
+        { role: 'user', content: text },
+      ]
+      const { chatWithTools } = await import('../hooks/useBrief.js')
+      const { text: improved } = await chatWithTools(messages, [])
+      const cleaned = (improved || '').trim().replace(/^["'`]+|["'`]+$/g, '')
+      if (cleaned) setEditablePrompt(cleaned)
+      else toast('AI returned no text', 'error')
+    } catch (e) {
+      console.error('[ImageSlot] improve prompt failed', e)
+      const msg = e?.message || String(e)
+      if (/\b429\b/.test(msg)) toast('Gemini rate limit hit. Try again in a minute.', 'error')
+      else toast(`Improve failed: ${msg.slice(0, 120)}`, 'error')
+    } finally {
+      setImprovingPrompt(false)
+    }
+  }
+
   async function downloadImage(e) {
     e?.stopPropagation?.()
     if (!activeImage) return
@@ -998,6 +1037,18 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
               disabled={loading}
             >
               Cancel
+            </button>
+            <button
+              className="img-prompt-modal-improve"
+              onClick={improvePromptWithAI}
+              disabled={improvingPrompt || loading || !editablePrompt.trim()}
+              title="Rewrite this prompt with more detail (lighting, mood, composition)"
+            >
+              <svg width="13" height="13" viewBox="0 0 18 18" fill="none">
+                <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
+              </svg>
+              {improvingPrompt ? 'Improving…' : 'Improve with AI'}
             </button>
             <button
               className="img-prompt-modal-regen"
