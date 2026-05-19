@@ -1418,33 +1418,28 @@ textarea { font-family: var(--font); resize: none; }
   overflow: hidden;
 }
 .cd-feature-bar {
-  display: flex; align-items: center; justify-content: flex-start; gap: 48px;
-  padding: 22px 43px;
+  /* Mockup spec: shorter strip, Creative LEFT, meta block RIGHT-justified,
+     no dividers, white values. */
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  padding: 14px 28px;
   background: #006dd4;
   color: #fff;
-  /* Top corners rounded so the strip still matches the section-card's
-     rounded top — used to come from the parent's overflow:hidden, but
-     that was clipping the floating hover toolbar inside slots. */
   border-radius: 6px 6px 0 0;
 }
 .cd-feature-label {
-  font: 400 20px var(--font);
+  font: 400 18px var(--font);
   letter-spacing: -0.01em;
 }
-.cd-feature-meta { display: flex; align-items: center; gap: 48px; }
+.cd-feature-meta { display: flex; align-items: center; gap: 40px; }
 .cd-feature-meta-item { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .cd-feature-meta-label {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
-  color: #46a4ff;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.7);
 }
 .cd-feature-meta-val {
-  font-size: 24px; font-weight: 400; color: #cce7ff;
+  font-size: 20px; font-weight: 400; color: #ffffff;
   display: inline-flex; align-items: center; gap: 4px;
-}
-/* Thin light-blue dividers between the items inside the blue strip. */
-.cd-feature-sep {
-  width: 1px; align-self: stretch;
-  background: rgba(204,231,255,0.4);
 }
 /* ASPECT RATIO is a dropdown — button reset + chevron + menu. */
 .cd-ratio-wrap { position: relative; }
@@ -1591,6 +1586,18 @@ textarea { font-family: var(--font); resize: none; }
   align-self: flex-start;
 }
 .bi-source-link:hover { color: var(--text); border-color: var(--border-md); }
+/* URL input that drives the brand logo lookup. Plain dark input; pasting
+   a domain (nike.com) auto-derives a logo via Google's favicon API
+   (the existing fallback chain). */
+.bi-source-input-wrap { width: 100%; }
+.bi-source-input {
+  width: 100%; padding: 7px 10px; border-radius: 7px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); font: 12px var(--font); outline: none;
+  transition: border-color 0.12s;
+}
+.bi-source-input:focus { border-color: #006dd4; }
+.bi-source-input::placeholder { color: var(--faint); }
 
 /* BRAND COLORS — joined strip of color blocks, no gaps. Hex code fades in
    on hover. Click to copy. Matches the May 13 mockup. */
