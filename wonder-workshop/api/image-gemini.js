@@ -25,11 +25,12 @@ const RATIO_MAP = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const apiKey = process.env.GEMINI_IMAGE_API_KEY
+  // Either env var works — one Gemini key can call any model.
+  const apiKey = process.env.GEMINI_IMAGE_API_KEY || process.env.GEMINI_API_KEY
   if (!apiKey) {
     return res.status(500).json({
-      error: 'GEMINI_IMAGE_API_KEY not configured',
-      hint: 'Add it to Vercel env vars (Production/Preview/Development).',
+      error: 'Gemini API key not configured',
+      hint: 'Set GEMINI_IMAGE_API_KEY or GEMINI_API_KEY in Vercel env vars.',
     })
   }
 
