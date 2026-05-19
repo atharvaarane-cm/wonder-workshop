@@ -2921,7 +2921,10 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── Dark theme — Board ──────────────────────────────────────── */
 [data-theme="dark"] .board-screen { background: #111111; }
-[data-theme="dark"] .topbar { background: #171717; border-color: rgba(255,255,255,0.07); }
+/* Topbar keeps its rainbow gradient in both themes — flat dark
+   override here was hiding it in dark mode. Only the border color
+   shifts for theme contrast. */
+[data-theme="dark"] .topbar { border-color: rgba(255,255,255,0.07); }
 [data-theme="dark"] .topbar-back { color: rgba(255,255,255,0.42); }
 [data-theme="dark"] .topbar-back:hover { color: #E8E8E8; }
 [data-theme="dark"] .topbar-desc-btn { background: #232323; border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.5); }
