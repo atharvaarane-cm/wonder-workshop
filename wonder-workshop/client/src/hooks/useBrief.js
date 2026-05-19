@@ -221,15 +221,31 @@ export async function generateBrief(userPrompt) {
   const parsed = JSON.parse(repaired)
   const projectInfo = parsed.projectInfo || {}
 
+  // Preserve the user's exact prompt as the visible creative direction
+  // instead of the model's summary. The structured fields (character,
+  // environment, productElements, shotList) still get extracted, but
+  // the headline description reads like what the user typed — not a
+  // generic paraphrase. Strip the generation-suffix markers we tack on
+  // at submit time (aspect ratio, resolution, quick start).
+  const cleanedPrompt = userPrompt
+    .replace(/\s*\(quick start:[^)]*\)\s*$/i, '')
+    .replace(/\s*\(resolution:[^)]*\)\s*$/i, '')
+    .replace(/\s*\(aspect ratio:[^)]*\)\s*$/i, '')
+    .trim()
+
   const merged = mergeBrandResearch({
     ...parsed,
+    creativeDirection: {
+      ...(parsed.creativeDirection || {}),
+      description: cleanedPrompt,
+    },
     projectInfo: {
       projectName: projectInfo.projectName || parsed.title || '',
       jobNumber: projectInfo.jobNumber || '',
       clientName: projectInfo.clientName || parsed.creativeDirection?.brand || '',
       brandCampaignName: projectInfo.brandCampaignName || parsed.creativeDirection?.brand || '',
     },
-    originalPrompt: userPrompt,
+    originalPrompt: cleanedPrompt,
   }, brandResearch)
 
   return injectMentionHandles(merged)
