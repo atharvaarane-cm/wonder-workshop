@@ -373,11 +373,19 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   // Returns { ok, requestId, slotKey, sectionTitle, label } so the chat
   // panel can correlate the resulting ww-image-generated event back to
   // the specific message.
-  function regenerateActiveImage(newPrompt) {
+  function regenerateActiveImage(newPrompt, opts = {}) {
     if (!activeImageTarget?.slotKey || !newPrompt) return { ok: false }
     const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
     window.dispatchEvent(new CustomEvent('ww-regenerate-image', {
-      detail: { slotKey: activeImageTarget.slotKey, newPrompt, requestId },
+      detail: {
+        slotKey: activeImageTarget.slotKey,
+        newPrompt,
+        requestId,
+        // Pass-through reference images attached to the chat message.
+        // ImageSlot merges these with its own slot-level refs (e.g. the
+        // character REFERENCE image) before sending to Gemini.
+        attachedReferences: Array.isArray(opts.referenceImages) ? opts.referenceImages : [],
+      },
     }))
     return {
       ok: true,

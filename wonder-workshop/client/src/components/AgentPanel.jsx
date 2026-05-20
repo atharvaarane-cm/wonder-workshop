@@ -149,6 +149,33 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
   const [collapsed, setCollapsed] = useState(false)
   const [listening, setListening] = useState(false)
   const [, forceUpdate] = useState(0)
+  // Reference images attached to the next message — Gemini accepts them
+  // as inline image inputs for identity / style preservation. Each entry
+  // is { src: <data URL>, name: <filename> }.
+  const [attachedImages, setAttachedImages] = useState([])
+  const chatFileInputRef = useRef(null)
+
+  function openChatAttach() { chatFileInputRef.current?.click() }
+  function handleChatAttach(files) {
+    const list = Array.from(files || []).filter(f => f && f.type.startsWith('image/'))
+    if (!list.length) return
+    const next = []
+    let pending = list.length
+    list.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        next.push({ src: String(reader.result || ''), name: file.name })
+        if (--pending === 0) setAttachedImages(prev => [...prev, ...next].slice(0, 4))
+      }
+      reader.onerror = () => {
+        if (--pending === 0 && next.length) setAttachedImages(prev => [...prev, ...next].slice(0, 4))
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+  function removeAttachedImage(idx) {
+    setAttachedImages(prev => prev.filter((_, i) => i !== idx))
+  }
   const messagesRef = useRef(null)
   const abortRef = useRef(null)
   const recognitionRef = useRef(null)
@@ -222,7 +249,12 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     setInput('')
     setStreaming(true)
 
-    setMessages(prev => [...prev, { role: 'user', text, ts: Date.now() }])
+    // Snapshot + clear attached images. They ride along on the user
+    // bubble for visual continuity AND get forwarded as referenceImages
+    // on any regen action this round triggers.
+    const snapshot = attachedImages
+    setAttachedImages([])
+    setMessages(prev => [...prev, { role: 'user', text, attachments: snapshot, ts: Date.now() }])
 
     const hasActiveImage = !!activeImageTarget?.prompt
     const systemPrompt = [
@@ -334,7 +366,8 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
           } else if (!activeImageTarget?.slotKey) {
             blockers.push('Click on the image you want me to change first, then ask again. I can only target a slot you\'ve selected — section context alone isn\'t enough.')
           } else {
-            const result = onRegenerateImage(new_prompt)
+            const referenceImages = snapshot.map(a => a.src).filter(Boolean)
+            const result = onRegenerateImage(new_prompt, { referenceImages })
             if (result?.ok) {
               applied.push(a)
               pendingCards.push({
@@ -553,7 +586,16 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
                 {m.text && <div className="msg-bubble card-closer">{m.text}</div>}
               </>
             ) : (
-              <div className="msg-bubble">{m.text || <span style={{ opacity: 0.4 }}>•••</span>}</div>
+              <div className="msg-bubble">
+                {Array.isArray(m.attachments) && m.attachments.length > 0 && (
+                  <div className="msg-attachments">
+                    {m.attachments.map((a, ai) => (
+                      <img key={ai} src={a.src} alt={a.name || `attachment ${ai + 1}`} />
+                    ))}
+                  </div>
+                )}
+                {m.text || (m.attachments?.length ? null : <span style={{ opacity: 0.4 }}>•••</span>)}
+              </div>
             )}
             <div className="msg-time">{timeAgo(m.ts)}</div>
           </div>
@@ -562,16 +604,48 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
 
       {/* Input */}
       <div className="panel-input">
+        {attachedImages.length > 0 && (
+          <div className="panel-attached-row">
+            {attachedImages.map((a, i) => (
+              <div key={i} className="panel-attached-thumb" title={a.name}>
+                <img src={a.src} alt={a.name} />
+                <button
+                  type="button"
+                  className="panel-attached-remove"
+                  onClick={() => removeAttachedImage(i)}
+                  title="Remove this reference"
+                >
+                  <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                    <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <textarea
           className="panel-textarea"
-          placeholder="What do you want to change about this section?"
+          placeholder={attachedImages.length ? 'Tell me how to use these references…' : 'What do you want to change about this section?'}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={onKey}
           disabled={streaming}
           rows={2}
         />
+        <input
+          ref={chatFileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: 'none' }}
+          onChange={e => { handleChatAttach(e.target.files); e.target.value = '' }}
+        />
         <div className="panel-input-actions">
+          <button className="panel-attach-btn" onClick={openChatAttach} title="Attach a reference image" type="button" disabled={streaming || attachedImages.length >= 4}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          </button>
           {SpeechRecognition && (
             <button className={`panel-mic-btn${listening ? ' active' : ''}`} onClick={toggleMic} title={listening ? 'Stop listening' : 'Speak'}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
