@@ -175,8 +175,28 @@ function CharacterBlock({ character, setField, onRemove, label }) {
 
       {/* Headshots — 4-view grid, drag-to-reorder. viewOrder is shared
           with Full Body below so both grids stay aligned. */}
-      <div className="character-views-group">
-        <div className="character-views-label">Headshots</div>
+      <div className="character-views-group" data-subgroup="headshot">
+        <div className="character-views-header">
+          <div className="character-views-label">Headshots</div>
+          <button
+            type="button"
+            className="character-views-populate"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('ww-generate-section', {
+                detail: { sectionTitle: 'Character Design', subgroup: 'headshot' },
+              }))
+            }}
+            disabled={!referenceImages.length}
+            title={referenceImages.length
+              ? 'Generate all 4 headshot views from the approved reference'
+              : 'Generate the REFERENCE image first'}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
+            </svg>
+            Populate All
+          </button>
+        </div>
         <div className="character-views character-views-4">
           {orderedViews.map((v, idx) => (
             <div
@@ -206,8 +226,28 @@ function CharacterBlock({ character, setField, onRemove, label }) {
       </div>
 
       {/* Full Body — 4-view grid, drag-to-reorder (shares viewOrder). */}
-      <div className="character-views-group">
-        <div className="character-views-label">Full Body</div>
+      <div className="character-views-group" data-subgroup="fullbody">
+        <div className="character-views-header">
+          <div className="character-views-label">Full Body</div>
+          <button
+            type="button"
+            className="character-views-populate"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('ww-generate-section', {
+                detail: { sectionTitle: 'Character Design', subgroup: 'fullbody' },
+              }))
+            }}
+            disabled={!referenceImages.length}
+            title={referenceImages.length
+              ? 'Generate all 4 full-body views from the approved reference'
+              : 'Generate the REFERENCE image first'}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
+            </svg>
+            Generate All
+          </button>
+        </div>
         <div className="character-views character-views-4">
           {orderedViews.map((v, idx) => (
             <div
