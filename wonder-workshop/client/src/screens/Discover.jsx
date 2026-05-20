@@ -930,7 +930,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
           {/* Greeting */}
           <div className="discover-greeting">
             <span className="greeting-hi">Hi Atharvaa,</span>
-            <span className="greeting-sub">what's on your mind?</span>
+            <span className="greeting-sub">what do you want to create?</span>
           </div>
 
           {/* Quick starts */}
