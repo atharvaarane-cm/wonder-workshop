@@ -257,6 +257,15 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Keep the textarea grown to fit its content whenever the prompt
+  // changes (Improve-with-AI rewrites, quick-start chips, etc.).
+  useEffect(() => {
+    const el = textRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 480) + 'px'
+  }, [prompt])
+
   // Read each picked file, extract its text, and add to attachments. Skips
   // anything we can't read and surfaces a friendly error inline.
   async function handleAttachFiles(files) {
@@ -955,11 +964,20 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
               className="input-card-text"
               placeholder="Describe the scene, shot, mood, characters, styling, location…"
               value={prompt}
-              onChange={e => setPrompt(e.target.value)}
+              onChange={e => {
+                setPrompt(e.target.value)
+                // Auto-grow the textarea up to a sensible max so long
+                // attached briefs / pasted creative documents render
+                // in full instead of being squeezed into 4 cramped lines.
+                const el = e.target
+                el.style.height = 'auto'
+                el.style.height = Math.min(el.scrollHeight, 480) + 'px'
+              }}
               onKeyDown={onKey}
               disabled={loading || improving}
               autoFocus
               rows={4}
+              style={{ maxHeight: 480, overflowY: 'auto' }}
             />
             {attachments.length > 0 && (
               <div className="input-card-attachments">
