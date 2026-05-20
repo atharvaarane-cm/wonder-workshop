@@ -32,7 +32,6 @@ export default function SectionCard({ name, loading, children, active, onClick, 
       <div className="section-header">
         <div className="section-name">{name}</div>
         <div className={`status-dot ${dotState}${imageLoading ? ' pulse' : ''}`} title={imageLoading ? 'Generating images…' : undefined} />
-        {imageResolution && <div className="section-resolution-badge">{imageResolution}</div>}
         {locked && (
           <span className="section-lock-badge" title="Locked — unlock to make changes">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
