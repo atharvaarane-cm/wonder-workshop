@@ -1986,6 +1986,28 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .char-ref-thumb:hover { border-color: #9B7DFF; }
 
 .character-views-group { display: flex; flex-direction: column; gap: 8px; }
+/* Header row above each views grid (Headshots / Full Body) — title on
+   the left, "Populate All" / "Generate All" button on the right. The
+   button is disabled until the REFERENCE image exists. */
+.character-views-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.character-views-populate {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px; height: 28px; border-radius: 14px;
+  border: 1px solid var(--border-md); background: var(--card);
+  color: var(--text); font-size: 11px; font-weight: 700; font-family: var(--font);
+  letter-spacing: 0.02em; cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.character-views-populate:hover:not(:disabled) {
+  background: #7C5CFC; color: #fff; border-color: #7C5CFC;
+}
+.character-views-populate:disabled { opacity: 0.4; cursor: not-allowed; }
+[data-theme="dark"] .character-views-populate { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14); }
+[data-theme="dark"] .character-views-populate:hover:not(:disabled) {
+  background: #7C5CFC; border-color: #7C5CFC; color: #fff;
+}
 
 /* ── Environment ───────────────────────────────────────────────── */
 .env-grid { display: flex; flex-direction: column; gap: 12px; }

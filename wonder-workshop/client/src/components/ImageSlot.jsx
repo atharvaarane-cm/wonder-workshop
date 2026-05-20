@@ -156,6 +156,14 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       if (e.detail?.primaryOnly && priority !== 'primary') return
       const sectionEl = slotRef.current?.closest('[data-section-title]')
       if (sectionEl?.dataset.sectionTitle !== targetSection) return
+      // Subgroup filter — used by Character Design's "Populate All
+      // Headshots" / "Generate All Full Body" buttons to scope a
+      // generation to one of the two 4-view grids without firing the
+      // whole section.
+      if (e.detail?.subgroup) {
+        const subgroupEl = slotRef.current?.closest('[data-subgroup]')
+        if (subgroupEl?.dataset.subgroup !== e.detail.subgroup) return
+      }
       generate(null, { silent: true })
     }
     window.addEventListener('ww-generate-section', onSectionGenerate)
