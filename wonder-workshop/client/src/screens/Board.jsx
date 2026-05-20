@@ -422,7 +422,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     ? `${activeImageTarget.sectionTitle} / ${activeImageTarget.label}`
     : activeTitle
   const activeRowIdx = ROWS.findIndex(row => row.some(s => s.id === activeId))
-  const imageResolution = brief.generationSettings?.resolution || '1K'
 
   function renderContent(id) {
     switch (id) {
@@ -686,7 +685,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       key={sec.id}
                       name={sec.title}
                       active={activeId === sec.id}
-                      imageResolution={IMAGE_SECTION_IDS.has(sec.id) ? imageResolution : null}
                       imageLoading={(loadingBySection[sec.title] || 0) > 0}
                       defaultCollapsed={sectionIsEmpty(sec.id, brief)}
                       canAutoGenerate={IMAGE_SECTION_IDS.has(sec.id)}

@@ -10,7 +10,7 @@ function Skeleton() {
   )
 }
 
-export default function SectionCard({ name, loading, children, active, onClick, imageResolution, imageLoading, canAutoGenerate, onAutoGenerate, canRegenerate, onRegenerate, canLock, locked, onToggleLock, disabledReason, onDelete, defaultCollapsed = false }) {
+export default function SectionCard({ name, loading, children, active, onClick, imageLoading, canAutoGenerate, onAutoGenerate, canRegenerate, onRegenerate, canLock, locked, onToggleLock, disabledReason, onDelete, defaultCollapsed = false }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
   // Two-click delete: first click arms it, second confirms. Auto-disarms
   // after a few seconds so a stray click doesn't leave it primed.
