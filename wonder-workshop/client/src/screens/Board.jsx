@@ -732,12 +732,11 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       onToggleLock={() => {
                         update('locks', { ...(brief.locks || {}), [sec.id]: !brief?.locks?.[sec.id] })
                       }}
-                      disabledReason={
-                        sec.id === 'sl'
-                          && (!brief?.locks?.loc || !brief?.locks?.cp || !brief?.locks?.char)
-                            ? 'Lock Location, Product / Elements, and Character Design first'
-                            : null
-                      }
+                      // No upstream-lock gate on storyboard auto-gen — Ed
+                      // wanted it always available so he can iterate.
+                      // Storyboard pulls the current state (locked or not)
+                      // of all upstream sections at generation time.
+                      disabledReason={null}
                       onDelete={
                         sec.id === 'char' ? () => deleteSection('character', 'Character')
                         : sec.id === 'loc' ? () => deleteSection('environment', 'Location')
