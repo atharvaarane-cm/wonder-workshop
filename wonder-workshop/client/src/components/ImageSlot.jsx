@@ -3,6 +3,7 @@ import ConfirmDialog from './ConfirmDialog.jsx'
 import { ProjectContext, appendImageVersion } from '../hooks/useProject.js'
 import { enqueue } from '../utils/generationQueue.js'
 import { logGeneration } from '../utils/generationLog.js'
+import { getImageProvider, subscribe } from '../utils/imageProvider.js'
 import MentionInput from './MentionInput.jsx'
 
 function toast(msg, type = 'success') {
@@ -67,10 +68,11 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [upscaleMenuOpen])
-  // VITE_IMAGE_PROVIDER picks the generator (pollinations | gemini) at
-  // build time. Default is Gemini Nano Banana Pro — set the env var to
-  // 'pollinations' to fall back to the legacy provider.
-  const provider = (import.meta.env.VITE_IMAGE_PROVIDER || 'gemini').toLowerCase()
+  // Provider can be flipped at runtime via the toggle in the Export
+  // dropdown. Default is Gemini Nano Banana Pro; flipping to
+  // Pollinations is useful for demos that don't want to burn credits.
+  const [provider, setProvider] = useState(() => getImageProvider())
+  useEffect(() => subscribe(p => setProvider(p)), [])
   const [copyState, setCopyState] = useState(null)
   const inputRef = useRef()
   const slotRef = useRef()

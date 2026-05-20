@@ -1,5 +1,6 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import PptxGenJS from 'pptxgenjs'
+import { getImageProvider, setImageProvider, subscribe as subscribeProvider } from '../utils/imageProvider.js'
 
 function downloadJson(brief) {
   const blob = new Blob([JSON.stringify(brief, null, 2)], { type: 'application/json' })
@@ -84,6 +85,11 @@ function exportPptx(brief) {
 
 export default function ExportDropdown({ brief, onClose, onOnePager, onShare, onToggleTheme, onOpenGenLog, theme }) {
   const ref = useRef()
+  const [provider, setProvider] = useState(() => getImageProvider())
+  useEffect(() => subscribeProvider(p => setProvider(p)), [])
+  function toggleProvider() {
+    setImageProvider(provider === 'gemini' ? 'pollinations' : 'gemini')
+  }
 
   useEffect(() => {
     function handleClick(e) {
@@ -189,6 +195,19 @@ export default function ExportDropdown({ brief, onClose, onOnePager, onShare, on
           </span>
         </button>
       )}
+
+      <button className="export-option" onClick={toggleProvider}>
+        <span className="export-option-icon">
+          {provider === 'gemini'
+            ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l1.6 4.4 4.7.4-3.6 3.1 1.1 4.6L8 11.6l-3.8 2.4 1.1-4.6L1.7 6.3l4.7-.4L8 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+            : <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3"/><path d="M5 9.5c1-1 2-1 3 0s2 1 3 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+          }
+        </span>
+        <span className="export-option-text">
+          <span className="export-option-label">Image gen: {provider === 'gemini' ? 'Gemini Nano Banana' : 'Pollinations (free)'}</span>
+          <span className="export-option-hint">Click to switch to {provider === 'gemini' ? 'Pollinations — free, no credit burn' : 'Gemini — identity-preserving, costs credits'}</span>
+        </span>
+      </button>
 
       {onToggleTheme && (
         <button className="export-option" onClick={() => { onToggleTheme(); onClose() }}>
