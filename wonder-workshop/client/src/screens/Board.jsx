@@ -270,11 +270,23 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   // Multi-character helpers. brief.character stays as the primary
   // character (backward compat); additional characters live in
   // brief.characters[] so existing single-character briefs keep working.
+  // If the primary slot is still empty (no name/description/wardrobe)
+  // AND no additional characters exist, initialize the primary first
+  // so the user sees one block to fill in. Otherwise append to the
+  // additional list.
   function addCharacter() {
-    setBrief(prev => ({
-      ...prev,
-      characters: [...(prev.characters || []), { name: '', description: '', wardrobe: '' }],
-    }))
+    setBrief(prev => {
+      const c = prev.character || {}
+      const primaryEmpty = !c.name && !c.description && !c.wardrobe
+      const noAdditional = !(prev.characters || []).length
+      if (primaryEmpty && noAdditional) {
+        return { ...prev, character: { name: '', description: '', wardrobe: '', views: ['FRONT', '3/4', 'SIDE'] } }
+      }
+      return {
+        ...prev,
+        characters: [...(prev.characters || []), { name: '', description: '', wardrobe: '' }],
+      }
+    })
   }
   function updateCharacterAt(idx, field, value) {
     setBrief(prev => {

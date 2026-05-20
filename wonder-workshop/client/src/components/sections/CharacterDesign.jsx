@@ -239,6 +239,11 @@ function CharacterBlock({ character, setField, onRemove, label }) {
   )
 }
 
+function isCharacterPopulated(c) {
+  if (!c) return false
+  return !!(c.name?.trim() || c.description?.trim() || c.wardrobe?.trim())
+}
+
 export default function CharacterDesign({
   primaryCharacter,
   additionalCharacters,
@@ -247,31 +252,37 @@ export default function CharacterDesign({
   updateCharacterAt,
   removeCharacterAt,
 }) {
+  const hasPrimary = isCharacterPopulated(primaryCharacter)
+  const additional = additionalCharacters || []
+  // Empty state per Ed's UX feedback: when no character is populated
+  // yet, show ONLY the "Add character" affordance — don't render an
+  // empty Reference / Headshots / Full Body skeleton.
+  if (!hasPrimary && additional.length === 0) {
+    return (
+      <div className="character-design">
+        <button className="char-add-row" onClick={addCharacter} type="button">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
+          <span>Add character</span>
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="character-design">
-      {/* Honest disclaimer about the current image generator. We're on
-          Pollinations (free, no API key), which is pure text-to-image —
-          it invents a new face per generation and can't lock identity
-          across views, and follows pose instructions loosely. */}
-      <div className="section-limitation-note">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.1"/>
-          <path d="M6 5.2v3M6 3.6v.05" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-        </svg>
-        <span>
-          <strong>Image-generator limits:</strong> the current (free) generator can't lock a face across views, so each headshot / full-body may show a slightly different person, and poses (SIDE, BACK) are followed loosely. Identity-preserving generation is on the roadmap.
-        </span>
-      </div>
-
-      {/* Primary character — backed by brief.character (the original
-          single-character schema). */}
-      <CharacterBlock
-        character={primaryCharacter}
-        setField={(field, value) => update(`character.${field}`, value)}
-      />
+      {/* Primary character — backed by brief.character. Only rendered
+          once populated (or once user has clicked Add character). */}
+      {hasPrimary && (
+        <CharacterBlock
+          character={primaryCharacter}
+          setField={(field, value) => update(`character.${field}`, value)}
+        />
+      )}
 
       {/* Additional characters — backed by brief.characters[i]. */}
-      {(additionalCharacters || []).map((c, idx) => (
+      {additional.map((c, idx) => (
         <CharacterBlock
           key={idx}
           character={c}
