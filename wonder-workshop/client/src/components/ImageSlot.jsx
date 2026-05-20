@@ -110,7 +110,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   // so user-edited prompts don't break targeting.
   useEffect(() => {
     function onRegenerate(e) {
-      const { slotKey: targetKey, newPrompt, requestId } = e.detail || {}
+      const { slotKey: targetKey, newPrompt, requestId, attachedReferences } = e.detail || {}
       if (!targetKey || !slotKey || targetKey !== slotKey) return
       if (!newPrompt) return
       setEditablePrompt(newPrompt)
@@ -118,7 +118,9 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       // without waiting for the editablePrompt setState to flush.
       // requestId propagates to the ww-image-generated event so the
       // chat panel can match the result to the specific action.
-      generate(null, { promptOverride: newPrompt, requestId })
+      // attachedReferences merge with our slot-level referenceImages
+      // (e.g. character REFERENCE) before going to Gemini.
+      generate(null, { promptOverride: newPrompt, requestId, attachedReferences })
     }
     window.addEventListener('ww-regenerate-image', onRegenerate)
     return () => window.removeEventListener('ww-regenerate-image', onRegenerate)
@@ -336,15 +338,18 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       // provider is hoisted above (component scope) so both generate()
       // and the JSX (upscale button) can reference it.
       const endpoint = provider === 'gemini' ? '/api/image-gemini' : '/api/image'
+      // Merge slot-level reference images (e.g. character REFERENCE
+      // image passed as prop) with chat-attached references for this
+      // specific regen request. Gemini caps at 4 inline image inputs.
+      const mergedRefs = [
+        ...(Array.isArray(referenceImages) ? referenceImages : []),
+        ...(Array.isArray(opts.attachedReferences) ? opts.attachedReferences : []),
+      ].slice(0, 4)
       const payload = provider === 'gemini'
         ? {
             prompt: text,
             ratio: effectiveRatio,
-            // Identity preservation: callers pass the character's
-            // reference image (or other ground-truth refs) here. Gemini
-            // accepts up to 4 inline image inputs. Pollinations doesn't
-            // support image conditioning so this is just dropped there.
-            ...(referenceImages?.length ? { referenceImages } : {}),
+            ...(mergedRefs.length ? { referenceImages: mergedRefs } : {}),
           }
         : { prompt: text, ...dims, ...(seed != null ? { seed } : {}) }
 
