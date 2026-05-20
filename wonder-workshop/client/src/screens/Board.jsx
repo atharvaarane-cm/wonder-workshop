@@ -40,7 +40,7 @@ const IMAGE_SECTION_IDS = new Set(['cd', 'bi', 'mb', 'loc', 'cp', 'char', 'sl'])
 // storyboard cards stay empty and the user hits AUTO-GENERATE on the
 // Storyboard section header when they're happy with upstream. Stops
 // wasting tokens on boards that get invalidated by the first edit.
-const AUTO_GENERATE_ORDER = ['loc', 'mb', 'cp', 'char']
+const AUTO_GENERATE_ORDER = ['loc', 'cp', 'char']
 
 // Aspect ratios the project can switch to post-creation — mirrors the
 // options on the Discover screen's ratio picker.

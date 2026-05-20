@@ -46,12 +46,6 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "shotRoute": "<location progression>",
     "keyElements": ["<element1>", "<element2>", "<element3>"]
   },
-  "environments": [
-    { "id": "<unique slug>", "name": "<short additional location name>", "description": "<location description>" }
-  ],
-  "moodBoard": [
-    { "id": "<unique slug>", "caption": "<rich visual mood reference, e.g. 'warm golden-hour lens flare on dark walnut wood, shallow depth of field' or 'editorial vogue colour palette, sun-bleached pastels'>" }
-  ],
   "productElements": [
     { "name": "<short product/prop name, e.g. 'Frappuccino' or 'Air Force 1s'>", "description": "<detailed visual description for product photography>" }
   ],
@@ -66,8 +60,7 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
 
 Rules:
 - environment.heroEnvironment is REQUIRED — populate it with a vivid 1-2 sentence description of the main location pulled from the user's prompt (architecture, time of day, weather, surrounding context). Never leave empty.
-- environments array: include additional distinct locations beyond the hero (urban park, secondary store, etc.). Empty array if only one location.
-- moodBoard array MUST have 3-5 items — each caption is a self-contained visual mood reference (lighting + palette + texture + film/lens feel). Captions seed image generation, so be specific and evocative. Don't paraphrase the creative brief — write fresh references that reinforce the mood. Use stable id slugs like "mb_warm_glow", "mb_film_grain".
+- DO NOT populate moodBoard or environments arrays — those are user-driven sections; the user adds entries manually via "Add mood reference" / "Add location" buttons. Leave them out of the JSON entirely.
 - shotList (the storyboard) must have exactly 9 items
 - MULTIPLE CHARACTERS: the primary subject ALWAYS goes in the 'character' field.
   If the prompt clearly implies additional distinct named people (a
@@ -241,6 +234,14 @@ export async function generateBrief(userPrompt) {
     .replace(/\s*\(resolution:[^)]*\)\s*$/i, '')
     .replace(/\s*\(aspect ratio:[^)]*\)\s*$/i, '')
     .trim()
+
+  // Defense in depth: even with the system prompt telling Gemini not to
+  // populate moodBoard / environments, the model occasionally returns
+  // them anyway. Drop them here so sections start empty and the user
+  // adds entries via "Add mood reference" / "Add location" buttons —
+  // per Ed's UX feedback.
+  delete parsed.moodBoard
+  delete parsed.environments
 
   const merged = mergeBrandResearch({
     ...parsed,
