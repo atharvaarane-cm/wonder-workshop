@@ -459,6 +459,12 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
           source: 'generated',
           createdAt: new Date().toISOString(),
         }
+        // Snapshot the previous active version BEFORE we append the
+        // new one. The chat delivery card uses this to show "before →
+        // after" with a one-click Revert so the user can SEE that
+        // their previous work is preserved, not destroyed.
+        const previousSrc = !wasFirst ? versions[activeVersion]?.src : null
+        const previousIndex = !wasFirst ? activeVersion : null
         // Persist FIRST (synchronous localStorage write) so the result
         // is durable even if the component is already unmounted — the
         // setVersions below is a no-op in that case. When mounted, the
@@ -472,7 +478,7 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         })
         setEditingPrompt(false)
         bumpLoading(-1)
-        if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New image version created')
+        if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New version saved · previous version still available')
         // Broadcast for the chat panel — lets it render a delivery card
         // with the new thumbnail + elapsed time after a chat-driven regen.
         window.dispatchEvent(new CustomEvent('ww-image-generated', {
@@ -485,6 +491,8 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
             prompt: text,
             elapsedMs: Math.round(performance.now() - totalStart),
             wasFirst,
+            previousSrc,
+            previousIndex,
           },
         }))
       } else {

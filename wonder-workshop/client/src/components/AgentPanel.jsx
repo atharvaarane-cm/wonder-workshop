@@ -272,6 +272,8 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
             src: d.src,
             prompt: d.prompt,
             elapsedMs: d.elapsedMs,
+            previousSrc: d.previousSrc || null,
+            previousIndex: d.previousIndex ?? null,
           },
         }
       }))
