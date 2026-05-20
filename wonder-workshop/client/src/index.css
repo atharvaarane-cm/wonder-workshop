@@ -2429,6 +2429,38 @@ textarea { font-family: var(--font); resize: none; }
   display: block;
 }
 
+/* Intent / "Create ▾" dropdown on the chat input row */
+.panel-intent-wrap { position: relative; }
+.panel-intent-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; height: 28px; border-radius: 14px;
+  border: 1px solid var(--border); background: var(--card);
+  color: var(--text); font-size: 11px; font-weight: 600; font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.panel-intent-btn:hover:not(:disabled) { background: var(--bg); border-color: var(--text); }
+.panel-intent-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.panel-intent-menu {
+  position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 12;
+  min-width: 220px; padding: 5px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 11px;
+  box-shadow: 0 14px 38px rgba(0,0,0,0.18);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.panel-intent-option {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 7px 9px; border: none; background: none; border-radius: 7px;
+  text-align: left; cursor: pointer; color: var(--text);
+}
+.panel-intent-option:hover { background: var(--bg); }
+.panel-intent-option.active { background: rgba(124,92,252,0.10); color: #5232d0; }
+.panel-intent-label { font-size: 12px; font-weight: 700; }
+.panel-intent-hint { font-size: 10.5px; color: var(--muted); }
+.panel-intent-option.active .panel-intent-hint { color: #5232d0; opacity: 0.7; }
+[data-theme="dark"] .panel-intent-option.active { background: rgba(124,92,252,0.18); color: #c8b8ff; }
+[data-theme="dark"] .panel-intent-option.active .panel-intent-hint { color: #c8b8ff; }
+
 /* Input */
 .panel-input { padding: 10px 12px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .panel-textarea {
