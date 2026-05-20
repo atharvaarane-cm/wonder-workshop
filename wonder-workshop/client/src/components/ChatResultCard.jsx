@@ -29,14 +29,14 @@ export default function ChatResultCard({ card, pending = false }) {
   }
 
   if (!card) return null
-  const { title, src, prompt, elapsedMs, sectionLabel } = card
+  const { title, src, prompt, elapsedMs, sectionLabel, blocked } = card
 
   return (
-    <div className="chat-result-card">
+    <div className={`chat-result-card${blocked ? ' blocked' : ''}`}>
       <div className="chat-result-header">
-        <span className="chat-result-dot" />
+        <span className={`chat-result-dot${blocked ? ' blocked' : ''}`} />
         <span className="chat-result-title">{title}</span>
-        {elapsedMs != null && (
+        {elapsedMs != null && !blocked && (
           <span className="chat-result-elapsed">{formatElapsed(elapsedMs)}</span>
         )}
       </div>

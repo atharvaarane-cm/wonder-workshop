@@ -2344,6 +2344,8 @@ textarea { font-family: var(--font); resize: none; }
   background: #f59e0b;
   animation: chat-pulse 1.4s ease-in-out infinite;
 }
+.chat-result-dot.blocked { background: #e53935; }
+.chat-result-card.blocked { border-color: rgba(229,57,53,0.4); }
 @keyframes chat-pulse {
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 1; }
