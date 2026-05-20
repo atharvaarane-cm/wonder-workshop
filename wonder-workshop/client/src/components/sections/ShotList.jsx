@@ -4,7 +4,7 @@ import ImageSlot from '../ImageSlot.jsx'
 import MentionInput from '../MentionInput.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import { ProjectContext } from '../../hooks/useProject.js'
-import { expandMentions, getMentionHandles } from '../../utils/mentions.js'
+import { expandMentions, getMentionHandles, getMentionImageRefs } from '../../utils/mentions.js'
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -177,6 +177,12 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
         // If the user hasn't used any @handles, the description is sent as-is.
         const expandedDescription = expandMentions(shot.description, brief)
         const prompt = `${expandedDescription}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`
+        // Identity preservation: pull the active image src for every
+        // @-handle referenced in this shot's description. Gemini uses
+        // these as inline reference images so the same Tony / same
+        // Pepsi can / same location renders across all 9 shots
+        // instead of looking subtly different each time.
+        const shotReferenceImages = getMentionImageRefs(shot.description, brief, project?.images || {})
         // The generator gets the expanded text, not what the writer typed —
         // surface that so it's never a silent rewrite.
         const wasExpanded = expandedDescription !== (shot.description || '')
@@ -198,6 +204,7 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
               prompt={prompt}
               ratio={ratio}
               disableImageDrag
+              referenceImages={shotReferenceImages}
               style={{ width: '100%', height: '100%', borderRadius: 8 }}
             />
             <span className="shot-badge-num">
