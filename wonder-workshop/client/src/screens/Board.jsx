@@ -370,12 +370,22 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   // Chat-driven regeneration: AgentPanel calls this when the model returns
   // a regenerate_active_image function call. We just rebroadcast as a
   // window event that the targeted ImageSlot is already listening for.
+  // Returns { ok, requestId, slotKey, sectionTitle, label } so the chat
+  // panel can correlate the resulting ww-image-generated event back to
+  // the specific message.
   function regenerateActiveImage(newPrompt) {
-    if (!activeImageTarget?.slotKey || !newPrompt) return false
+    if (!activeImageTarget?.slotKey || !newPrompt) return { ok: false }
+    const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
     window.dispatchEvent(new CustomEvent('ww-regenerate-image', {
-      detail: { slotKey: activeImageTarget.slotKey, newPrompt },
+      detail: { slotKey: activeImageTarget.slotKey, newPrompt, requestId },
     }))
-    return true
+    return {
+      ok: true,
+      requestId,
+      slotKey: activeImageTarget.slotKey,
+      sectionTitle: activeImageTarget.sectionTitle,
+      label: activeImageTarget.label,
+    }
   }
 
   // Sync nav dots to scroll position

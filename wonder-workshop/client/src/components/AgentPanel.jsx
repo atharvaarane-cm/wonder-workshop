@@ -1,6 +1,34 @@
 import { useState, useRef, useEffect, useContext } from 'react'
 import { chatWithTools } from '../hooks/useBrief.js'
 import { ProjectContext } from '../hooks/useProject.js'
+import ChatResultCard from './ChatResultCard.jsx'
+
+// Picked at random per chat round so we can match a ww-image-generated
+// event back to the message that triggered it.
+function makeRequestId() {
+  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+// Templated conversational closer — same vibe as Luma's "What do you
+// think?" without the extra LLM call. Picked deterministically off the
+// action so it doesn't repeat too quickly.
+const CLOSERS = {
+  regen: [
+    'How does that read?',
+    'Want me to push it further?',
+    'Closer to what you had in mind?',
+  ],
+  field: [
+    'Anything else to tweak?',
+    'Want me to update anything tied to that?',
+    'Looks good?',
+  ],
+}
+function pickCloser(kind) {
+  const list = CLOSERS[kind] || []
+  if (!list.length) return ''
+  return list[Math.floor(Math.random() * list.length)]
+}
 
 function timeAgo(ts) {
   const diff = Math.round((Date.now() - ts) / 60000)
@@ -160,6 +188,34 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     return () => clearInterval(t)
   }, [])
 
+  // Listen for ww-image-generated and patch the matching pending card
+  // message with the result. Each chat round that fires a regen attaches
+  // a unique requestId; when the event arrives with that id, we find the
+  // message and fill in title / thumb / elapsed.
+  useEffect(() => {
+    function onGenerated(e) {
+      const d = e.detail || {}
+      if (!d.requestId) return
+      setMessages(prev => prev.map(m => {
+        if (m.kind !== 'card' || m.card?.requestId !== d.requestId) return m
+        return {
+          ...m,
+          pending: false,
+          card: {
+            ...m.card,
+            title: `${d.sectionTitle || 'Image'} — updated`,
+            sectionLabel: d.label ? `${d.sectionTitle} / ${d.label}` : d.sectionTitle,
+            src: d.src,
+            prompt: d.prompt,
+            elapsedMs: d.elapsedMs,
+          },
+        }
+      }))
+    }
+    window.addEventListener('ww-image-generated', onGenerated)
+    return () => window.removeEventListener('ww-image-generated', onGenerated)
+  }, [])
+
   async function send() {
     const text = input.trim()
     if (!text || streaming) return
@@ -232,6 +288,9 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       // Collect blocker reasons so we can surface them to the user in
       // the chat instead of silently dropping their request.
       const blockers = []
+      // Each regen action gets a pending card; the ww-image-generated
+      // listener fills it in when the image lands.
+      const pendingCards = []
       // Paths the agent is NOT allowed to write to wholesale — these are
       // user-managed lists the chat should never grow on its own. Editing
       // an existing index (e.g. characters[0].description) is fine; replacing
@@ -275,9 +334,19 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
           } else if (!activeImageTarget?.slotKey) {
             blockers.push('Click on the image you want me to change first, then ask again. I can only target a slot you\'ve selected — section context alone isn\'t enough.')
           } else {
-            const ok = onRegenerateImage(new_prompt)
-            if (ok) applied.push(a)
-            else blockers.push('I tried to regenerate the image but the slot didn\'t accept the request.')
+            const result = onRegenerateImage(new_prompt)
+            if (result?.ok) {
+              applied.push(a)
+              pendingCards.push({
+                requestId: result.requestId,
+                slotKey: result.slotKey,
+                sectionTitle: result.sectionTitle,
+                label: result.label,
+                prompt: new_prompt,
+              })
+            } else {
+              blockers.push('I tried to regenerate the image but the slot didn\'t accept the request.')
+            }
           }
         }
       }
@@ -334,16 +403,47 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       finalText = finalText.replace(/\b(regenerate_active_image|update_brief_field)\s*\([^)]*\)\s*/g, '').trim()
       if (blockers.length) {
         finalText = blockers.join('\n\n')
-      } else if (!finalText && actionSummaries.length) {
+      } else if (!finalText && actionSummaries.length && !pendingCards.length) {
+        // If we have pending cards, the card itself will show the
+        // result — no need to also dump the action summary line.
         finalText = actionSummaries.join(' · ')
-      } else if (actionSummaries.length && !finalText.includes(actionSummaries[0])) {
-        finalText = `${finalText}\n\n${actionSummaries.map(s => `↳ ${s}`).join('\n')}`
       }
-      if (!finalText) finalText = '(no response)'
 
+      // If we have pending cards from regen actions, replace the
+      // placeholder text bubble with a card-bearing message. The
+      // ww-image-generated listener will fill in the card data when
+      // the image arrives. Otherwise fall back to the text path.
       setMessages(prev => {
         const next = [...prev]
-        next[next.length - 1] = { role: 'agent', text: finalText, ts: next[next.length - 1].ts }
+        const lastTs = next[next.length - 1].ts
+        if (pendingCards.length) {
+          // One card per regen action. If the model added text on top,
+          // keep it as a header line above the card; otherwise use a
+          // deterministic conversational closer.
+          const closer = finalText || pickCloser('regen')
+          next.splice(next.length - 1, 1, ...pendingCards.map((c, i) => ({
+            role: 'agent',
+            kind: 'card',
+            pending: true,
+            card: {
+              requestId: c.requestId,
+              slotKey: c.slotKey,
+              sectionTitle: c.sectionTitle,
+              prompt: c.prompt,
+              // title / src / elapsedMs filled in by the listener
+            },
+            // Only show the closer text after the LAST card in the round
+            text: i === pendingCards.length - 1 ? closer : '',
+            ts: lastTs + i,
+          })))
+        } else {
+          if (!finalText && applied.length) {
+            // Field updates without a visible card — append a closer
+            finalText = `${actionSummaries.join(' · ')} — ${pickCloser('field')}`.trim()
+          }
+          if (!finalText) finalText = '(no response)'
+          next[next.length - 1] = { role: 'agent', text: finalText, ts: lastTs }
+        }
         return next
       })
     } catch (e) {
@@ -447,7 +547,14 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       <div className="panel-messages" ref={messagesRef}>
         {messages.map((m, i) => (
           <div key={i} className={`msg ${m.role}`} style={{ animationDelay: `${i * 60}ms` }}>
-            <div className="msg-bubble">{m.text || <span style={{ opacity: 0.4 }}>•••</span>}</div>
+            {m.kind === 'card' ? (
+              <>
+                <ChatResultCard card={m.card} pending={m.pending} />
+                {m.text && <div className="msg-bubble card-closer">{m.text}</div>}
+              </>
+            ) : (
+              <div className="msg-bubble">{m.text || <span style={{ opacity: 0.4 }}>•••</span>}</div>
+            )}
             <div className="msg-time">{timeAgo(m.ts)}</div>
           </div>
         ))}

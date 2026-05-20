@@ -110,13 +110,15 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   // so user-edited prompts don't break targeting.
   useEffect(() => {
     function onRegenerate(e) {
-      const { slotKey: targetKey, newPrompt } = e.detail || {}
+      const { slotKey: targetKey, newPrompt, requestId } = e.detail || {}
       if (!targetKey || !slotKey || targetKey !== slotKey) return
       if (!newPrompt) return
       setEditablePrompt(newPrompt)
       // generate uses opts.promptOverride if passed; this lets us regen
       // without waiting for the editablePrompt setState to flush.
-      generate(null, { promptOverride: newPrompt })
+      // requestId propagates to the ww-image-generated event so the
+      // chat panel can match the result to the specific action.
+      generate(null, { promptOverride: newPrompt, requestId })
     }
     window.addEventListener('ww-regenerate-image', onRegenerate)
     return () => window.removeEventListener('ww-regenerate-image', onRegenerate)
@@ -308,6 +310,10 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     // running; appendImageVersion writes to localStorage directly.
     const persistProjectId = project?.id
     const persistSlotKey = slotKey || text
+    // Total wall-clock for the request — broadcast in ww-image-generated
+    // so the chat panel can show a "12s" badge on the delivery card.
+    const totalStart = performance.now()
+    const requestId = opts.requestId || null
 
     await enqueue(async () => {
       setQueued(false)
@@ -424,6 +430,20 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         setEditingPrompt(false)
         bumpLoading(-1)
         if (!opts.silent) toast(wasFirst ? 'Image generated' : 'New image version created')
+        // Broadcast for the chat panel — lets it render a delivery card
+        // with the new thumbnail + elapsed time after a chat-driven regen.
+        window.dispatchEvent(new CustomEvent('ww-image-generated', {
+          detail: {
+            slotKey: persistSlotKey,
+            requestId,
+            sectionTitle,
+            label: label || '',
+            src: loadedUrl,
+            prompt: text,
+            elapsedMs: Math.round(performance.now() - totalStart),
+            wasFirst,
+          },
+        }))
       } else {
         // Surface the actual failure mode so the user knows whether to
         // wait (rate limit), rephrase (safety refusal), or escalate
