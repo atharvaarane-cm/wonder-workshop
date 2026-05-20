@@ -10,6 +10,19 @@ function toast(msg, type = 'success') {
   window.dispatchEvent(new CustomEvent('ww-toast', { detail: { msg, type } }))
 }
 
+// Section identity used to gate generation against brief.locks. If a slot
+// lives inside a locked section, every generation entry point bails so the
+// lock is truly inviolable (Ed's "literally locked in place" requirement).
+const SECTION_TITLE_TO_ID = {
+  'Creative Direction': 'cd',
+  'Brand Info': 'bi',
+  'Mood Board / Style References': 'mb',
+  'Locations / Set Design': 'loc',
+  'Product / Elements': 'cp',
+  'Character Design': 'char',
+  'Storyboard': 'sl',
+}
+
 const RATIO_DIMS = {
   '16:9': { width: 896, height: 504 },
   '9:16': { width: 504, height: 896 },
@@ -299,8 +312,33 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     setError(null)
   }
 
+  // Determine if THIS slot's section is locked by walking up to the
+  // nearest [data-section-title] ancestor and looking up brief.locks.
+  // Called from every generation entry point so locks are inviolable
+  // regardless of how the regen was triggered (button, chat, ratio
+  // change, section-regen event, etc.).
+  function isSectionLocked() {
+    const sectionEl = slotRef.current?.closest('[data-section-title]')
+    const title = sectionEl?.dataset.sectionTitle
+    const id = title && SECTION_TITLE_TO_ID[title]
+    if (!id) return false
+    return !!project?.brief?.locks?.[id]
+  }
+
   async function generate(e, opts = {}) {
     e?.stopPropagation?.()
+    if (isSectionLocked()) {
+      // Surface why nothing happened. Stays silent for opts.silent so
+      // section-wide auto-gen sweeps don't spam toasts.
+      if (!opts.silent) toast('Section is locked — unlock to regenerate', 'error')
+      // Tell the chat panel too so any pending card resolves as blocked.
+      if (opts.requestId) {
+        window.dispatchEvent(new CustomEvent('ww-image-blocked', {
+          detail: { requestId: opts.requestId, reason: 'locked' },
+        }))
+      }
+      return
+    }
     const text = (opts.promptOverride ?? editablePrompt).trim()
     if (!text) return
     setQueued(true)
@@ -490,6 +528,10 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   // Only fires when provider=gemini; the button is hidden otherwise.
   async function upscaleImage(targetRes = '4k') {
     if (!activeImage?.src) return
+    if (isSectionLocked()) {
+      toast('Section is locked — unlock to upscale', 'error')
+      return
+    }
     if (provider !== 'gemini') {
       toast('Upscale requires Nano Banana Pro')
       return
@@ -559,6 +601,10 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     const tidy = (instruction || '').trim()
     if (!tidy) return
     if (!activeImage?.src) return
+    if (isSectionLocked()) {
+      toast('Section is locked — unlock to improve', 'error')
+      return
+    }
     setQueued(true)
     setError(null)
     await enqueue(async () => {

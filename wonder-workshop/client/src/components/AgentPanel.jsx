@@ -272,6 +272,27 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     return () => window.removeEventListener('ww-image-generated', onGenerated)
   }, [])
 
+  // Mirror of the success path: if a regen was blocked (typically by a
+  // section lock), resolve the pending card with a "blocked" state so
+  // the chat doesn't pulse forever.
+  useEffect(() => {
+    function onBlocked(e) {
+      const d = e.detail || {}
+      if (!d.requestId) return
+      setMessages(prev => prev.map(m => {
+        if (m.kind !== 'card' || m.card?.requestId !== d.requestId) return m
+        return {
+          ...m,
+          pending: false,
+          card: { ...m.card, title: 'Blocked — section is locked', blocked: true },
+          text: 'I couldn\'t change that — the section is locked. Unlock it first, then ask me again.',
+        }
+      }))
+    }
+    window.addEventListener('ww-image-blocked', onBlocked)
+    return () => window.removeEventListener('ww-image-blocked', onBlocked)
+  }, [])
+
   async function send() {
     const text = input.trim()
     if (!text || streaming) return
@@ -392,11 +413,30 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         // attempt to overwrite the full array.
         return PROTECTED_ARRAYS.has(path)
       }
+      // Locked-entity guard: if the field this write targets drives a
+      // section the user has locked, refuse. Otherwise the brief data
+      // would shift underneath frozen images — exactly what Ed flagged.
+      function fieldDrivesLockedSection(path) {
+        if (!path) return false
+        const locks = brief?.locks || {}
+        if ((path.startsWith('character.') || path === 'character'
+          || path.startsWith('characters.') || path === 'characters') && locks.char) return 'Character Design'
+        if ((path.startsWith('environment.') || path === 'environment'
+          || path.startsWith('environments.') || path === 'environments') && locks.loc) return 'Locations / Set Design'
+        if ((path.startsWith('productElements') || path === 'productElements') && locks.cp) return 'Product / Elements'
+        if ((path.startsWith('shotList') || path === 'shotList') && locks.sl) return 'Storyboard'
+        return false
+      }
       for (const a of actions) {
         if (a.name === 'update_brief_field' && onUpdate) {
           const { path, value } = a.args || {}
           if (isProtectedRootWrite(path)) {
             blockers.push(`I can't add or replace the ${path} list directly. Use the "Add ___" button in that section, then I can help you fill in the new entry.`)
+            continue
+          }
+          const lockedSection = fieldDrivesLockedSection(path)
+          if (lockedSection) {
+            blockers.push(`Can't update that — the ${lockedSection} section is locked. Unlock it first, then ask me again.`)
             continue
           }
           if (path && typeof value === 'string') {
