@@ -32,7 +32,15 @@ const RATIO_CSS = {
 
 export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false, disableImageDrag = false, referenceImages = [], priority = 'primary' }) {
   const project = useContext(ProjectContext)
-  const slotKey = prompt || null
+  // Freeze slotKey to the first non-empty prompt this slot ever saw.
+  // Without freezing, chat-driven brief edits change `prompt` → slotKey
+  // changes → new generations save under a different key than the
+  // existing image, splitting version history. The frozen key means
+  // versions accumulate at one stable slot identity even when the
+  // generation prompt evolves.
+  const slotKeyRef = useRef(null)
+  if (slotKeyRef.current === null && prompt) slotKeyRef.current = prompt
+  const slotKey = slotKeyRef.current
   const initial = slotKey && project?.images?.[slotKey]
 
   const [versions, setVersions] = useState(() => initial?.versions || [])
