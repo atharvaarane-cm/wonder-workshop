@@ -178,6 +178,12 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       `- If the user asks a question or wants conversation, respond with plain text only (no function calls). Keep replies under 3 sentences.`,
       `- NEVER just describe a change — always CALL the tool.`,
       ``,
+      `# HARD CONSTRAINTS on update_brief_field — NEVER violate these:`,
+      `- NEVER add new entries to user-managed arrays. These are: moodBoard, environments (additional locations beyond the hero), productElements, characters (additional characters beyond the primary), assets, shotList. Users add to these via dedicated "Add ___" buttons in the UI. You only EDIT EXISTING entries in place.`,
+      `- If the user wants a NEW location / mood reference / product / character / shot, REPLY IN PLAIN TEXT telling them to click the "Add ___" button in the corresponding section. Do NOT call update_brief_field on those arrays.`,
+      `- You MAY edit the contents of an existing entry by index (e.g. characters[0].description), but you may NOT append, prepend, or replace the array length.`,
+      `- environment.heroEnvironment and environment.heroName ARE editable in place (single hero location). environments[] (the additional-locations array) is NOT — users add additional locations themselves.`,
+      ``,
       `# Scope rules — read carefully`,
       hasActiveImage
         ? [
@@ -226,9 +232,27 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       // Collect blocker reasons so we can surface them to the user in
       // the chat instead of silently dropping their request.
       const blockers = []
+      // Paths the agent is NOT allowed to write to wholesale — these are
+      // user-managed lists the chat should never grow on its own. Editing
+      // an existing index (e.g. characters[0].description) is fine; replacing
+      // the whole array is not.
+      const PROTECTED_ARRAYS = new Set([
+        'moodBoard', 'environments', 'productElements',
+        'characters', 'assets', 'shotList',
+      ])
+      function isProtectedRootWrite(path) {
+        if (!path) return false
+        // Block writes to the bare array name (e.g. "moodBoard") or any
+        // attempt to overwrite the full array.
+        return PROTECTED_ARRAYS.has(path)
+      }
       for (const a of actions) {
         if (a.name === 'update_brief_field' && onUpdate) {
           const { path, value } = a.args || {}
+          if (isProtectedRootWrite(path)) {
+            blockers.push(`I can't add or replace the ${path} list directly. Use the "Add ___" button in that section, then I can help you fill in the new entry.`)
+            continue
+          }
           if (path && typeof value === 'string') {
             onUpdate(path, value)
             applied.push(a)
