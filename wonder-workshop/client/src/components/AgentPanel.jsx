@@ -155,6 +155,28 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
   const [attachedImages, setAttachedImages] = useState([])
   const chatFileInputRef = useRef(null)
 
+  // Intent picker — analogous to Luma's "Create ▾". Lets the user
+  // explicitly pick what kind of work they want done, reducing the
+  // model's tool-routing mistakes. 'auto' = agent decides (today's
+  // behavior).
+  const INTENTS = [
+    { id: 'auto',   label: 'Auto',           hint: 'Let me figure out what to do' },
+    { id: 'regen',  label: 'Regenerate image', hint: 'Replace the selected image with a new variation' },
+    { id: 'edit',   label: 'Edit brief',      hint: 'Change a description, character, brand field, etc.' },
+    { id: 'chat',   label: 'Just chat',       hint: 'Answer in plain text, no actions' },
+  ]
+  const [intent, setIntent] = useState('auto')
+  const [intentMenuOpen, setIntentMenuOpen] = useState(false)
+  const intentBtnRef = useRef(null)
+  useEffect(() => {
+    if (!intentMenuOpen) return
+    function onClick(e) {
+      if (intentBtnRef.current && !intentBtnRef.current.contains(e.target)) setIntentMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [intentMenuOpen])
+
   function openChatAttach() { chatFileInputRef.current?.click() }
   function handleChatAttach(files) {
     const list = Array.from(files || []).filter(f => f && f.type.startsWith('image/'))
@@ -257,9 +279,20 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     setMessages(prev => [...prev, { role: 'user', text, attachments: snapshot, ts: Date.now() }])
 
     const hasActiveImage = !!activeImageTarget?.prompt
+    // Intent override: when the user explicitly picked a mode via the
+    // "Create ▾" dropdown, prepend a hard instruction so the model
+    // doesn't second-guess. 'auto' is a no-op.
+    const intentLock = intent === 'regen'
+      ? `# MODE LOCK — user explicitly chose REGENERATE IMAGE\n- You MUST call regenerate_active_image, or refuse if no image is selected.\n- Do not call update_brief_field. Do not reply with plain text unless reporting a blocker.\n\n`
+      : intent === 'edit'
+      ? `# MODE LOCK — user explicitly chose EDIT BRIEF\n- You MUST call update_brief_field on the relevant entity field.\n- Do not call regenerate_active_image. Do not reply with plain text unless reporting a blocker.\n\n`
+      : intent === 'chat'
+      ? `# MODE LOCK — user explicitly chose JUST CHAT\n- Do NOT call any tools. Respond in plain text only, under 3 sentences.\n\n`
+      : ''
     const systemPrompt = [
       `You are a creative production assistant working inside Wonder Workshop, a brief tool.`,
       ``,
+      intentLock,
       `# Tool routing — pick the RIGHT tool:`,
       `- If the user wants to change a CHARACTER's appearance (hair, clothes, wardrobe, look) — or any property of the character / location / product entity — CALL update_brief_field on the relevant entity field (character.description, character.wardrobe, environment.heroEnvironment, productElements, etc.). Every image driven by that entity will re-fire automatically with the new value. Example: "make her have purple hair" → update_brief_field(path: "character.description", value: "<full original description, with purple hair added>"). Always include the FULL new value — your update REPLACES the field.`,
       `- If the user wants a ONE-OFF tweak to JUST the currently selected image (lighting, framing, mood, a stylistic variation), CALL regenerate_active_image with the FULL new prompt — describe subject, setting, lighting, framing, mood. This only affects the selected image, not other images of the same entity.`,
@@ -309,7 +342,10 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     try {
       const controller = new AbortController()
       abortRef.current = controller
-      const { text: replyText, actions } = await chatWithTools(history, TOOLS, controller.signal)
+      // When user picked Just chat, send no tools at all so the model
+      // physically cannot emit a function call.
+      const effectiveTools = intent === 'chat' ? [] : TOOLS
+      const { text: replyText, actions } = await chatWithTools(history, effectiveTools, controller.signal)
 
       // Apply each function call against the live brief. Track which
       // entity sections need their images re-fired afterwards (e.g.
@@ -646,6 +682,35 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
               <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
           </button>
+          <div className="panel-intent-wrap" ref={intentBtnRef}>
+            <button
+              type="button"
+              className="panel-intent-btn"
+              onClick={() => setIntentMenuOpen(o => !o)}
+              disabled={streaming}
+              title="Pick what you want me to do"
+            >
+              <span>{INTENTS.find(i => i.id === intent)?.label || 'Auto'}</span>
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </button>
+            {intentMenuOpen && (
+              <div className="panel-intent-menu">
+                {INTENTS.map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`panel-intent-option${intent === opt.id ? ' active' : ''}`}
+                    onClick={() => { setIntent(opt.id); setIntentMenuOpen(false) }}
+                  >
+                    <span className="panel-intent-label">{opt.label}</span>
+                    <span className="panel-intent-hint">{opt.hint}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {SpeechRecognition && (
             <button className={`panel-mic-btn${listening ? ' active' : ''}`} onClick={toggleMic} title={listening ? 'Stop listening' : 'Speak'}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
