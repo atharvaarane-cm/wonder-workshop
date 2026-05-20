@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { generateBrief, chatWithTools } from '../hooks/useBrief.js'
+import { extractFileText } from '../utils/extractFileText.js'
 
 const QUICK_START_PROMPTS = [
   {
@@ -237,10 +238,15 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   const [resolutionOpen, setResolutionOpen] = useState(false)
   const [quickStart, setQuickStart] = useState(null)
   const [inputFocused, setInputFocused] = useState(false)
+  // Attached files (treatments, briefs, scripts) whose text gets folded
+  // into the brief-generation prompt as extra context.
+  const [attachments, setAttachments] = useState([])
+  const [attaching, setAttaching] = useState(false)
   const textRef = useRef(null)
   const ratioRef = useRef(null)
   const resolutionRef = useRef(null)
   const inputCardRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -251,12 +257,46 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Read each picked file, extract its text, and add to attachments. Skips
+  // anything we can't read and surfaces a friendly error inline.
+  async function handleAttachFiles(files) {
+    const list = Array.from(files || []).filter(Boolean)
+    if (!list.length) return
+    setAttaching(true); setError(null)
+    const next = []
+    for (const file of list) {
+      try {
+        const content = await extractFileText(file)
+        next.push({ name: file.name, size: file.size, content, addedAt: Date.now() })
+      } catch (e) {
+        setError(`Couldn't read "${file.name}": ${e?.message || e}`)
+      }
+    }
+    if (next.length) setAttachments(prev => [...prev, ...next])
+    setAttaching(false)
+  }
+  function removeAttachment(idx) {
+    setAttachments(prev => prev.filter((_, i) => i !== idx))
+  }
+  function openFilePicker() {
+    fileInputRef.current?.click()
+  }
+
   async function handleSend() {
     const text = prompt.trim()
     if (!text || loading) return
     setLoading(true); setError(null)
     try {
-      const full = `${text} (aspect ratio: ${ratio}) (resolution: ${resolution})${quickStart ? ` (quick start: ${quickStart})` : ''}`
+      // Fold attachment contents into the user prompt as extra context.
+      // Each file is bracketed so the model knows where one ends and the
+      // next begins. Caps individual files at ~20k chars so a huge PDF
+      // doesn't blow out the token budget.
+      const attachmentBlock = attachments.length
+        ? '\n\n=== Attached files (use as context for the brief) ===\n' +
+          attachments.map(a => `--- ${a.name} ---\n${(a.content || '').slice(0, 20000)}`).join('\n\n') +
+          '\n=== End attached files ===\n'
+        : ''
+      const full = `${text}${attachmentBlock} (aspect ratio: ${ratio}) (resolution: ${resolution})${quickStart ? ` (quick start: ${quickStart})` : ''}`
       const brief = await generateBrief(full)
       onGenerate({
         ...brief,
@@ -926,8 +966,40 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
               autoFocus
               rows={4}
             />
+            {attachments.length > 0 && (
+              <div className="input-card-attachments">
+                {attachments.map((a, i) => (
+                  <span key={i} className="input-attachment-chip" title={`${a.name} — ${Math.round((a.content || '').length / 100) / 10}k chars`}>
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <path d="M4 2h6l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                      <path d="M10 2v3h3" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="input-attachment-name">{a.name}</span>
+                    <button
+                      className="input-attachment-remove"
+                      onClick={() => removeAttachment(i)}
+                      title="Remove this attachment"
+                      type="button"
+                    >
+                      <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                        <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+                {attaching && <span className="input-attachment-loading">Reading file…</span>}
+              </div>
+            )}
             <div className="input-card-footer">
-              <button className="attach-pill" title="Attach file">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.txt,.md,.json,.csv,.rtf,application/pdf,text/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={e => { handleAttachFiles(e.target.files); e.target.value = '' }}
+              />
+              <button className="attach-pill" title="Attach a brief, treatment, or notes" onClick={openFilePicker} type="button">
                 <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
                   <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 </svg>
