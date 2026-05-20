@@ -1370,20 +1370,23 @@ textarea { font-family: var(--font); resize: none; }
 .section-regen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .section-regen-btn svg { flex-shrink: 0; opacity: 0.95; }
 
-/* Lock toggle in the section header — small, icon-only by default.
-   Lights up + outlines when the section is locked. */
-.section-lock-btn {
-  width: 28px; height: 28px; border-radius: 6px;
-  display: inline-flex; align-items: center; justify-content: center;
+/* Section-wide lock pill — full pill-shaped button with LOCK SECTION /
+   UNLOCK SECTION text. Sits in the section header alongside auto-gen.
+   Pairs with the per-image lock buttons inside each ImageSlot. */
+.section-lock-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 12px; border-radius: 14px;
   background: transparent; border: 1px solid var(--border-md);
-  color: var(--muted); cursor: pointer; flex-shrink: 0;
+  color: var(--muted); font-size: 11px; font-weight: 700;
+  font-family: var(--font); letter-spacing: 0.05em;
+  cursor: pointer; flex-shrink: 0; white-space: nowrap;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.section-lock-btn:hover { background: var(--card); border-color: var(--border); color: var(--text); }
-.section-lock-btn.active {
+.section-lock-pill:hover { background: var(--card); border-color: var(--border); color: var(--text); }
+.section-lock-pill.active {
   background: rgba(45,154,78,0.14); border-color: rgba(45,154,78,0.6); color: #2D9A4E;
 }
-.section-lock-btn.active:hover { background: rgba(45,154,78,0.22); }
+.section-lock-pill.active:hover { background: rgba(45,154,78,0.22); }
 
 /* Compact "LOCKED" badge pinned next to the section name when the
    section is locked. Reuses the green status color for consistency. */
@@ -3075,6 +3078,23 @@ textarea { font-family: var(--font); resize: none; }
   font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
   backdrop-filter: blur(6px);
   display: flex; align-items: center; gap: 2px;
+}
+/* Persistent green padlock badge on slots that have been locked (per
+   image or via Lock Section). Sits in the top-right so it doesn't
+   collide with the version-count badge in the top-left. */
+.img-locked-badge {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(45,154,78,0.92); color: #fff;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.ihn-btn.active {
+  background: rgba(45,154,78,0.22); color: #5BCB7A;
+}
+.ihn-btn.active:hover:not(:disabled) {
+  background: rgba(45,154,78,0.34);
 }
 .img-version-badge span { padding: 0 4px; }
 .img-version-arrow {

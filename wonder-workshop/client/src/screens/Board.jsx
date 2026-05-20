@@ -160,6 +160,24 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [ratioMenuOpen])
 
+  // Per-slot lock toggle — fired by the lock button on each image's
+  // hover toolbar. brief.slotLocks[slotKey] = true|undefined.
+  useEffect(() => {
+    function onToggle(e) {
+      const slotKey = e.detail?.slotKey
+      if (!slotKey) return
+      setBrief(prev => {
+        const current = prev?.slotLocks || {}
+        const next = { ...current }
+        if (next[slotKey]) delete next[slotKey]
+        else next[slotKey] = true
+        return { ...prev, slotLocks: next }
+      })
+    }
+    window.addEventListener('ww-toggle-slot-lock', onToggle)
+    return () => window.removeEventListener('ww-toggle-slot-lock', onToggle)
+  }, [])
+
   // Click outside any image slot (and not on the agent panel) deselects
   // the active image — gives users a way to undo a slot selection.
   useEffect(() => {

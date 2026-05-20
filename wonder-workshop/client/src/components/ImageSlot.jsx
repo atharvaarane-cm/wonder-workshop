@@ -320,11 +320,16 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     setError(null)
   }
 
-  // Determine if THIS slot's section is locked by walking up to the
-  // nearest [data-section-title] ancestor and looking up brief.locks.
-  // Called from every generation entry point so locks are inviolable
-  // regardless of how the regen was triggered (button, chat, ratio
-  // change, section-regen event, etc.).
+  // Effective lock = section-wide auto-lock OR per-slot manual lock.
+  // Either keeps the image from being overwritten. Section pill toggles
+  // brief.locks[sectionId]; the per-image lock toggles
+  // brief.slotLocks[slotKey]. Clicking "Unlock Section" only clears the
+  // section bool — manually-locked slots stay locked because their
+  // slotLocks entry is independent.
+  function isSlotLocked() {
+    if (!slotKey) return false
+    return !!project?.brief?.slotLocks?.[slotKey]
+  }
   function isSectionLocked() {
     const sectionEl = slotRef.current?.closest('[data-section-title]')
     const title = sectionEl?.dataset.sectionTitle
@@ -332,10 +337,19 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     if (!id) return false
     return !!project?.brief?.locks?.[id]
   }
+  function isLocked() {
+    return isSlotLocked() || isSectionLocked()
+  }
+  function toggleSlotLock() {
+    if (!slotKey) return
+    window.dispatchEvent(new CustomEvent('ww-toggle-slot-lock', {
+      detail: { slotKey },
+    }))
+  }
 
   async function generate(e, opts = {}) {
     e?.stopPropagation?.()
-    if (isSectionLocked()) {
+    if (isLocked()) {
       // Surface why nothing happened. Stays silent for opts.silent so
       // section-wide auto-gen sweeps don't spam toasts.
       if (!opts.silent) toast('Section is locked — unlock to regenerate', 'error')
@@ -544,8 +558,8 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
   // Only fires when provider=gemini; the button is hidden otherwise.
   async function upscaleImage(targetRes = '4k') {
     if (!activeImage?.src) return
-    if (isSectionLocked()) {
-      toast('Section is locked — unlock to upscale', 'error')
+    if (isLocked()) {
+      toast('Image is locked — unlock to upscale', 'error')
       return
     }
     if (provider !== 'gemini') {
@@ -617,8 +631,8 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     const tidy = (instruction || '').trim()
     if (!tidy) return
     if (!activeImage?.src) return
-    if (isSectionLocked()) {
-      toast('Section is locked — unlock to improve', 'error')
+    if (isLocked()) {
+      toast('Image is locked — unlock to improve', 'error')
       return
     }
     setQueued(true)
@@ -932,6 +946,14 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
                 </button>
               </div>
             )}
+            {isSlotLocked() && (
+              <div className="img-locked-badge" title="This image is locked — regen won't touch it">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.18"/>
+                  <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+            )}
             <div className="img-version-badge">
               {versions.length > 1 && (
                 <button
@@ -1012,6 +1034,23 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
                   )}
                 </div>
               )}
+              <button
+                className={`ihn-btn${isSlotLocked() ? ' active' : ''}`}
+                onClick={e => { e.stopPropagation(); toggleSlotLock() }}
+                data-tip={isSlotLocked() ? 'Unlock this image' : 'Lock this image (protect from regen)'}
+              >
+                {isSlotLocked() ? (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.18"/>
+                    <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.5"/>
+                    <path d="M5.5 7V5a2.5 2.5 0 0 1 4.6-1.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                )}
+              </button>
               <button className="ihn-btn ihn-btn-danger" onClick={requestDeleteImage} data-tip="Delete">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
