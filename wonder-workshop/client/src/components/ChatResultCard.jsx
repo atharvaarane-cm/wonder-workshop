@@ -29,7 +29,14 @@ export default function ChatResultCard({ card, pending = false }) {
   }
 
   if (!card) return null
-  const { title, src, prompt, elapsedMs, sectionLabel, blocked } = card
+  const { title, src, prompt, elapsedMs, sectionLabel, blocked, previousSrc, previousIndex, slotKey } = card
+
+  function revertToPrevious() {
+    if (previousIndex == null || !slotKey) return
+    window.dispatchEvent(new CustomEvent('ww-set-active-version', {
+      detail: { slotKey, versionIndex: previousIndex },
+    }))
+  }
 
   return (
     <div className={`chat-result-card${blocked ? ' blocked' : ''}`}>
@@ -41,10 +48,34 @@ export default function ChatResultCard({ card, pending = false }) {
         )}
       </div>
       {sectionLabel && <div className="chat-result-section">{sectionLabel}</div>}
-      {src && (
+      {src && previousSrc ? (
+        // before → after pair. Makes it visually obvious that the
+        // previous version is preserved, not destroyed.
+        <div className="chat-result-diff">
+          <div className="chat-result-diff-pane">
+            <div className="chat-result-diff-label">Before</div>
+            <div className="chat-result-thumb"><img src={previousSrc} alt="Previous version" /></div>
+          </div>
+          <div className="chat-result-diff-arrow" aria-hidden="true">→</div>
+          <div className="chat-result-diff-pane">
+            <div className="chat-result-diff-label">After</div>
+            <div className="chat-result-thumb"><img src={src} alt={title || 'New version'} /></div>
+          </div>
+        </div>
+      ) : src ? (
         <div className="chat-result-thumb">
           <img src={src} alt={title || 'Result'} />
         </div>
+      ) : null}
+      {previousSrc && (
+        <button
+          type="button"
+          className="chat-result-revert"
+          onClick={revertToPrevious}
+          title="Switch the slot back to the previous version"
+        >
+          ↩ Revert to previous version
+        </button>
       )}
       {prompt && (
         <button

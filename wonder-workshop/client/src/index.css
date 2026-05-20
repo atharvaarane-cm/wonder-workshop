@@ -2366,6 +2366,27 @@ textarea { font-family: var(--font); resize: none; }
 .chat-result-thumb img {
   display: block; width: 100%; height: auto; object-fit: cover;
 }
+/* Before → after pair shown when a regen has a previous version. */
+.chat-result-diff {
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px;
+  align-items: center;
+}
+.chat-result-diff-pane { min-width: 0; }
+.chat-result-diff-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 4px;
+}
+.chat-result-diff-arrow {
+  font-size: 16px; color: var(--muted); padding: 0 2px;
+  align-self: end; padding-bottom: 14px;
+}
+.chat-result-revert {
+  align-self: flex-start;
+  font-size: 11px; font-weight: 600; color: #7C5CFC;
+  background: none; border: none; padding: 2px 0; cursor: pointer;
+}
+.chat-result-revert:hover { text-decoration: underline; }
 .chat-result-process-toggle {
   align-self: flex-start;
   font-size: 11px; color: #7C5CFC; font-weight: 600;
