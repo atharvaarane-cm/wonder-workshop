@@ -458,17 +458,6 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
     })
   }
 
-  // Generate 3 parallel variations of the active prompt. Staggered slightly
-  // to avoid hammering Pollinations all at once.
-  function generateVariations(e) {
-    e?.stopPropagation?.()
-    if (!editablePrompt.trim()) return
-    toast('Generating 3 variations…')
-    for (let i = 0; i < 3; i++) {
-      setTimeout(() => generate(null, { silent: true }), i * 600)
-    }
-  }
-
   // Upscale: Nano Banana Pro supports image conditioning, so "upscale"
   // here is regenerate-with-the-current-image-as-reference + an
   // explicit "enhance, preserve details, higher resolution" prompt.
@@ -910,14 +899,11 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
               </button>
               <button className="ihn-edit" onClick={e => { e.stopPropagation(); setEditingPrompt(true) }}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                Edit with prompt
+                Edit prompt
               </button>
               <span className="ihn-sep" />
               <button className="ihn-btn" onClick={generate} disabled={loading} data-tip="Regenerate">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              <button className="ihn-btn" onClick={generateVariations} disabled={loading} data-tip="Generate 3 variations">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3z" fill="currentColor"/></svg>
               </button>
               {provider === 'gemini' && (
                 <div className="ihn-upscale-wrap">
@@ -1032,14 +1018,11 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
             </button>
             <button className="ihn-edit" onClick={() => { setLightboxOpen(false); setEditingPrompt(true) }}>
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Edit with prompt
+              Edit prompt
             </button>
             <span className="ihn-sep" />
             <button className="ihn-btn" onClick={generate} disabled={loading} data-tip="Regenerate">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-            <button className="ihn-btn" onClick={generateVariations} disabled={loading} data-tip="Generate 3 variations">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3z" fill="currentColor"/></svg>
             </button>
             <button className="ihn-btn ihn-btn-danger" onClick={requestDeleteImage} data-tip="Delete">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
