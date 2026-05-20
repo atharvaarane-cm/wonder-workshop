@@ -2320,8 +2320,9 @@ textarea { font-family: var(--font); resize: none; }
 .msg-bubble { padding: 10px 13px; border-radius: 14px; font-size: 13px; line-height: 1.55; }
 .msg.user .msg-bubble { background: #1A1A1A; color: #fff; border-bottom-right-radius: 4px; }
 .msg.agent .msg-bubble { background: var(--bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; color: var(--text); }
-.msg-time { font-size: 10px; color: var(--faint); margin-top: 3px; padding: 0 4px; }
-.msg.user .msg-time { text-align: right; }
+/* Per-message timestamps removed — Luma doesn't show them; the chat
+   reads cleaner without the noise. (Kept the rule slot in case we ever
+   want them back: .msg-time { ... }) */
 
 /* ── Chat delivery card (Luma-style) ───────────────────────────── */
 .chat-result-card {
@@ -2370,17 +2371,20 @@ textarea { font-family: var(--font); resize: none; }
 }
 .chat-result-process-toggle:hover { text-decoration: underline; }
 .chat-result-process {
-  margin: 0; padding: 8px 10px;
-  background: rgba(0,0,0,0.03); border-radius: 7px;
-  font-size: 11px; line-height: 1.5; color: var(--text);
+  margin: 0; padding: 10px 12px;
+  background: rgba(0,0,0,0.04); border-radius: 8px;
+  font-size: 12px; line-height: 1.55; color: var(--text);
   white-space: pre-wrap; word-break: break-word;
   font-family: var(--font);
-  max-height: 180px; overflow-y: auto;
+  max-height: 220px; overflow-y: auto;
 }
+/* Conversational closer — text directly below a delivery card.
+   Was italic+muted, hard to read in dark; now plain, lighter weight,
+   readable. Sits flush left of the agent column. */
 .msg-bubble.card-closer {
   margin-top: 6px; background: transparent; border: none;
-  padding: 4px 0; font-size: 12px; font-style: italic;
-  color: var(--muted);
+  padding: 4px 2px; font-size: 13px; font-weight: 500;
+  color: var(--text); opacity: 0.85;
 }
 [data-theme="dark"] .chat-result-card { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
 [data-theme="dark"] .chat-result-elapsed { background: rgba(255,255,255,0.08); }
@@ -2428,6 +2432,79 @@ textarea { font-family: var(--font); resize: none; }
   width: 80px; height: 80px; object-fit: cover; border-radius: 6px;
   display: block;
 }
+
+/* Edit button on user chat messages — appears on hover, lets the user
+   replace this message + everything after with a new attempt. */
+.msg-edit-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 5px; padding: 3px 7px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--card);
+  color: var(--muted); font-size: 10px; font-weight: 600; font-family: var(--font);
+  cursor: pointer; opacity: 0; transform: translateY(-2px);
+  transition: opacity 0.12s, transform 0.12s, color 0.12s, border-color 0.12s;
+}
+.msg.user:hover .msg-edit-btn,
+.msg.editing .msg-edit-btn {
+  opacity: 1; transform: translateY(0);
+}
+.msg-edit-btn:hover { color: var(--text); border-color: var(--text); }
+.msg.user .msg-edit-btn { align-self: flex-end; }
+.msg.editing .msg-bubble {
+  outline: 2px dashed rgba(124,92,252,0.6); outline-offset: 2px;
+}
+
+/* Active-slot context chip — shown above the chat input when an image
+   slot is selected on the canvas. Visual confirmation that the chat
+   is targeting that specific image. */
+.panel-active-context {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px; margin: 0 4px 6px;
+  background: rgba(124,92,252,0.07); border: 1px solid rgba(124,92,252,0.22);
+  border-radius: 10px;
+}
+.panel-active-context-thumb {
+  width: 36px; height: 36px; object-fit: cover; border-radius: 6px;
+  flex-shrink: 0;
+}
+.panel-active-context-empty {
+  width: 36px; height: 36px; border-radius: 6px;
+  background: rgba(124,92,252,0.18); color: #5232d0;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.panel-active-context-meta {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+}
+.panel-active-context-eyebrow {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #5232d0;
+}
+.panel-active-context-label {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+[data-theme="dark"] .panel-active-context {
+  background: rgba(124,92,252,0.12); border-color: rgba(124,92,252,0.32);
+}
+[data-theme="dark"] .panel-active-context-eyebrow { color: #c8b8ff; }
+
+/* Editing banner — appears above the input when the user has clicked
+   Edit on a previous message and the next send will replace it. */
+.panel-editing-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 6px 10px; margin: 0 4px 6px;
+  background: rgba(255,200,87,0.16); border: 1px solid rgba(255,200,87,0.4);
+  border-radius: 8px; color: #8a6010; font-size: 11px; font-weight: 600;
+}
+.panel-editing-cancel {
+  background: none; border: none; color: #8a6010;
+  font-weight: 700; font-size: 11px; cursor: pointer; padding: 0;
+}
+.panel-editing-cancel:hover { text-decoration: underline; }
+[data-theme="dark"] .panel-editing-banner {
+  background: rgba(255,200,87,0.16); color: #f5d27a; border-color: rgba(255,200,87,0.4);
+}
+[data-theme="dark"] .panel-editing-cancel { color: #f5d27a; }
 
 /* Intent / "Create ▾" dropdown on the chat input row */
 .panel-intent-wrap { position: relative; }

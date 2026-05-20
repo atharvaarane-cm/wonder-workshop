@@ -30,12 +30,8 @@ function pickCloser(kind) {
   return list[Math.floor(Math.random() * list.length)]
 }
 
-function timeAgo(ts) {
-  const diff = Math.round((Date.now() - ts) / 60000)
-  if (diff < 1) return 'Just now'
-  if (diff === 1) return '1 min ago'
-  return `${diff} min ago`
-}
+// Per-message timestamps were noisy and didn't match the Luma reference.
+// Kept the import path simple — if we ever want them back, render again.
 
 // Strip large/binary fields from the brief before stringifying for the
 // chat system prompt. Without this, base64 data: URLs (logos, uploaded
@@ -148,12 +144,25 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
   const [streaming, setStreaming] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [listening, setListening] = useState(false)
-  const [, forceUpdate] = useState(0)
   // Reference images attached to the next message — Gemini accepts them
   // as inline image inputs for identity / style preservation. Each entry
   // is { src: <data URL>, name: <filename> }.
   const [attachedImages, setAttachedImages] = useState([])
   const chatFileInputRef = useRef(null)
+  // Edit-in-place mode: when set, the next send REPLACES this message
+  // (and everything after it in the conversation) instead of appending.
+  // Lets the user retry a request with tweaked wording.
+  const [editingTs, setEditingTs] = useState(null)
+  function startEdit(message) {
+    setEditingTs(message.ts)
+    setInput(message.text || '')
+    setAttachedImages(Array.isArray(message.attachments) ? message.attachments : [])
+  }
+  function cancelEdit() {
+    setEditingTs(null)
+    setInput('')
+    setAttachedImages([])
+  }
 
   // Intent picker — analogous to Luma's "Create ▾". Lets the user
   // explicitly pick what kind of work they want done, reducing the
@@ -232,10 +241,8 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     }
   }, [messages])
 
-  useEffect(() => {
-    const t = setInterval(() => forceUpdate(n => n + 1), 30000)
-    return () => clearInterval(t)
-  }, [])
+  // (forceUpdate interval removed along with timeAgo — nothing else needs
+  // a ticking re-render in the panel.)
 
   // Listen for ww-image-generated and patch the matching pending card
   // message with the result. Each chat round that fires a regen attaches
@@ -276,7 +283,19 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     // on any regen action this round triggers.
     const snapshot = attachedImages
     setAttachedImages([])
-    setMessages(prev => [...prev, { role: 'user', text, attachments: snapshot, ts: Date.now() }])
+    const editTsSnapshot = editingTs
+    setEditingTs(null)
+    setMessages(prev => {
+      const newMsg = { role: 'user', text, attachments: snapshot, ts: Date.now() }
+      // In edit mode: drop the original message AND everything after it,
+      // then append the new attempt. Removes the stale agent response so
+      // we don't have duplicates littering the history.
+      if (editTsSnapshot != null) {
+        const idx = prev.findIndex(m => m.ts === editTsSnapshot)
+        if (idx >= 0) return [...prev.slice(0, idx), newMsg]
+      }
+      return [...prev, newMsg]
+    })
 
     const hasActiveImage = !!activeImageTarget?.prompt
     // Intent override: when the user explicitly picked a mode via the
@@ -615,7 +634,7 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       {/* Messages */}
       <div className="panel-messages" ref={messagesRef}>
         {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`} style={{ animationDelay: `${i * 60}ms` }}>
+          <div key={m.ts ?? i} className={`msg ${m.role}${editingTs === m.ts ? ' editing' : ''}`} style={{ animationDelay: `${i * 60}ms` }}>
             {m.kind === 'card' ? (
               <>
                 <ChatResultCard card={m.card} pending={m.pending} />
@@ -633,13 +652,58 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
                 {m.text || (m.attachments?.length ? null : <span style={{ opacity: 0.4 }}>•••</span>)}
               </div>
             )}
-            <div className="msg-time">{timeAgo(m.ts)}</div>
+            {m.role === 'user' && (
+              <button
+                type="button"
+                className="msg-edit-btn"
+                onClick={() => startEdit(m)}
+                title="Edit this message and re-run"
+              >
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Edit
+              </button>
+            )}
           </div>
         ))}
       </div>
 
       {/* Input */}
       <div className="panel-input">
+        {/* Active-slot context chip — confirms which image on the
+            canvas the chat is targeting. Visible whenever a slot is
+            selected; the slot's active thumbnail (if any) renders
+            alongside the section / label. */}
+        {activeImageTarget?.slotKey && (
+          <div className="panel-active-context">
+            {versions[activeVersion]?.src ? (
+              <img
+                className="panel-active-context-thumb"
+                src={versions[activeVersion].src}
+                alt={activeImageTarget.label || 'Selected image'}
+              />
+            ) : (
+              <div className="panel-active-context-empty" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+            )}
+            <div className="panel-active-context-meta">
+              <span className="panel-active-context-eyebrow">Editing</span>
+              <span className="panel-active-context-label">
+                {activeImageTarget.sectionTitle} / {activeImageTarget.label || 'Image'}
+              </span>
+            </div>
+          </div>
+        )}
+        {editingTs != null && (
+          <div className="panel-editing-banner">
+            <span>✎ Editing — sending will replace the previous message</span>
+            <button type="button" className="panel-editing-cancel" onClick={cancelEdit}>Cancel</button>
+          </div>
+        )}
         {attachedImages.length > 0 && (
           <div className="panel-attached-row">
             {attachedImages.map((a, i) => (
