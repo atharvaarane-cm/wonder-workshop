@@ -74,21 +74,24 @@ export default function SectionCard({ name, loading, children, active, onClick, 
         )}
         {canLock && (
           <button
-            className={`section-lock-btn${locked ? ' active' : ''}`}
+            className={`section-lock-pill${locked ? ' active' : ''}`}
             onClick={e => { e.stopPropagation(); onToggleLock?.() }}
-            title={locked ? 'Unlock — allow auto-gen / regen' : 'Lock — freeze this section and gate downstream auto-gen'}
+            title={locked
+              ? 'Unlock Section — clears the section-wide lock. Images you locked individually stay locked.'
+              : 'Lock Section — protects every image in this section from regen.'}
           >
             {locked ? (
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.15"/>
-                <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.6" fill="currentColor" fillOpacity="0.18"/>
+                <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
               </svg>
             ) : (
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M5.5 7V5a2.5 2.5 0 0 1 4.6-1.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.6"/>
+                <path d="M5.5 7V5a2.5 2.5 0 0 1 4.6-1.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
               </svg>
             )}
+            <span>{locked ? 'UNLOCK SECTION' : 'LOCK SECTION'}</span>
           </button>
         )}
         {onDelete && (
