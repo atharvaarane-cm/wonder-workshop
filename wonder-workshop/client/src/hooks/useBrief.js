@@ -301,12 +301,38 @@ export async function streamChat(messages, onToken, signal) {
  * Each action is { name, args } where name matches one of the supplied tools.
  */
 export async function chatWithTools(messages, tools, signal) {
-  const res = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    signal,
-    body: JSON.stringify({ messages, tools, stream: false }),
-  })
+  // Bound the request so a hung server (or a Gemini call that 5xxs
+  // after a long stall) can't leave the chat pending forever. 90s is
+  // generous for any reasonable text-only generation.
+  const timeoutController = new AbortController()
+  const timer = setTimeout(() => timeoutController.abort('timeout'), 90000)
+  // Compose caller's signal with our timeout so either can abort.
+  const onCallerAbort = () => timeoutController.abort('caller-aborted')
+  signal?.addEventListener('abort', onCallerAbort)
+
+  let res
+  try {
+    res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: timeoutController.signal,
+      body: JSON.stringify({ messages, tools, stream: false }),
+    })
+  } catch (err) {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onCallerAbort)
+    if (err?.name === 'AbortError') {
+      const reason = timeoutController.signal.reason
+      if (reason === 'timeout') {
+        const e = new Error('Chat timed out after 90s. The server may be overloaded — try again in a minute.')
+        e.status = 504
+        throw e
+      }
+    }
+    throw err
+  }
+  clearTimeout(timer)
+  signal?.removeEventListener('abort', onCallerAbort)
 
   if (!res.ok) {
     // Include the response body so callers can show the real cause

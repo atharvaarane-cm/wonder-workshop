@@ -138,7 +138,15 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
   })
   useEffect(() => {
     if (!chatStorageKey) return
-    try { localStorage.setItem(chatStorageKey, JSON.stringify(messages)) } catch {}
+    // Strip attachments before persisting. Each attached image is a
+    // multi-MB base64 data URL; persisting them inflates the messages
+    // blob to tens of megabytes, blocks the main thread on each save,
+    // and looks like the tab is crashing. Attachments stay in memory
+    // for the session but don't survive reload — fair trade.
+    const lean = messages.map(m => (
+      m.attachments?.length ? { ...m, attachments: undefined } : m
+    ))
+    try { localStorage.setItem(chatStorageKey, JSON.stringify(lean)) } catch {}
   }, [chatStorageKey, messages])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -371,9 +379,16 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       sanitizeBriefForChat(brief ?? {}),
     ].join('\n')
 
+    // Cap history at the last 30 turns. After long sessions the
+    // unbounded payload either burns Gemini tokens for no benefit or
+    // tips into a request that hangs / 5xxs. Strip card messages
+    // (they're visual artifacts, not conversation) and card messages
+    // with empty text — keep only meaningful user / agent exchanges.
+    const meaningful = messages.filter(m => m.text && (m.role === 'user' || (m.role === 'agent' && m.kind !== 'card')))
+    const recent = meaningful.slice(-30)
     const history = [
       { role: 'system', content: systemPrompt },
-      ...messages.map(m => ({ role: m.role === 'agent' ? 'assistant' : 'user', content: m.text })),
+      ...recent.map(m => ({ role: m.role === 'agent' ? 'assistant' : 'user', content: m.text })),
       { role: 'user', content: text },
     ]
 
