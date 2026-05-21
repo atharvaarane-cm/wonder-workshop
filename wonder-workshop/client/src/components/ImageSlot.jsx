@@ -428,12 +428,17 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       // The slotKey (used to find existing images) stays in the legacy
       // prompt format, but the prompt actually sent to the image API gets
       // a suppression suffix appended so new generations don't render
-      // garbled fake-Pepsi text on shirts or bleed branded props into
-      // what's supposed to be a neutral reference. Doing it here (not in
+      // garbled fake-Pepsi text on shirts or bleed extra props into what's
+      // supposed to be a clean reference. Doing it here (not in
       // characterPrompts.js) keeps existing project images findable on
       // reload — changing characterPrompts.js would orphan them.
+      //
+      // IMPORTANT: only suppress text/logos and extra props. Do NOT
+      // override the wardrobe (color, style) — the user changes shirt
+      // color via chat ("give him a blue shirt") and that has to land in
+      // the rendered image.
       const apiPrompt = sectionTitle === 'Character Design'
-        ? `${text}, plain neutral solid-color t-shirt, no text on clothing, no logos, no brand graphics, no writing visible, no jewelry, no accessories, no props, isolated subject, clean seamless studio background`
+        ? `${text}, no text or letters on clothing, no logos, no brand graphics, no writing visible anywhere in the frame, plain unprinted fabric, no extra props in the scene, isolated subject, clean seamless studio background`
         : text
       const payload = provider === 'gemini'
         ? {
