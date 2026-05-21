@@ -63,6 +63,26 @@ const CARD_GRADIENTS = [
   'linear-gradient(135deg,#0a1a2e,#1a4060)',
 ]
 
+// Cinematic backdrops for the home page. Pre-generated via Pollinations + flux
+// and committed under client/public/landing-bg/ so they load instantly from the
+// app's own origin — generating fresh on every page load takes 30-60s with the
+// flux model, which is too slow for a backdrop. One is picked at random per
+// mount so each page load shows a different image.
+const HOME_BG_IMAGES = [
+  '/landing-bg/bg-01.jpg',
+  '/landing-bg/bg-02.jpg',
+  '/landing-bg/bg-03.jpg',
+  '/landing-bg/bg-04.jpg',
+  '/landing-bg/bg-05.jpg',
+  '/landing-bg/bg-06.jpg',
+  '/landing-bg/bg-07.jpg',
+  '/landing-bg/bg-08.jpg',
+]
+
+function pickHomeBackground() {
+  return HOME_BG_IMAGES[Math.floor(Math.random() * HOME_BG_IMAGES.length)]
+}
+
 export default function Discover({ onGenerate, onStartBlank, projects = [], folders: folderList = [], onOpenProject, onDeleteProject, onRenameProject, onMoveProjectToFolder, onDuplicateProject, onCreateFolder, onDeleteFolder, onRenameFolder, theme, toggleTheme }) {
   const [activePage, setActivePage] = useState('home')
   // Drilled-in folder name (string) or null for the folder list view.
@@ -228,6 +248,10 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
     setRenamingId(null)
   }
 
+  // Pick a cinematic background once per mount. Lazy initializer runs once,
+  // so navigating between Home / Projects / Inspiration inside Discover keeps
+  // the same image — only a fresh page load (or returning from a board) swaps.
+  const [homeBg] = useState(pickHomeBackground)
   const [prompt, setPrompt]         = useState('')
   const [loading, setLoading]       = useState(false)
   const [improving, setImproving]   = useState(false)
@@ -923,7 +947,16 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
         )}
 
         {/* ── Home / Generate form ── */}
-        {activePage === 'home' && <main className="discover-form">
+        {activePage === 'home' && <>
+          {/* Cinematic backdrop. Picked once per mount in pickHomeBackground(); */}
+          {/* overlay keeps the greeting + input card readable on any image. */}
+          <div
+            className="discover-bg"
+            style={{ backgroundImage: `url(${homeBg})` }}
+            aria-hidden
+          />
+          <div className="discover-bg-overlay" aria-hidden />
+          <main className="discover-form">
 
           {error && <div className="discover-error">{error}</div>}
 
@@ -1128,7 +1161,8 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
           </div>
 
 
-        </main>}
+          </main>
+        </>}
 
       </div>
     </div>
