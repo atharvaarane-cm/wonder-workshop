@@ -427,18 +427,19 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       // Character reference / view grids should be clean identity sheets.
       // The slotKey (used to find existing images) stays in the legacy
       // prompt format, but the prompt actually sent to the image API gets
-      // a suppression suffix appended so new generations don't render
-      // garbled fake-Pepsi text on shirts or bleed extra props into what's
-      // supposed to be a clean reference. Doing it here (not in
+      // a small suffix appended for framing only — isolated subject, clean
+      // background, no stray scene props. Doing it here (not in
       // characterPrompts.js) keeps existing project images findable on
       // reload — changing characterPrompts.js would orphan them.
       //
-      // IMPORTANT: only suppress text/logos and extra props. Do NOT
-      // override the wardrobe (color, style) — the user changes shirt
-      // color via chat ("give him a blue shirt") and that has to land in
-      // the rendered image.
+      // NOTE: we DO NOT suppress text/logos/brand graphics anymore. The AI
+      // image model handles those imperfectly (sometimes garbled), but
+      // forbidding them strips brand context the user explicitly added
+      // (e.g. "Pepsi sweatshirt" → has to land as a Pepsi-looking shirt).
+      // Garbled text is the lesser evil here. A proper brand-asset-as-
+      // reference path is the long-term answer.
       const apiPrompt = sectionTitle === 'Character Design'
-        ? `${text}, no text or letters on clothing, no logos, no brand graphics, no writing visible anywhere in the frame, plain unprinted fabric, no extra props in the scene, isolated subject, clean seamless studio background`
+        ? `${text}, isolated subject, clean seamless studio background, no extra props in the scene`
         : text
       const payload = provider === 'gemini'
         ? {
