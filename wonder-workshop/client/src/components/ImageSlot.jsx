@@ -424,13 +424,24 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         ...(Array.isArray(referenceImages) ? referenceImages : []),
         ...(Array.isArray(opts.attachedReferences) ? opts.attachedReferences : []),
       ].slice(0, 4)
+      // Character reference / view grids should be clean identity sheets.
+      // The slotKey (used to find existing images) stays in the legacy
+      // prompt format, but the prompt actually sent to the image API gets
+      // a suppression suffix appended so new generations don't render
+      // garbled fake-Pepsi text on shirts or bleed branded props into
+      // what's supposed to be a neutral reference. Doing it here (not in
+      // characterPrompts.js) keeps existing project images findable on
+      // reload — changing characterPrompts.js would orphan them.
+      const apiPrompt = sectionTitle === 'Character Design'
+        ? `${text}, plain neutral solid-color t-shirt, no text on clothing, no logos, no brand graphics, no writing visible, no jewelry, no accessories, no props, isolated subject, clean seamless studio background`
+        : text
       const payload = provider === 'gemini'
         ? {
-            prompt: text,
+            prompt: apiPrompt,
             ratio: effectiveRatio,
             ...(mergedRefs.length ? { referenceImages: mergedRefs } : {}),
           }
-        : { prompt: text, ...dims, ...(seed != null ? { seed } : {}) }
+        : { prompt: apiPrompt, ...dims, ...(seed != null ? { seed } : {}) }
 
       async function attemptOnce() {
         const started = performance.now()

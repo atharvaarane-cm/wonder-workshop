@@ -30,24 +30,19 @@ export const VIEWS = [
   },
 ]
 
-// Suppression appended to every character-reference prompt. The reference
-// grids are meant to be CLEAN identity sheets — face / hair / skin tone /
-// body type — used as conditioning for storyboard shots later. We strip
-// branded clothing and props here for two reasons:
-// 1. Pollinations / flux can't render text reliably, so "Pepsi sweatshirt"
-//    in the description came back with garbled fake-Pepsi text.
-// 2. The reference should isolate the character so storyboard shots can
-//    place them in any scene without baked-in props bleeding through.
-const CLEAN_REFERENCE_SUFFIX = 'plain neutral solid-color t-shirt, no text on clothing, no logos, no brand graphics, no writing visible anywhere, no jewelry, no accessories, no props, no background objects, isolated subject'
-
+// IMPORTANT: these strings double as the slotKey for each character image
+// (ImageSlot freezes slotKey to its first prompt). Changing the format
+// orphans every existing project's character images on reload, so the
+// format here is FROZEN. To clean up text/logos on new generations, append
+// suppression in ImageSlot at API-call time instead of editing these.
 export function closeupPrompt(data, view) {
-  return `${data?.description || ''}, close-up portrait, head and shoulders, ${view.closeup}, sharp face detail, studio lighting, clean seamless white background, headshot, ${CLEAN_REFERENCE_SUFFIX}`
+  return `${data?.description || ''}, ${data?.wardrobe || ''}, close-up portrait, head and shoulders, ${view.closeup}, sharp face detail, studio lighting, clean white background, headshot`
 }
 
 export function fullbodyPrompt(data, view) {
-  return `${data?.description || ''}, ${view.fullbody}, full body shot head to toe, seamless white studio background, professional photography, character reference sheet, ${CLEAN_REFERENCE_SUFFIX}`
+  return `${data?.description || ''}, ${data?.wardrobe || ''}, ${view.fullbody}, full body shot head to toe, white studio background, professional photography, character reference sheet`
 }
 
 export function referencePrompt(data) {
-  return `${data?.description || ''}, close-up portrait, head and shoulders, facing directly forward, front view, full face visible, sharp face detail, studio lighting, clean seamless white background, headshot, ${CLEAN_REFERENCE_SUFFIX}`
+  return `${data?.description || ''}, ${data?.wardrobe || ''}, close-up portrait, head and shoulders, facing directly forward, front view, full face visible, sharp face detail, studio lighting, clean white background, headshot`
 }
