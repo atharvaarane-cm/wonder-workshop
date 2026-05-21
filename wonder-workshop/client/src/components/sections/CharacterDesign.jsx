@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect } from 'react'
+import { useContext, useState } from 'react'
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
@@ -62,37 +62,17 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
   const headshotSlotId = v => `char.${charKey}.headshot.${v.id}`
   const fullbodySlotId = v => `char.${charKey}.fullbody.${v.id}`
 
-  // One-time migration: copy existing prompt-keyed entries forward to the
-  // new stable slot IDs. Runs once per character per project mount. Best
-  // effort — only matches images saved under the CURRENT prompt format.
-  // Images stored under a prior prompt (from before a chat edit) were
-  // already orphaned today, so this can't recover those, but it does
-  // protect every image generated under the current state from the next
-  // refresh. Old keys are NOT deleted (non-destructive).
-  useEffect(() => {
-    if (!project?.id || !project?.images || !project?.saveImage) return
-    const migrationKey = `ww_charmig_${project.id}_${charKey}`
-    try {
-      if (sessionStorage.getItem(migrationKey)) return
-    } catch {}
-    const pairs = [
-      [refPrompt, refSlotId],
-      ...VIEWS.map(v => [closeupPrompt(character || {}, v), headshotSlotId(v)]),
-      ...VIEWS.map(v => [fullbodyPrompt(character || {}, v), fullbodySlotId(v)]),
-    ]
-    let migrated = 0
-    for (const [oldKey, newKey] of pairs) {
-      if (!oldKey || oldKey === newKey) continue
-      const oldEntry = project.images[oldKey]
-      const newEntry = project.images[newKey]
-      if (oldEntry?.versions?.length && !newEntry?.versions?.length) {
-        project.saveImage(newKey, { versions: oldEntry.versions, activeVersion: oldEntry.activeVersion ?? 0 })
-        migrated++
-      }
-    }
-    try { sessionStorage.setItem(migrationKey, String(migrated)) } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, charKey])
+  // Legacy → stable-ID migration is now handled inside ImageSlot itself
+  // via the readSaved() fallback (reads project.images[slotKey] first,
+  // falls back to project.images[prompt]). That approach is timing-safe:
+  // even if the imageStore hadn't hydrated when CharacterBlock first
+  // mounted, ImageSlot's rehydrate effect re-runs whenever either entry
+  // changes and picks up the legacy data. The save effect then persists
+  // it forward under the stable slotKey on the next change. The previous
+  // explicit migration here had a sessionStorage flag that latched the
+  // "no migration needed" decision before the store finished hydrating —
+  // which is exactly why Marcus disappeared on the first reload after
+  // PR #188 deployed.
 
   // Pull the active version of this character's reference image so it
   // can be passed as conditioning to every Headshots / Full Body view.
