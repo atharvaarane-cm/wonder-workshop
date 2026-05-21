@@ -821,7 +821,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       // AUTO-GENERATE additionally requires every
                       // upstream entity section (loc, cp, char) to be
                       // locked first (Ed's W-01/W-02 workflow gate).
-                      canLock={['mb', 'loc', 'cp', 'char', 'sl'].includes(sec.id)}
+                      canLock={['bi', 'mb', 'loc', 'cp', 'char', 'sl'].includes(sec.id)}
                       locked={!!brief?.locks?.[sec.id]}
                       onToggleLock={() => {
                         update('locks', { ...(brief.locks || {}), [sec.id]: !brief?.locks?.[sec.id] })
