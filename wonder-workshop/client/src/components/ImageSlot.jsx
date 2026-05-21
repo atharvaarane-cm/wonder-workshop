@@ -190,6 +190,16 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
       if (!prompt) return
       const sectionEl = slotRef.current?.closest('[data-section-title]')
       if (sectionEl?.dataset.sectionTitle !== targetSection) return
+      // Per-character scoping. When the agent edits one character's field,
+      // only that character's slots should regen — not every block in the
+      // section. The event carries the index ("primary" or "0", "1", ...);
+      // we match it against the [data-character-index] on the closest
+      // CharacterBlock ancestor. Slots outside any CharacterBlock have no
+      // such ancestor and are skipped when a characterIndex is targeted.
+      if (e.detail?.characterIndex !== undefined && e.detail.characterIndex !== null) {
+        const charEl = slotRef.current?.closest('[data-character-index]')
+        if (!charEl || charEl.dataset.characterIndex !== String(e.detail.characterIndex)) return
+      }
       setEditablePrompt(prompt)
       generate(null, { silent: true, promptOverride: prompt })
     }

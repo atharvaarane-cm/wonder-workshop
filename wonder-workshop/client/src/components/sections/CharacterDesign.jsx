@@ -48,7 +48,7 @@ function ReferenceThumbs({ slotKey }) {
 // character (brief.character) and any additional characters
 // (brief.characters[i]) — the parent passes a setField callback that
 // knows how to write back to the correct path.
-function CharacterBlock({ character, setField, onRemove, label }) {
+function CharacterBlock({ character, setField, onRemove, label, dataIndex }) {
   const project = useContext(ProjectContext)
   const seed = hashStr((character?.description || '') + (character?.wardrobe || ''))
   const refPrompt = referencePrompt(character)
@@ -113,7 +113,7 @@ function CharacterBlock({ character, setField, onRemove, label }) {
   }
 
   return (
-    <div className="character-block">
+    <div className="character-block" data-character-index={dataIndex}>
       {onRemove && (
         <div className="character-block-header">
           <span className="character-block-label">{label}</span>
@@ -318,6 +318,7 @@ export default function CharacterDesign({
         <CharacterBlock
           character={primaryCharacter}
           setField={(field, value) => update(`character.${field}`, value)}
+          dataIndex="primary"
         />
       )}
 
@@ -329,6 +330,7 @@ export default function CharacterDesign({
           label={c?.name ? `Character — ${c.name}` : `Character ${idx + 2}`}
           setField={(field, value) => updateCharacterAt?.(idx, field, value)}
           onRemove={() => removeCharacterAt?.(idx)}
+          dataIndex={String(idx)}
         />
       ))}
 
