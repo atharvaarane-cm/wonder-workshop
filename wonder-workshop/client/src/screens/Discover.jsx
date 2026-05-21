@@ -50,15 +50,15 @@ const NAV_ITEMS = [
 ]
 
 const INSPIRATION_ITEMS = [
-  { title: 'Golden Hour Campaign',   tags: ['Lifestyle','Warm'],       prompt: 'Golden hour lifestyle campaign, warm amber light, outdoor locations, natural performances, cinematic depth of field, rich textures' },
-  { title: 'Dark Studio Editorial',  tags: ['Fashion','Editorial'],    prompt: 'High fashion dark studio editorial, dramatic chiaroscuro lighting, bold wardrobe, expressive poses, medium format aesthetic' },
-  { title: 'Urban Street Story',     tags: ['Street','Documentary'],   prompt: 'Urban street photography campaign, candid moments, city textures, dynamic compositions, authentic talent, natural light' },
-  { title: 'Product Hero Shots',     tags: ['Product','Luxury'],       prompt: 'Luxury product hero campaign, macro detail shots, premium materials, controlled studio lighting, clean backgrounds, tactile focus' },
-  { title: 'Athlete in Motion',      tags: ['Sport','Dynamic'],        prompt: 'Athletic performance campaign, high-speed action, motion blur, powerful compositions, outdoor stadium, peak performance moments' },
-  { title: 'Minimalist Beauty',      tags: ['Beauty','Clean'],         prompt: 'Minimalist beauty campaign, soft diffused light, clean white environments, close-up skin textures, serene expressions, editorial precision' },
-  { title: 'Neon Night City',        tags: ['Night','Moody'],          prompt: 'Neon-lit night city campaign, wet reflections, bold colour contrast, mysterious atmosphere, street-level angles, cinematic noir mood' },
-  { title: 'Nature & Wellness',      tags: ['Wellness','Organic'],     prompt: 'Nature wellness campaign, lush green environments, soft morning light, breathable fabrics, meditative atmosphere, earthy tones' },
-  { title: 'Social Vertical Launch', tags: ['Social','Vertical'],      prompt: 'Social media vertical launch campaign, scroll-stopping hero frames, creator-style lighting, bold typography moments, 9:16 ratio, energetic pacing' },
+  { id: 'golden-hour',     title: 'Golden Hour Campaign',   tags: ['Lifestyle','Warm'],       prompt: 'Golden hour lifestyle campaign, warm amber light, outdoor locations, natural performances, cinematic depth of field, rich textures' },
+  { id: 'dark-studio',     title: 'Dark Studio Editorial',  tags: ['Fashion','Editorial'],    prompt: 'High fashion dark studio editorial, dramatic chiaroscuro lighting, bold wardrobe, expressive poses, medium format aesthetic' },
+  { id: 'urban-street',    title: 'Urban Street Story',     tags: ['Street','Documentary'],   prompt: 'Urban street photography campaign, candid moments, city textures, dynamic compositions, authentic talent, natural light' },
+  { id: 'product-hero',    title: 'Product Hero Shots',     tags: ['Product','Luxury'],       prompt: 'Luxury product hero campaign, macro detail shots, premium materials, controlled studio lighting, clean backgrounds, tactile focus' },
+  { id: 'athlete-motion',  title: 'Athlete in Motion',      tags: ['Sport','Dynamic'],        prompt: 'Athletic performance campaign, high-speed action, motion blur, powerful compositions, outdoor stadium, peak performance moments' },
+  { id: 'minimal-beauty',  title: 'Minimalist Beauty',      tags: ['Beauty','Clean'],         prompt: 'Minimalist beauty campaign, soft diffused light, clean white environments, close-up skin textures, serene expressions, editorial precision' },
+  { id: 'neon-night',      title: 'Neon Night City',        tags: ['Night','Moody'],          prompt: 'Neon-lit night city campaign, wet reflections, bold colour contrast, mysterious atmosphere, street-level angles, cinematic noir mood' },
+  { id: 'nature-wellness', title: 'Nature & Wellness',      tags: ['Wellness','Organic'],     prompt: 'Nature wellness campaign, lush green environments, soft morning light, breathable fabrics, meditative atmosphere, earthy tones' },
+  { id: 'social-vertical', title: 'Social Vertical Launch', tags: ['Social','Vertical'],      prompt: 'Social media vertical launch campaign, scroll-stopping hero frames, creator-style lighting, bold typography moments, 9:16 ratio, energetic pacing' },
 ]
 
 const CARD_GRADIENTS = [
@@ -269,7 +269,12 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   const [ratioOpen, setRatioOpen]   = useState(false)
   const [resolutionOpen, setResolutionOpen] = useState(false)
   const [lengthOpen, setLengthOpen] = useState(false)
-  const [quickStart, setQuickStart] = useState(null)
+  // Industry pill (Fashion Shoot / Product Ad / Lifestyle / Social) and
+  // Inspiration pill (Golden Hour / Dark Studio / etc.) are tracked
+  // separately. The user can pick ONE of each; Generate + Improve-with-AI
+  // fold both selections into the prompt as context tags.
+  const [selectedIndustry, setSelectedIndustry] = useState(null)
+  const [selectedInspiration, setSelectedInspiration] = useState(null)
   const [inputFocused, setInputFocused] = useState(false)
   // Attached files (treatments, briefs, scripts) whose text gets folded
   // into the brief-generation prompt as extra context.
@@ -343,7 +348,10 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
           attachments.map(a => `--- ${a.name} ---\n${(a.content || '').slice(0, 20000)}`).join('\n\n') +
           '\n=== End attached files ===\n'
         : ''
-      const full = `${text}${attachmentBlock} (aspect ratio: ${ratio}) (resolution: ${resolution}) (length: ${length})${quickStart ? ` (quick start: ${quickStart})` : ''}`
+      const ind = selectedIndustryItem()
+      const insp = selectedInspirationItem()
+      const tagSuffix = `${ind ? ` (industry: ${ind.label})` : ''}${insp ? ` (inspiration: ${insp.title})` : ''}`
+      const full = `${text}${tagContextString()}${attachmentBlock} (aspect ratio: ${ratio}) (resolution: ${resolution}) (length: ${length})${tagSuffix}`
       const brief = await generateBrief(full)
       onGenerate({
         ...brief,
@@ -369,7 +377,13 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   // different system prompt tuned for a discovery-phase brief.
   async function improvePrompt() {
     const text = prompt.trim()
-    if (!text || improving || loading) return
+    const ind = selectedIndustryItem()
+    const insp = selectedInspirationItem()
+    // Improve can fire on tags alone (no typed text) — user picks an
+    // industry + inspiration and asks the AI to compose the brief from
+    // those seeds. If nothing is set anywhere, refuse.
+    if (!text && !ind && !insp) return
+    if (improving || loading) return
     setImproving(true); setError(null)
     try {
       const messages = [
@@ -392,7 +406,14 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
           '- No headings, no bullets, no labels, no quotes, no preamble',
           '- Return ONLY the expanded brief paragraph, ready to drop into a generation tool',
         ].join('\n') },
-        { role: 'user', content: `Rough idea to expand (preserve every character and detail, then add specifics):\n\n${text}` },
+        { role: 'user', content: (() => {
+          const seedParts = []
+          if (text) seedParts.push(`Rough idea to expand (preserve every character and detail, then add specifics):\n\n${text}`)
+          if (ind) seedParts.push(`Selected industry: ${ind.label}. Use this as the campaign type. Reference vibe: ${ind.prompt}`)
+          if (insp) seedParts.push(`Selected inspiration: ${insp.title}. Use this as the aesthetic direction. Reference vibe: ${insp.prompt}`)
+          if (!text) seedParts.unshift('No user-typed prompt — compose a complete creative brief from the selected industry + inspiration tags below.')
+          return seedParts.join('\n\n')
+        })() },
       ]
       const { text: improved } = await chatWithTools(messages, [])
       const cleaned = (improved || '').trim().replace(/^["'`]+|["'`]+$/g, '')
@@ -410,10 +431,32 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  function pickQuickStart(item) {
-    setQuickStart(item.id)
-    setPrompt(item.prompt)
+  // Toggle an industry / inspiration pill selection. Clicking the same
+  // pill again clears it. Industry + inspiration are independent — both
+  // can be set simultaneously and fold into the prompt as context tags.
+  function pickIndustry(item) {
+    setSelectedIndustry(prev => prev === item.id ? null : item.id)
     textRef.current?.focus()
+  }
+  function pickInspiration(item) {
+    setSelectedInspiration(prev => prev === item.id ? null : item.id)
+    textRef.current?.focus()
+  }
+  function selectedIndustryItem() {
+    return QUICK_START_PROMPTS.find(p => p.id === selectedIndustry) || null
+  }
+  function selectedInspirationItem() {
+    return INSPIRATION_ITEMS.find(p => p.id === selectedInspiration) || null
+  }
+  // Compose the industry + inspiration tags into a single context string
+  // that can be appended to the prompt sent to Improve / Generate.
+  function tagContextString() {
+    const ind = selectedIndustryItem()
+    const insp = selectedInspirationItem()
+    const parts = []
+    if (ind) parts.push(`Industry: ${ind.label} (${ind.prompt})`)
+    if (insp) parts.push(`Inspiration: ${insp.title} (${insp.prompt})`)
+    return parts.length ? `\n\n--- Selected tags (use these as creative direction) ---\n${parts.join('\n')}` : ''
   }
 
   return (
@@ -981,18 +1024,37 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
             <span className="greeting-sub">what do you want to create?</span>
           </div>
 
-          {/* Quick starts */}
+          {/* Industries — pick one to anchor the campaign type. */}
           <div className="form-section">
-            <h3 className="form-section-label">Quick start prompts</h3>
+            <h3 className="form-section-label">Industries</h3>
             <div className="quick-start-row">
               {QUICK_START_PROMPTS.map(item => (
                 <button
                   key={item.id}
-                  className={`quick-start-chip${quickStart === item.id ? ' active' : ''}`}
-                  onClick={() => pickQuickStart(item)}
+                  className={`quick-start-chip${selectedIndustry === item.id ? ' active' : ''}`}
+                  onClick={() => pickIndustry(item)}
                   type="button"
                 >
                   {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Inspiration — pick one aesthetic direction. Combines with the
+              industry pill above so Improve / Generate get both as context. */}
+          <div className="form-section">
+            <h3 className="form-section-label">Inspiration</h3>
+            <div className="quick-start-row inspiration-row">
+              {INSPIRATION_ITEMS.map(item => (
+                <button
+                  key={item.id}
+                  className={`quick-start-chip${selectedInspiration === item.id ? ' active' : ''}`}
+                  onClick={() => pickInspiration(item)}
+                  type="button"
+                  title={item.prompt}
+                >
+                  {item.title}
                 </button>
               ))}
             </div>
@@ -1054,7 +1116,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
                 {attaching && <span className="input-attachment-loading">Reading file…</span>}
               </div>
             )}
-            <div className="input-card-footer">
+            <div className="input-card-footer input-card-footer-settings">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1067,6 +1129,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
                 <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
                   <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 </svg>
+                <span className="attach-pill-label">Attach</span>
               </button>
               <div className="ratio-dropdown" ref={ratioRef}>
                 <button className="ratio-pill" onClick={() => setRatioOpen(o => !o)} title="Aspect Ratio">
@@ -1180,11 +1243,18 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
                   </div>
                 )}
               </div>
+            </div>
+            {/* Second footer row — primary actions live together on their
+                own line so they never get pushed off the right edge by the
+                settings pills above (Attach / Ratio / Resolution / Length). */}
+            <div className="input-card-footer input-card-footer-actions">
               <button
                 className="discover-improve-btn"
                 onClick={improvePrompt}
-                disabled={!prompt.trim() || improving || loading}
-                title="Expand this prompt into a richer brief — location, mood, elements, characters"
+                disabled={(!prompt.trim() && !selectedIndustry && !selectedInspiration) || improving || loading}
+                title={selectedIndustry || selectedInspiration
+                  ? 'Expand into a richer brief using the prompt, industry, and inspiration tags'
+                  : 'Expand this prompt into a richer brief — location, mood, elements, characters'}
                 type="button"
               >
                 <svg width="13" height="13" viewBox="0 0 18 18" fill="none">
