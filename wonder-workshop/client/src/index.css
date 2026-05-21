@@ -1809,6 +1809,28 @@ textarea { font-family: var(--font); resize: none; }
 }
 .character-block-remove:hover { background: rgba(224,65,65,0.14); border-color: rgba(224,65,65,0.5); color: #E04141; }
 
+/* Per-character lock pill in the block header. Mirrors the section-lock
+   pill style but lives inside the character block, so users can lock
+   ONE character while still editing others. */
+.character-block-header { padding: 4px 0; }
+.character-block-lock {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 11px; border-radius: 13px;
+  background: transparent; border: 1px solid var(--border-md);
+  color: var(--muted); font-size: 10px; font-weight: 700;
+  font-family: var(--font); letter-spacing: 0.05em;
+  cursor: pointer; flex-shrink: 0; white-space: nowrap;
+  margin-left: auto;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.character-block-lock:hover { background: var(--card); border-color: var(--border); color: var(--text); }
+.character-block-lock.active {
+  background: rgba(45,154,78,0.14); border-color: rgba(45,154,78,0.6); color: #2D9A4E;
+}
+.character-block-lock.active:hover { background: rgba(45,154,78,0.22); }
+.character-block-locked { opacity: 0.86; }
+.character-block-locked .character-views-populate { opacity: 0.55; }
+
 /* "+ Add character" footer bar — same look as the other section
    add-bars (#1a1a1a / #282828 / 7px, 66px tall, full width). */
 .char-add-row {

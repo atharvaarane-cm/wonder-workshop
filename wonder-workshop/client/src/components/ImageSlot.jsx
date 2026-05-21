@@ -200,6 +200,13 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         const charEl = slotRef.current?.closest('[data-character-index]')
         if (!charEl || charEl.dataset.characterIndex !== String(e.detail.characterIndex)) return
       }
+      // Per-character lock — set by the LOCK CHARACTER pill in the block
+      // header. Even when this slot belongs to the character the event is
+      // targeting, skip if the character itself is locked. Section-level
+      // lock and slot-level lock are checked inside generate() below; this
+      // is the new in-between layer.
+      const blockEl = slotRef.current?.closest('[data-character-index]')
+      if (blockEl?.dataset.characterLocked === 'true') return
       // Subgroup filter — used by Character Design's per-character
       // "Regenerate All" buttons. Each grid wraps its slots in a
       // [data-subgroup="headshot"|"fullbody"] container; the reference slot

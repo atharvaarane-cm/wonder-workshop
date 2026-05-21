@@ -490,6 +490,21 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         if ((path.startsWith('shotList') || path === 'shotList') && locks.sl) return 'Storyboard'
         return false
       }
+      // Per-character lock: refuse chat writes that target a specific
+      // character the user has individually locked. brief.characterLocks
+      // is keyed by "primary" (brief.character) or numeric string for
+      // brief.characters[N]. We map the path to its character index using
+      // the same logic that drives scoped regen below.
+      function pathTargetsLockedCharacter(path) {
+        if (!path) return null
+        const charLocks = brief?.characterLocks || {}
+        if (path === 'character' || path.startsWith('character.')) {
+          return charLocks.primary ? 'primary' : null
+        }
+        const m = path.match(/^characters\.(\d+)/)
+        if (m) return charLocks[m[1]] ? m[1] : null
+        return null
+      }
       for (const a of actions) {
         if (a.name === 'update_brief_field' && onUpdate) {
           const { path, value } = a.args || {}
@@ -504,6 +519,12 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
           const lockedSection = fieldDrivesLockedSection(path)
           if (lockedSection) {
             blockers.push(`Can't update that — the ${lockedSection} section is locked. Unlock it first, then ask me again.`)
+            continue
+          }
+          const lockedChar = pathTargetsLockedCharacter(path)
+          if (lockedChar) {
+            const charLabel = lockedChar === 'primary' ? 'the primary character' : `character ${Number(lockedChar) + 2}`
+            blockers.push(`Can't update that — ${charLabel} is locked. Click UNLOCK CHARACTER on their block first, then ask me again.`)
             continue
           }
           if (path && typeof value === 'string') {
