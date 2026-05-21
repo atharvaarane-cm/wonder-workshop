@@ -410,6 +410,12 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       // view should regenerate with the new description baked in).
       const applied = []
       const sectionsToRegen = new Set()
+      // When the agent edits ONE character's field, regen should target only
+      // that character's slots — not every CharacterBlock in the section.
+      // Track which character indexes were touched. "primary" = brief.character,
+      // numeric strings = brief.characters[N]. If the set stays empty after
+      // processing all actions, we fire section-wide as before.
+      const characterIndexesToRegen = new Set()
       // Collect blocker reasons so we can surface them to the user in
       // the chat instead of silently dropping their request.
       const blockers = []
@@ -465,6 +471,18 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
             // drive image generation directly.
             if (path.startsWith('character.') || path.startsWith('characters.') || path === 'character' || path === 'characters') {
               sectionsToRegen.add('Character Design')
+              // Derive which character was touched so regen scopes to that
+              // block only. brief.character (singular) = "primary"; the
+              // brief.characters array uses numeric indexes.
+              if (path === 'character' || path.startsWith('character.')) {
+                characterIndexesToRegen.add('primary')
+              } else if (path.startsWith('characters.')) {
+                const m = path.match(/^characters\.(\d+)/)
+                if (m) characterIndexesToRegen.add(m[1])
+                // If the path is just "characters" (whole-array write — already
+                // blocked by isProtectedRootWrite, but kept defensively),
+                // we fall back to section-wide by NOT adding a specific index.
+              }
             } else if (path.startsWith('environment.') || path.startsWith('environments.') || path === 'environment' || path === 'environments') {
               sectionsToRegen.add('Locations / Set Design')
             } else if (path.startsWith('productElements') || path === 'productElements') {
@@ -530,9 +548,20 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         setTimeout(() => {
           for (const sectionTitle of sectionsToRegen) {
             if (lockedTitles.has(sectionTitle)) continue
-            window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
-              detail: { sectionTitle },
-            }))
+            // Character Design: if we know which character(s) the edit
+            // touched, fire one scoped event per character so only that
+            // CharacterBlock's slots regen. Other characters stay frozen.
+            if (sectionTitle === 'Character Design' && characterIndexesToRegen.size > 0) {
+              for (const characterIndex of characterIndexesToRegen) {
+                window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
+                  detail: { sectionTitle, characterIndex },
+                }))
+              }
+            } else {
+              window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
+                detail: { sectionTitle },
+              }))
+            }
           }
         }, 80)
       }
