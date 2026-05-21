@@ -362,7 +362,7 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       ``,
       intentLock,
       `# Tool routing — pick the RIGHT tool:`,
-      `- If the user wants to change a CHARACTER's appearance (hair, clothes, wardrobe, look) — or any property of the character / location / product entity — CALL update_brief_field on the relevant entity field (character.description, character.wardrobe, environment.heroEnvironment, productElements, etc.). Every image driven by that entity will re-fire automatically with the new value. Example: "make her have purple hair" → update_brief_field(path: "character.description", value: "<full original description, with purple hair added>"). Always include the FULL new value — your update REPLACES the field.`,
+      `- If the user wants to change a CHARACTER's appearance (hair, clothes, wardrobe, look) — or any property of the character / location / product entity — CALL update_brief_field on the relevant entity field (character.description, character.wardrobe, environment.heroEnvironment, productElements, etc.). Example: "make her have purple hair" → update_brief_field(path: "character.description", value: "<full original description, with purple hair added>"). Always include the FULL new value — your update REPLACES the field. IMPORTANT: brief edits no longer auto-regenerate images. After calling update_brief_field, your reply MUST tell the user what to click next — for character edits, say: "Updated [name]. Click Regenerate All on Headshots / Full Body for [name] to refresh the views."`,
       `- If the user wants a ONE-OFF tweak to JUST the currently selected image (lighting, framing, mood, a stylistic variation), CALL regenerate_active_image with the FULL new prompt — describe subject, setting, lighting, framing, mood. This only affects the selected image, not other images of the same entity.`,
       `- If the user asks a question or wants conversation, respond with plain text only (no function calls). Keep replies under 3 sentences.`,
       `- NEVER just describe a change — always CALL the tool.`,
@@ -553,42 +553,13 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         }
       }
 
-      // Fire section regens after a tick so React has propagated the
-      // brief update — image slots build their prompts from the new
-      // field values rather than the stale ones. Skip locked sections
-      // (Ed's lock-and-approve workflow — chat-driven edits land in
-      // the brief data, but image gen stays frozen until unlocked).
-      if (sectionsToRegen.size > 0) {
-        const lockedTitles = new Set()
-        const sectionIdByTitle = {
-          'Locations / Set Design': 'loc',
-          'Product / Elements': 'cp',
-          'Character Design': 'char',
-          'Storyboard': 'sl',
-        }
-        for (const [title, id] of Object.entries(sectionIdByTitle)) {
-          if (brief?.locks?.[id]) lockedTitles.add(title)
-        }
-        setTimeout(() => {
-          for (const sectionTitle of sectionsToRegen) {
-            if (lockedTitles.has(sectionTitle)) continue
-            // Character Design: if we know which character(s) the edit
-            // touched, fire one scoped event per character so only that
-            // CharacterBlock's slots regen. Other characters stay frozen.
-            if (sectionTitle === 'Character Design' && characterIndexesToRegen.size > 0) {
-              for (const characterIndex of characterIndexesToRegen) {
-                window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
-                  detail: { sectionTitle, characterIndex },
-                }))
-              }
-            } else {
-              window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
-                detail: { sectionTitle },
-              }))
-            }
-          }
-        }, 80)
-      }
+      // No more automatic regens. Per Ed's "upstream destroying downstream"
+      // pain point + Logan's explicit ask: chat edits update the brief data
+      // ONLY. The user picks when to re-fire images — Regenerate buttons in
+      // each section (and the per-character Regenerate All for Character
+      // Design) trigger the regen explicitly. sectionsToRegen and
+      // characterIndexesToRegen are still populated above so the action
+      // summary in the chat reply can hint at what to do next.
 
       // Assemble the agent's reply. If Gemini sent text, use it; if there
       // were applied actions but no text, synthesise a short summary.

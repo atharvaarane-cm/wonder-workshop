@@ -182,19 +182,24 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex }) {
             type="button"
             className="character-views-populate"
             onClick={() => {
-              window.dispatchEvent(new CustomEvent('ww-generate-section', {
-                detail: { sectionTitle: 'Character Design', subgroup: 'headshot' },
+              // Force-regen ALL views in this character's headshot grid.
+              // Scoped via characterIndex (so other CharacterBlocks stay
+              // untouched) and subgroup (so the Full Body grid doesn't
+              // also fire). Slots that are individually locked stay
+              // frozen — the regen listener honors slot-level locks.
+              window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
+                detail: { sectionTitle: 'Character Design', subgroup: 'headshot', characterIndex: dataIndex },
               }))
             }}
             disabled={!referenceImages.length}
             title={referenceImages.length
-              ? 'Generate all 4 headshot views from the approved reference'
+              ? 'Regenerate all 4 headshot views from the approved reference (overwrites existing)'
               : 'Generate the REFERENCE image first'}
           >
             <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
               <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
             </svg>
-            Populate All
+            Regenerate All
           </button>
         </div>
         <div className="character-views character-views-4">
@@ -233,19 +238,21 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex }) {
             type="button"
             className="character-views-populate"
             onClick={() => {
-              window.dispatchEvent(new CustomEvent('ww-generate-section', {
-                detail: { sectionTitle: 'Character Design', subgroup: 'fullbody' },
+              // Same scoped regen as the headshots button — this character,
+              // full-body grid only.
+              window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
+                detail: { sectionTitle: 'Character Design', subgroup: 'fullbody', characterIndex: dataIndex },
               }))
             }}
             disabled={!referenceImages.length}
             title={referenceImages.length
-              ? 'Generate all 4 full-body views from the approved reference'
+              ? 'Regenerate all 4 full-body views from the approved reference (overwrites existing)'
               : 'Generate the REFERENCE image first'}
           >
             <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
               <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
             </svg>
-            Generate All
+            Regenerate All
           </button>
         </div>
         <div className="character-views character-views-4">

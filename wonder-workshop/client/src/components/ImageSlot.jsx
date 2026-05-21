@@ -200,6 +200,15 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         const charEl = slotRef.current?.closest('[data-character-index]')
         if (!charEl || charEl.dataset.characterIndex !== String(e.detail.characterIndex)) return
       }
+      // Subgroup filter — used by Character Design's per-character
+      // "Regenerate All" buttons. Each grid wraps its slots in a
+      // [data-subgroup="headshot"|"fullbody"] container; the reference slot
+      // sits outside any such wrapper and is skipped when a subgroup is
+      // targeted (so locking + regenerating doesn't touch the reference).
+      if (e.detail?.subgroup) {
+        const sgEl = slotRef.current?.closest('[data-subgroup]')
+        if (!sgEl || sgEl.dataset.subgroup !== e.detail.subgroup) return
+      }
       setEditablePrompt(prompt)
       generate(null, { silent: true, promptOverride: prompt })
     }
