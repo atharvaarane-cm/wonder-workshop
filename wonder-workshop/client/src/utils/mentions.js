@@ -29,18 +29,22 @@ function legacyCharacterReferencePromptKey(character) {
   if (!character) return null
   return `${character.description || ''}, ${character.wardrobe || ''}, close-up portrait, head and shoulders, facing directly forward, front view, full face visible, sharp face detail, studio lighting, clean white background, headshot`
 }
-function locationSlotKey(env) {
+function locationSlotKey(envIndex) {
+  return `env.${envIndex}`
+}
+function legacyLocationPromptKey(env) {
   if (!env?.heroEnvironment && !env?.heroName) return null
   const hero = env.heroEnvironment ?? 'cinematic location'
   const elements = (env.keyElements || []).join(', ')
-  // Must match LocationsSetDesign.jsx hero slot.
   return `${hero}, ${elements}, wide establishing shot, golden hour, cinematic photography`
 }
-function productSlotKey(product) {
+function productSlotKey(productIndex) {
+  return `product.${productIndex}`
+}
+function legacyProductPromptKey(product) {
   if (!product) return null
   const userDesc = (product.description || '').trim()
   const userName = (product.name || '').trim()
-  // Must match ClothingProps.jsx slot prompt.
   return userDesc
     ? `${userDesc}, product shot, clean white background, studio lighting, commercial photography`
     : `${userName || 'product'}, product shot, clean white background, studio lighting, commercial photography`
@@ -73,10 +77,15 @@ export function getMentionHandles(brief) {
     })
   }
   // Primary location (brief.environment) + any additional locations
-  // (brief.environments[]). Each named location becomes a @handle.
-  const allLocations = [brief?.environment, ...(brief?.environments || [])]
-  for (const env of allLocations) {
-    if (!env?.heroName) continue
+  // (brief.environments[]). Each named location becomes a @handle. Track
+  // the location INDEX so slot keys match the stable IDs in LocationsSetDesign.
+  const indexedLocations = []
+  if (brief?.environment?.heroName) indexedLocations.push({ env: brief.environment, index: 'primary' })
+  for (let i = 0; i < (brief?.environments?.length || 0); i++) {
+    const e = brief.environments[i]
+    if (e?.heroName) indexedLocations.push({ env: e, index: String(i) })
+  }
+  for (const { env, index } of indexedLocations) {
     const parts = []
     if (env.heroEnvironment) parts.push(env.heroEnvironment)
     const elements = (env.keyElements || []).slice(0, 3).join(', ')
@@ -86,11 +95,14 @@ export function getMentionHandles(brief) {
       label: env.heroName,
       kind: 'location',
       expansion: [env.heroName, ...parts].join(', '),
-      slotKey: locationSlotKey(env),
+      slotKey: locationSlotKey(index),
+      legacySlotKey: legacyLocationPromptKey(env),
     })
   }
-  // Named products/elements (e.g. @Frappuccino, @AirForce1s)
-  for (const product of brief?.productElements || []) {
+  // Named products/elements (e.g. @Frappuccino, @AirForce1s). Track INDEX
+  // so slot keys match the stable IDs in ClothingProps.
+  for (let i = 0; i < (brief?.productElements?.length || 0); i++) {
+    const product = brief.productElements[i]
     if (!product?.name) continue
     const parts = []
     if (product.description) parts.push(product.description)
@@ -99,7 +111,8 @@ export function getMentionHandles(brief) {
       label: product.name,
       kind: 'product',
       expansion: [product.name, ...parts].join(', '),
-      slotKey: productSlotKey(product),
+      slotKey: productSlotKey(i),
+      legacySlotKey: legacyProductPromptKey(product),
     })
   }
   return handles

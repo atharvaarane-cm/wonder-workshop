@@ -40,6 +40,7 @@ function MoodItem({ item, idx, creative, onUpdate, onRemove }) {
         ratio="16:9"
         slimWhenEmpty
         prompt={prompt}
+        slotId={item.id ? `mood.${item.id}` : undefined}
         style={{ width: '100%', aspectRatio: '16/9', borderRadius: 7 }}
       />
       <EditableText
