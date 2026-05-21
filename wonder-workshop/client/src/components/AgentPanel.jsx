@@ -460,6 +460,22 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         // attempt to overwrite the full array.
         return PROTECTED_ARRAYS.has(path)
       }
+      // Block writes that would replace an entire ENTITY OBJECT with a
+      // string. Without this, `update_brief_field(path: "character", value:
+      // "Mid-twenties Latina...")` overwrote brief.character (an object) with
+      // a string, which then fails isCharacterPopulated() and the primary
+      // character silently disappears from the UI. Same applies to indexed
+      // entries like characters.0 / environments.1 / etc. — those must be
+      // edited via their subfields (character.description, characters.0.wardrobe).
+      function wouldFlattenEntityObject(path, value) {
+        if (typeof value !== 'string') return false
+        if (path === 'character' || path === 'environment' || path === 'brandInfo' || path === 'creativeDirection' || path === 'brief') return true
+        // characters.0 / environments.2 / productElements.1 / moodBoard.3 /
+        // shotList.5 — anything matching <bareName>.<number> and nothing
+        // after means the AI is trying to swap the whole indexed entry.
+        if (/^(characters|environments|productElements|moodBoard|shotList|assets)\.\d+$/.test(path)) return true
+        return false
+      }
       // Locked-entity guard: if the field this write targets drives a
       // section the user has locked, refuse. Otherwise the brief data
       // would shift underneath frozen images — exactly what Ed flagged.
@@ -479,6 +495,10 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
           const { path, value } = a.args || {}
           if (isProtectedRootWrite(path)) {
             blockers.push(`I can't add or replace the ${path} list directly. Use the "Add ___" button in that section, then I can help you fill in the new entry.`)
+            continue
+          }
+          if (wouldFlattenEntityObject(path, value)) {
+            blockers.push(`I almost flattened ${path} into a single string, which would have erased that entire entry. Edit a subfield instead (e.g. ${path}.description or ${path}.wardrobe).`)
             continue
           }
           const lockedSection = fieldDrivesLockedSection(path)
