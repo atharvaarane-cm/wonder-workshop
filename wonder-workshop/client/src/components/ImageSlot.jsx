@@ -59,7 +59,23 @@ export default function ImageSlot({ label, prompt, slotId, style, className, see
     else if (prompt) slotKeyRef.current = prompt
   }
   const slotKey = slotKeyRef.current
-  const initial = slotKey && project?.images?.[slotKey]
+  // Helper that reads from the stable slotKey first, then falls back to
+  // the legacy prompt-keyed entry. Used everywhere this slot looks up
+  // its data so projects that were generated before stable IDs existed
+  // still display, and the save effect below migrates them forward on
+  // first change. CRITICAL: this is the safety net that means a hard
+  // reload never loses character images even if migration timing is off.
+  function readSaved() {
+    if (!slotKey || !project?.images) return undefined
+    const fromStable = project.images[slotKey]
+    if (fromStable?.versions?.length) return fromStable
+    if (slotId && prompt && prompt !== slotKey) {
+      const fromLegacy = project.images[prompt]
+      if (fromLegacy?.versions?.length) return fromLegacy
+    }
+    return fromStable
+  }
+  const initial = readSaved()
 
   const [versions, setVersions] = useState(() => initial?.versions || [])
   const [activeVersion, setActiveVersion] = useState(() => initial?.activeVersion ?? 0)
@@ -302,7 +318,10 @@ export default function ImageSlot({ label, prompt, slotId, style, className, see
   // state already matches what's in the store, do nothing.
   useEffect(() => {
     if (!slotKey || !project?.images) return
-    const saved = project.images[slotKey]
+    // Use the same fallback lookup as initial state so this effect can
+    // recover the legacy entry on a later React tick if the imageStore
+    // hadn't hydrated by mount time.
+    const saved = readSaved()
     const savedVersions = saved?.versions || []
     const savedActive = saved?.activeVersion ?? 0
     const sameLength = savedVersions.length === versions.length
@@ -314,7 +333,7 @@ export default function ImageSlot({ label, prompt, slotId, style, className, see
     setVersions(savedVersions)
     setActiveVersion(savedActive)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, project?.images?.[slotKey]])
+  }, [project?.id, project?.images?.[slotKey], project?.images?.[prompt]])
 
   // Persist generated versions to the project store. Uploaded blob URLs
   // would not survive a refresh, so they're filtered out.
