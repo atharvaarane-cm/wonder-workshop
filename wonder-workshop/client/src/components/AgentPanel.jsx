@@ -489,6 +489,7 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         if ((path.startsWith('productElements') || path === 'productElements') && locks.cp) return 'Product / Elements'
         if ((path.startsWith('shotList') || path === 'shotList') && locks.sl) return 'Storyboard'
         if ((path.startsWith('moodBoard') || path === 'moodBoard') && locks.mb) return 'Mood Board / Style References'
+        if ((path.startsWith('brandInfo') || path === 'brandInfo') && locks.bi) return 'Brand Info'
         return false
       }
       // Per-character lock: refuse chat writes that target a specific
@@ -607,6 +608,7 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       if (sectionsToRegen.size > 0) {
         const lockedTitles = new Set()
         const sectionIdByTitle = {
+          'Brand Info': 'bi',
           'Mood Board / Style References': 'mb',
           'Locations / Set Design': 'loc',
           'Product / Elements': 'cp',
