@@ -4,7 +4,7 @@ import ImageSlot from '../ImageSlot.jsx'
 // One location block: the wide hero image with an editable name caption
 // overlaid bottom-left. Used both for the primary location
 // (brief.environment) and any additional ones (brief.environments[i]).
-function LocationBlock({ data, setField, onRemove, label }) {
+function LocationBlock({ data, setField, onRemove, label, dataIndex }) {
   const hero = data?.heroEnvironment ?? 'cinematic location'
   const elements = data?.keyElements?.slice(0, 3).join(', ') ?? ''
 
@@ -25,6 +25,7 @@ function LocationBlock({ data, setField, onRemove, label }) {
           ratio="16:9"
           slimWhenEmpty
           prompt={`${hero}, ${elements}, wide establishing shot, golden hour, cinematic photography`}
+          slotId={`env.${dataIndex ?? 'primary'}`}
           style={{ width: '100%', aspectRatio: '16/9', borderRadius: 10 }}
         />
         <div className="loc-hero-caption">
@@ -56,6 +57,7 @@ export default function LocationsSetDesign({
       <LocationBlock
         data={primaryLocation}
         setField={(field, value) => update?.(`environment.${field}`, value)}
+        dataIndex="primary"
       />
 
       {(additionalLocations || []).map((loc, idx) => (
@@ -65,6 +67,7 @@ export default function LocationsSetDesign({
           label={loc?.heroName ? `Location — ${loc.heroName}` : `Location ${idx + 2}`}
           setField={(field, value) => updateLocationAt?.(idx, field, value)}
           onRemove={() => removeLocationAt?.(idx)}
+          dataIndex={String(idx)}
         />
       ))}
 

@@ -82,6 +82,7 @@ export default function ClothingProps({ brief, update }) {
               ratio="1:1"
               slimWhenEmpty
               prompt={prompt}
+              slotId={`product.${i}`}
               style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10 }}
             />
             <EditableText
