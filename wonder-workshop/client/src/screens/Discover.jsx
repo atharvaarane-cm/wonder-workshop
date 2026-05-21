@@ -294,11 +294,14 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
 
   // Keep the textarea grown to fit its content whenever the prompt
   // changes (Improve-with-AI rewrites, quick-start chips, etc.).
+  // Cap is viewport-relative so big briefs get most of the screen
+  // before the textarea switches to its internal scrollbar.
   useEffect(() => {
     const el = textRef.current
     if (!el) return
+    const cap = Math.max(360, Math.round(window.innerHeight * 0.6))
     el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 480) + 'px'
+    el.style.height = Math.min(el.scrollHeight, cap) + 'px'
   }, [prompt])
 
   // Read each picked file, extract its text, and add to attachments. Skips
@@ -1011,18 +1014,21 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
               value={prompt}
               onChange={e => {
                 setPrompt(e.target.value)
-                // Auto-grow the textarea up to a sensible max so long
-                // attached briefs / pasted creative documents render
-                // in full instead of being squeezed into 4 cramped lines.
+                // Auto-grow the textarea so long attached briefs / pasted
+                // creative documents render in full instead of being
+                // squeezed into 4 cramped lines. Cap is 60% of viewport
+                // height (floor 360px) so big briefs get real room, then
+                // the textarea's own scrollbar takes over.
                 const el = e.target
+                const cap = Math.max(360, Math.round(window.innerHeight * 0.6))
                 el.style.height = 'auto'
-                el.style.height = Math.min(el.scrollHeight, 480) + 'px'
+                el.style.height = Math.min(el.scrollHeight, cap) + 'px'
               }}
               onKeyDown={onKey}
               disabled={loading || improving}
               autoFocus
               rows={4}
-              style={{ maxHeight: 480, overflowY: 'auto' }}
+              style={{ maxHeight: '60vh', overflowY: 'auto' }}
             />
             {attachments.length > 0 && (
               <div className="input-card-attachments">
