@@ -585,8 +585,15 @@ textarea { font-family: var(--font); resize: none; }
 .input-card-text::placeholder { color: rgba(0,0,0,0.22); }
 .input-card-footer {
   display: flex; align-items: center; gap: 7px;
+  /* Adding the Length pill (and any future pill) pushed the row past
+     the card width on standard laptop viewports. flex-wrap lets the
+     row break into a second line instead of clipping; row-gap keeps the
+     wrapped row visually separated. flex-shrink stays 0 on individual
+     pills so they don't squeeze into ellipses. */
+  flex-wrap: wrap; row-gap: 8px;
   padding: 10px 14px 14px; border-top: 1px solid rgba(0,0,0,0.06); flex-shrink: 0;
 }
+.input-card-footer > * { flex-shrink: 0; }
 /* Attached-file chips above the footer — show user's uploaded briefs /
    treatments / notes that will be folded into the brief generator. */
 .input-card-attachments {
