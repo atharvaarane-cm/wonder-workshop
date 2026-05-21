@@ -424,23 +424,29 @@ export default function ImageSlot({ label, prompt, style, className, seed, ratio
         ...(Array.isArray(referenceImages) ? referenceImages : []),
         ...(Array.isArray(opts.attachedReferences) ? opts.attachedReferences : []),
       ].slice(0, 4)
-      // Character reference / view grids should be clean identity sheets.
-      // The slotKey (used to find existing images) stays in the legacy
-      // prompt format, but the prompt actually sent to the image API gets
-      // a small suffix appended for framing only — isolated subject, clean
-      // background, no stray scene props. Doing it here (not in
-      // characterPrompts.js) keeps existing project images findable on
-      // reload — changing characterPrompts.js would orphan them.
+      // Character reference / view grids: the slotKey (used to find
+      // existing images) stays in the legacy prompt format, but the
+      // prompt actually sent to the image API gets two transformations:
       //
-      // NOTE: we DO NOT suppress text/logos/brand graphics anymore. The AI
-      // image model handles those imperfectly (sometimes garbled), but
-      // forbidding them strips brand context the user explicitly added
-      // (e.g. "Pepsi sweatshirt" → has to land as a Pepsi-looking shirt).
-      // Garbled text is the lesser evil here. A proper brand-asset-as-
-      // reference path is the long-term answer.
-      const apiPrompt = sectionTitle === 'Character Design'
-        ? `${text}, isolated subject, clean seamless studio background, no extra props in the scene`
-        : text
+      // 1. Strip internal LABEL phrases that the AI renders literally as
+      //    text on the image. "character reference sheet" was being
+      //    printed across full-body shirts; "professional photography" is
+      //    a softer offender but worth stripping too. The label phrases
+      //    are still in the slotKey so existing images stay findable.
+      // 2. Append a small framing suffix — isolated subject, clean
+      //    background, no stray scene props.
+      //
+      // We deliberately do NOT suppress brand text/logos. Letting the AI
+      // attempt the Pepsi logo (even imperfectly) is better than stripping
+      // brand context the user explicitly added. Proper brand-asset-as-
+      // reference is the long-term answer.
+      let apiPrompt = text
+      if (sectionTitle === 'Character Design') {
+        apiPrompt = apiPrompt
+          .replace(/,\s*character reference sheet\s*/gi, '')
+          .replace(/,\s*professional photography\s*/gi, '')
+        apiPrompt = `${apiPrompt}, isolated subject, clean seamless studio background, no extra props in the scene`
+      }
       const payload = provider === 'gemini'
         ? {
             prompt: apiPrompt,
