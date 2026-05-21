@@ -16,9 +16,35 @@ import GenerationLogModal from '../components/GenerationLogModal.jsx'
 import { ProjectContext } from '../hooks/useProject.js'
 import { generateBrief } from '../hooks/useBrief.js'
 
+// Immutable deep-set. Preserves array-vs-object identity at every level
+// (the old version spread `{ ...arr }` which converted brief.characters
+// into a plain object with "0"/"1"/... keys — every later .map() call on
+// it crashed with "s.map is not a function"). When walking into a missing
+// intermediate, the next path segment decides: a numeric next-key creates
+// an array, anything else creates an object.
 function setIn(obj, keys, value) {
-  if (keys.length === 1) return { ...obj, [keys[0]]: value }
-  return { ...obj, [keys[0]]: setIn(obj[keys[0]] || {}, keys.slice(1), value) }
+  const head = keys[0]
+  const rest = keys.slice(1)
+  if (rest.length === 0) {
+    if (Array.isArray(obj)) {
+      const next = obj.slice()
+      next[Number(head)] = value
+      return next
+    }
+    return { ...(obj || {}), [head]: value }
+  }
+  let currentChild = obj != null ? obj[head] : undefined
+  if (currentChild == null) {
+    const nextKeyIsNumeric = /^\d+$/.test(String(rest[0]))
+    currentChild = nextKeyIsNumeric ? [] : {}
+  }
+  const newChild = setIn(currentChild, rest, value)
+  if (Array.isArray(obj)) {
+    const next = obj.slice()
+    next[Number(head)] = newChild
+    return next
+  }
+  return { ...(obj || {}), [head]: newChild }
 }
 
 const ROWS = [

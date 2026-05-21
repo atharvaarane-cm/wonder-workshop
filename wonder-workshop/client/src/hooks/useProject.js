@@ -14,8 +14,59 @@ const ACTIVE_KEY = 'ww_active_project'
 // projects into it.
 const FOLDERS_KEY = 'ww_extra_folders'
 
+// Older chat edits could mutate brief.characters (and other array fields)
+// into a plain object with "0"/"1"/... keys, because the previous setIn
+// spread arrays into object literals. Any subsequent .map() over the field
+// crashed the whole React tree. This sanitizer repairs in-place on load.
+function arrayifyIfNumericKeyed(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  const keys = Object.keys(value)
+  if (!keys.length) return value
+  if (!keys.every(k => /^\d+$/.test(k))) return value
+  const sorted = keys.map(Number).sort((a, b) => a - b)
+  return sorted.map(k => value[k])
+}
+const BRIEF_ARRAY_FIELDS = ['characters', 'shotList', 'environments', 'moodBoard', 'productElements']
+function repairBrief(brief) {
+  if (!brief || typeof brief !== 'object') return brief
+  let next = brief
+  for (const field of BRIEF_ARRAY_FIELDS) {
+    const repaired = arrayifyIfNumericKeyed(brief[field])
+    if (repaired !== brief[field]) {
+      if (next === brief) next = { ...brief }
+      next[field] = repaired
+    }
+  }
+  // Nested arrays inside brandInfo (assets, colors).
+  if (brief.brandInfo && typeof brief.brandInfo === 'object') {
+    for (const field of ['assets', 'colors']) {
+      const repaired = arrayifyIfNumericKeyed(brief.brandInfo[field])
+      if (repaired !== brief.brandInfo[field]) {
+        if (next === brief) next = { ...brief }
+        if (next.brandInfo === brief.brandInfo) next.brandInfo = { ...brief.brandInfo }
+        next.brandInfo[field] = repaired
+      }
+    }
+  }
+  return next
+}
+
 function loadAll() {
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+  try {
+    const all = JSON.parse(localStorage.getItem(KEY) || '{}')
+    if (!all || typeof all !== 'object') return {}
+    // Repair any briefs whose arrays got coerced into objects by the old
+    // setIn bug. Returning the same map shape — components still iterate
+    // projects the same way.
+    for (const id of Object.keys(all)) {
+      const p = all[id]
+      if (p?.brief) {
+        const repaired = repairBrief(p.brief)
+        if (repaired !== p.brief) all[id] = { ...p, brief: repaired }
+      }
+    }
+    return all
+  } catch { return {} }
 }
 
 // Attach images from the in-memory imageStore cache. The localStorage
