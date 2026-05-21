@@ -362,7 +362,7 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       ``,
       intentLock,
       `# Tool routing — pick the RIGHT tool:`,
-      `- If the user wants to change a CHARACTER's appearance (hair, clothes, wardrobe, look) — or any property of the character / location / product entity — CALL update_brief_field on the relevant entity field (character.description, character.wardrobe, environment.heroEnvironment, productElements, etc.). Example: "make her have purple hair" → update_brief_field(path: "character.description", value: "<full original description, with purple hair added>"). Always include the FULL new value — your update REPLACES the field. IMPORTANT: brief edits no longer auto-regenerate images. After calling update_brief_field, your reply MUST tell the user what to click next — for character edits, say: "Updated [name]. Click Regenerate All on Headshots / Full Body for [name] to refresh the views."`,
+      `- If the user wants to change a CHARACTER's appearance (hair, clothes, wardrobe, look) — or any property of the character / location / product entity — CALL update_brief_field on the relevant entity field (character.description, character.wardrobe, environment.heroEnvironment, productElements, etc.). When you edit a character's description or wardrobe, that character's Headshots and Full Body views re-fire automatically with the new value. The REFERENCE image stays put (so a locked reference is respected). Example: "make her have purple hair" → update_brief_field(path: "character.description", value: "<full original description, with purple hair added>"). Always include the FULL new value — your update REPLACES the field.`,
       `- If the user wants a ONE-OFF tweak to JUST the currently selected image (lighting, framing, mood, a stylistic variation), CALL regenerate_active_image with the FULL new prompt — describe subject, setting, lighting, framing, mood. This only affects the selected image, not other images of the same entity.`,
       `- If the user asks a question or wants conversation, respond with plain text only (no function calls). Keep replies under 3 sentences.`,
       `- NEVER just describe a change — always CALL the tool.`,
@@ -553,13 +553,49 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
         }
       }
 
-      // No more automatic regens. Per Ed's "upstream destroying downstream"
-      // pain point + Logan's explicit ask: chat edits update the brief data
-      // ONLY. The user picks when to re-fire images — Regenerate buttons in
-      // each section (and the per-character Regenerate All for Character
-      // Design) trigger the regen explicitly. sectionsToRegen and
-      // characterIndexesToRegen are still populated above so the action
-      // summary in the chat reply can hint at what to do next.
+      // Auto-regen behavior — narrowed scope from earlier iterations.
+      // Chat edits to a character's wardrobe / description SHOULD refresh
+      // that character's views (otherwise the chat does nothing visible).
+      // What we deliberately DON'T do:
+      // - touch the REFERENCE image (no data-subgroup wrapper, so subgroup
+      //   filter naturally excludes it — a locked reference stays locked,
+      //   and changing the reference image itself doesn't cascade)
+      // - touch OTHER characters (characterIndex filter scopes per-block)
+      // - touch locked sections (Ed's lock-and-approve workflow)
+      if (sectionsToRegen.size > 0) {
+        const lockedTitles = new Set()
+        const sectionIdByTitle = {
+          'Locations / Set Design': 'loc',
+          'Product / Elements': 'cp',
+          'Character Design': 'char',
+          'Storyboard': 'sl',
+        }
+        for (const [title, id] of Object.entries(sectionIdByTitle)) {
+          if (brief?.locks?.[id]) lockedTitles.add(title)
+        }
+        setTimeout(() => {
+          for (const sectionTitle of sectionsToRegen) {
+            if (lockedTitles.has(sectionTitle)) continue
+            if (sectionTitle === 'Character Design' && characterIndexesToRegen.size > 0) {
+              // Per character, fire two scoped events: one for the
+              // headshot grid, one for the full-body grid. Reference slot
+              // has no [data-subgroup] ancestor so the listener's subgroup
+              // filter skips it.
+              for (const characterIndex of characterIndexesToRegen) {
+                for (const subgroup of ['headshot', 'fullbody']) {
+                  window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
+                    detail: { sectionTitle, characterIndex, subgroup },
+                  }))
+                }
+              }
+            } else {
+              window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
+                detail: { sectionTitle },
+              }))
+            }
+          }
+        }, 80)
+      }
 
       // Assemble the agent's reply. If Gemini sent text, use it; if there
       // were applied actions but no text, synthesise a short summary.
