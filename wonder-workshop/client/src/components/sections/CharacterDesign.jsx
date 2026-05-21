@@ -72,6 +72,19 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
   const orderedViews = viewOrder
     .map(id => VIEWS.find(v => v.id === id))
     .filter(Boolean)
+  // Drives the "Generate All" vs "Regenerate All" label below. Looks up
+  // each view's current prompt in project.images — best-effort, since a
+  // slot whose key froze under an older prompt won't match this lookup.
+  // Worst case: button still says "Generate All" but clicking it still
+  // works (writes to the frozen key just like before).
+  const headshotsHasAny = orderedViews.some(v => {
+    const key = closeupPrompt(character || {}, v)
+    return !!project?.images?.[key]?.versions?.length
+  })
+  const fullbodyHasAny = orderedViews.some(v => {
+    const key = fullbodyPrompt(character || {}, v)
+    return !!project?.images?.[key]?.versions?.length
+  })
   // Backfill any missing views (e.g. if VIEWS gets a new entry later, or
   // the stored order is corrupted) so the grid stays complete.
   for (const v of VIEWS) {
@@ -223,17 +236,17 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
                 detail: { sectionTitle: 'Character Design', subgroup: 'headshot', characterIndex: dataIndex },
               }))
             }}
-            disabled={!referenceImages.length || locked}
+            disabled={locked}
             title={locked
               ? 'Character is locked — unlock to regenerate'
-              : referenceImages.length
-              ? 'Regenerate all 4 headshot views from the approved reference (overwrites existing)'
-              : 'Generate the REFERENCE image first'}
+              : headshotsHasAny
+              ? 'Regenerate all 4 headshot views (overwrites existing)'
+              : 'Generate all 4 headshot views'}
           >
             <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
               <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
             </svg>
-            Regenerate All
+            {headshotsHasAny ? 'Regenerate All' : 'Generate All'}
           </button>
         </div>
         <div className="character-views character-views-4">
@@ -278,17 +291,17 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
                 detail: { sectionTitle: 'Character Design', subgroup: 'fullbody', characterIndex: dataIndex },
               }))
             }}
-            disabled={!referenceImages.length || locked}
+            disabled={locked}
             title={locked
               ? 'Character is locked — unlock to regenerate'
-              : referenceImages.length
-              ? 'Regenerate all 4 full-body views from the approved reference (overwrites existing)'
-              : 'Generate the REFERENCE image first'}
+              : fullbodyHasAny
+              ? 'Regenerate all 4 full-body views (overwrites existing)'
+              : 'Generate all 4 full-body views'}
           >
             <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
               <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
             </svg>
-            Regenerate All
+            {fullbodyHasAny ? 'Regenerate All' : 'Generate All'}
           </button>
         </div>
         <div className="character-views character-views-4">
