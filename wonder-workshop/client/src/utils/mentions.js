@@ -17,9 +17,16 @@ function escapeRe(s) {
 // Each entity's slot key is derived the same way the section component
 // derives it, so the storyboard can find the entity's image in
 // project.images for identity-preserving generation.
-function characterReferenceSlotKey(character) {
+//
+// Character references switched to stable slot IDs ("char.primary.reference",
+// "char.0.reference", ...) anchored to the character's position in the
+// brief. The legacy prompt-keyed lookup is kept as a fallback for projects
+// that haven't been migrated yet.
+function characterReferenceSlotKey(characterIndex) {
+  return `char.${characterIndex}.reference`
+}
+function legacyCharacterReferencePromptKey(character) {
   if (!character) return null
-  // Must match referencePrompt() in utils/characterPrompts.js verbatim.
   return `${character.description || ''}, ${character.wardrobe || ''}, close-up portrait, head and shoulders, facing directly forward, front view, full face visible, sharp face detail, studio lighting, clean white background, headshot`
 }
 function locationSlotKey(env) {
@@ -42,10 +49,17 @@ function productSlotKey(product) {
 export function getMentionHandles(brief) {
   const handles = []
   // Primary character (brief.character) + any additional characters
-  // (brief.characters[]). Each named character becomes a @handle.
-  const allCharacters = [brief?.character, ...(brief?.characters || [])]
-    .filter(c => c?.name)
-  for (const character of allCharacters) {
+  // (brief.characters[]). Each named character becomes a @handle. We
+  // track the character INDEX so the slot key matches the stable ID used
+  // in CharacterDesign ("primary" for brief.character, numeric for
+  // brief.characters[N]).
+  const indexedCharacters = []
+  if (brief?.character?.name) indexedCharacters.push({ character: brief.character, index: 'primary' })
+  for (let i = 0; i < (brief?.characters?.length || 0); i++) {
+    const c = brief.characters[i]
+    if (c?.name) indexedCharacters.push({ character: c, index: String(i) })
+  }
+  for (const { character, index } of indexedCharacters) {
     const parts = []
     if (character.description) parts.push(character.description)
     if (character.wardrobe) parts.push(character.wardrobe)
@@ -54,7 +68,8 @@ export function getMentionHandles(brief) {
       label: character.name,
       kind: 'character',
       expansion: [character.name, ...parts].join(', '),
-      slotKey: characterReferenceSlotKey(character),
+      slotKey: characterReferenceSlotKey(index),
+      legacySlotKey: legacyCharacterReferencePromptKey(character),
     })
   }
   // Primary location (brief.environment) + any additional locations
@@ -117,9 +132,12 @@ export function getMentionImageRefs(text, brief, projectImages) {
   referenced.sort((a, b) => (priority[a.kind] ?? 9) - (priority[b.kind] ?? 9))
   const refs = []
   for (const h of referenced) {
-    if (!h.slotKey) continue
-    const slot = projectImages[h.slotKey]
-    const active = slot?.versions?.[slot?.activeVersion ?? 0]
+    // Try the stable slot ID first, fall back to the legacy prompt-keyed
+    // entry so storyboards on un-migrated projects still find references.
+    const slot = (h.slotKey && projectImages[h.slotKey])
+      || (h.legacySlotKey && projectImages[h.legacySlotKey])
+    if (!slot) continue
+    const active = slot.versions?.[slot.activeVersion ?? 0]
     if (active?.src) refs.push(active.src)
     if (refs.length >= 4) break
   }
