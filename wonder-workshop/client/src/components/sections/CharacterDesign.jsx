@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react'
+import { useContext, useState, useEffect } from 'react'
 import EditableText from '../EditableText.jsx'
 import ImageSlot from '../ImageSlot.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
@@ -53,13 +53,53 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
   const seed = hashStr((character?.description || '') + (character?.wardrobe || ''))
   const refPrompt = referencePrompt(character)
 
+  // Stable slot IDs anchored to character POSITION (not prompt text).
+  // These survive any description / wardrobe edit, so a hard reload after
+  // chat-driven changes no longer orphans images. The prompt is still
+  // sent to the API; only the storage key is stable.
+  const charKey = String(dataIndex ?? 'primary')
+  const refSlotId = `char.${charKey}.reference`
+  const headshotSlotId = v => `char.${charKey}.headshot.${v.id}`
+  const fullbodySlotId = v => `char.${charKey}.fullbody.${v.id}`
+
+  // One-time migration: copy existing prompt-keyed entries forward to the
+  // new stable slot IDs. Runs once per character per project mount. Best
+  // effort — only matches images saved under the CURRENT prompt format.
+  // Images stored under a prior prompt (from before a chat edit) were
+  // already orphaned today, so this can't recover those, but it does
+  // protect every image generated under the current state from the next
+  // refresh. Old keys are NOT deleted (non-destructive).
+  useEffect(() => {
+    if (!project?.id || !project?.images || !project?.saveImage) return
+    const migrationKey = `ww_charmig_${project.id}_${charKey}`
+    try {
+      if (sessionStorage.getItem(migrationKey)) return
+    } catch {}
+    const pairs = [
+      [refPrompt, refSlotId],
+      ...VIEWS.map(v => [closeupPrompt(character || {}, v), headshotSlotId(v)]),
+      ...VIEWS.map(v => [fullbodyPrompt(character || {}, v), fullbodySlotId(v)]),
+    ]
+    let migrated = 0
+    for (const [oldKey, newKey] of pairs) {
+      if (!oldKey || oldKey === newKey) continue
+      const oldEntry = project.images[oldKey]
+      const newEntry = project.images[newKey]
+      if (oldEntry?.versions?.length && !newEntry?.versions?.length) {
+        project.saveImage(newKey, { versions: oldEntry.versions, activeVersion: oldEntry.activeVersion ?? 0 })
+        migrated++
+      }
+    }
+    try { sessionStorage.setItem(migrationKey, String(migrated)) } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, charKey])
+
   // Pull the active version of this character's reference image so it
   // can be passed as conditioning to every Headshots / Full Body view.
-  // Nano Banana Pro uses inline image inputs to preserve identity
-  // across angles — without it, each view comes back as a slightly
-  // different person. Pollinations ignores referenceImages, so this is
-  // a no-op for that provider.
-  const refSlot = project?.images?.[refPrompt]
+  // Looks up via the stable slotId first (post-migration), with a fallback
+  // to the legacy prompt-keyed lookup so older projects that haven't been
+  // migrated yet still find their reference image.
+  const refSlot = project?.images?.[refSlotId] || project?.images?.[refPrompt]
   const refActive = refSlot?.versions?.[refSlot?.activeVersion ?? 0]
   const referenceImages = refActive?.src ? [refActive.src] : []
 
@@ -78,12 +118,14 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
   // Worst case: button still says "Generate All" but clicking it still
   // works (writes to the frozen key just like before).
   const headshotsHasAny = orderedViews.some(v => {
-    const key = closeupPrompt(character || {}, v)
-    return !!project?.images?.[key]?.versions?.length
+    const id = headshotSlotId(v)
+    const legacyKey = closeupPrompt(character || {}, v)
+    return !!(project?.images?.[id]?.versions?.length || project?.images?.[legacyKey]?.versions?.length)
   })
   const fullbodyHasAny = orderedViews.some(v => {
-    const key = fullbodyPrompt(character || {}, v)
-    return !!project?.images?.[key]?.versions?.length
+    const id = fullbodySlotId(v)
+    const legacyKey = fullbodyPrompt(character || {}, v)
+    return !!(project?.images?.[id]?.versions?.length || project?.images?.[legacyKey]?.versions?.length)
   })
   // Backfill any missing views (e.g. if VIEWS gets a new entry later, or
   // the stored order is corrupted) so the grid stays complete.
@@ -193,9 +235,10 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
             ratio="1:1"
             seed={seed}
             prompt={refPrompt}
+            slotId={refSlotId}
             style={{ width: '100%', aspectRatio: '1/1', borderRadius: 7 }}
           />
-          <ReferenceThumbs slotKey={refPrompt} />
+          <ReferenceThumbs slotKey={refSlotId} />
         </div>
 
         <div className="character-bio-text">
@@ -269,6 +312,7 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
                 priority="secondary"
                 referenceImages={referenceImages}
                 prompt={closeupPrompt(character || {}, v)}
+                slotId={headshotSlotId(v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
               <div className="character-view-caption">{v.label}</div>
@@ -324,6 +368,7 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
                 priority="secondary"
                 referenceImages={referenceImages}
                 prompt={fullbodyPrompt(character || {}, v)}
+                slotId={fullbodySlotId(v)}
                 style={{ width: '100%', aspectRatio: '177/268', borderRadius: 7 }}
               />
               <div className="character-view-caption">{v.label}</div>

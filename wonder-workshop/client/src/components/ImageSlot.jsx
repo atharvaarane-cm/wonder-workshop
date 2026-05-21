@@ -43,16 +43,21 @@ const RATIO_CSS = {
   '2:1':  '2/1',
 }
 
-export default function ImageSlot({ label, prompt, style, className, seed, ratio, slimWhenEmpty = false, disableImageDrag = false, referenceImages = [], priority = 'primary' }) {
+export default function ImageSlot({ label, prompt, slotId, style, className, seed, ratio, slimWhenEmpty = false, disableImageDrag = false, referenceImages = [], priority = 'primary' }) {
   const project = useContext(ProjectContext)
-  // Freeze slotKey to the first non-empty prompt this slot ever saw.
-  // Without freezing, chat-driven brief edits change `prompt` → slotKey
-  // changes → new generations save under a different key than the
-  // existing image, splitting version history. The frozen key means
-  // versions accumulate at one stable slot identity even when the
-  // generation prompt evolves.
+  // Storage key for this slot's generated images.
+  // - If `slotId` is provided (e.g. "char.primary.headshot.FRONT"), use it
+  //   directly. This is the stable-ID contract — the key survives any
+  //   prompt/description edit, so a hard reload never orphans images.
+  // - Otherwise fall back to the legacy behavior: freeze on the first
+  //   non-empty prompt the slot ever saw. Kept so call sites that haven't
+  //   migrated yet (mood board with its own IDs in the prompt, brand
+  //   assets keyed by asset id, etc.) keep working unchanged.
   const slotKeyRef = useRef(null)
-  if (slotKeyRef.current === null && prompt) slotKeyRef.current = prompt
+  if (slotKeyRef.current === null) {
+    if (slotId) slotKeyRef.current = slotId
+    else if (prompt) slotKeyRef.current = prompt
+  }
   const slotKey = slotKeyRef.current
   const initial = slotKey && project?.images?.[slotKey]
 
