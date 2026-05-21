@@ -94,6 +94,35 @@ function sectionIsEmpty(sectionId, brief) {
   }
 }
 
+// Drives the AUTO-GENERATE ↔ REGENERATE label toggle on each section's
+// header button. Looks at project.images keys whose stable-ID prefix
+// matches this section. Returns true the moment any slot in the section
+// has at least one saved version.
+function sectionHasImages(sectionId, brief) {
+  const images = brief?.images
+  if (!images) return false
+  // Char section: only references count for the label toggle, since the
+  // section button only regens references. Headshots / Full Body grids
+  // have their own Populate/Repopulate buttons and don't influence this.
+  const matchPrefix = {
+    char: /^char\.[^.]+\.reference$/,
+    loc: /^env\./,
+    cp: /^product\./,
+    mb: /^mood\./,
+    bi: /^brand-asset:/,
+    sl: /^shot[._-]/,
+  }[sectionId]
+  if (matchPrefix) {
+    for (const key of Object.keys(images)) {
+      if (!matchPrefix.test(key)) continue
+      if (images[key]?.versions?.length) return true
+    }
+  }
+  // Fallback to brief-level signals for sections without slotted images.
+  if (sectionId === 'bi') return !!brief?.brandInfo?.logoUrl
+  return false
+}
+
 export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false, autoGenerateImages = false, onAutoGenerateConsumed }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
@@ -772,20 +801,19 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       imageLoading={(loadingBySection[sec.title] || 0) > 0}
                       defaultCollapsed={sectionIsEmpty(sec.id, brief)}
                       canAutoGenerate={IMAGE_SECTION_IDS.has(sec.id)}
+                      hasImages={sectionHasImages(sec.id, brief)}
                       onAutoGenerate={() => {
-                        window.dispatchEvent(new CustomEvent('ww-generate-section', {
-                          detail: { sectionTitle: sec.title },
-                        }))
-                      }}
-                      // Per Ed: Product / Elements specifically needs a
-                      // force-regen (AUTO-GENERATE only fills empties),
-                      // so the user can iterate on the product images
-                      // without deleting them first.
-                      canRegenerate={sec.id === 'cp'}
-                      onRegenerate={() => {
-                        window.dispatchEvent(new CustomEvent('ww-regenerate-section', {
-                          detail: { sectionTitle: sec.title },
-                        }))
+                        // Always force-regen — the listener generates empty
+                        // slots and overwrites populated ones, so a single
+                        // event covers both halves of the AUTO-GENERATE ↔
+                        // REGENERATE label toggle. Character Design is
+                        // special-cased: the section button only touches
+                        // each character's REFERENCE slot. Headshots and
+                        // full-body grids stay manual via per-character
+                        // Populate All / Repopulate All buttons.
+                        const detail = { sectionTitle: sec.title }
+                        if (sec.id === 'char') detail.subgroup = 'reference'
+                        window.dispatchEvent(new CustomEvent('ww-regenerate-section', { detail }))
                       }}
                       // Lock & approve — only entity / output sections.
                       // When a section is locked, AUTO-GENERATE and

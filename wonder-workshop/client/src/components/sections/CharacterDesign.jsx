@@ -206,8 +206,11 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
         onCancel={() => setConfirmRemove(false)}
       />
 
-      {/* Bio: reference image on the left, NAME + DESCRIPTION on the right. */}
-      <div className="character-bio">
+      {/* Bio: reference image on the left, NAME + DESCRIPTION on the right.
+          data-subgroup="reference" so the section-level AUTO-GENERATE /
+          REGENERATE button can target only the reference slots, leaving
+          Headshots and Full Body to their per-character buttons. */}
+      <div className="character-bio" data-subgroup="reference">
         <div className="character-bio-reference">
           <div className="character-bio-label">REFERENCE</div>
           <ImageSlot
