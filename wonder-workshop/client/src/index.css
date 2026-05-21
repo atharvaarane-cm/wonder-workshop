@@ -594,6 +594,16 @@ textarea { font-family: var(--font); resize: none; }
   padding: 10px 14px 14px; border-top: 1px solid rgba(0,0,0,0.06); flex-shrink: 0;
 }
 .input-card-footer > * { flex-shrink: 0; }
+/* The footer is now two stacked rows: settings (attach / ratio / resolution
+   / length) on top, primary actions (improve / start blank / generate) on
+   the bottom. The actions row right-aligns its buttons so Generate sits
+   at the same edge it always did, with the others to its left. */
+.input-card-footer-actions { justify-content: flex-end; padding-top: 0; border-top: none; }
+.attach-pill { display: inline-flex; align-items: center; gap: 6px; }
+.attach-pill-label { font-size: 12px; font-weight: 500; }
+/* Inspiration row can be ~9 pills — let it wrap to multiple lines on
+   narrow viewports instead of overflowing. */
+.inspiration-row { flex-wrap: wrap; row-gap: 6px; }
 /* Attached-file chips above the footer — show user's uploaded briefs /
    treatments / notes that will be folded into the brief generator. */
 .input-card-attachments {
