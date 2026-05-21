@@ -204,6 +204,27 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     return () => window.removeEventListener('ww-toggle-slot-lock', onToggle)
   }, [])
 
+  // Per-character lock toggle — fired by the lock pill in each
+  // CharacterBlock header. brief.characterLocks[characterIndex] =
+  // true|undefined. characterIndex is "primary" (brief.character) or a
+  // numeric string ("0", "1", ...) into brief.characters.
+  useEffect(() => {
+    function onToggle(e) {
+      const characterIndex = e.detail?.characterIndex
+      if (characterIndex == null) return
+      const key = String(characterIndex)
+      setBrief(prev => {
+        const current = prev?.characterLocks || {}
+        const next = { ...current }
+        if (next[key]) delete next[key]
+        else next[key] = true
+        return { ...prev, characterLocks: next }
+      })
+    }
+    window.addEventListener('ww-toggle-character-lock', onToggle)
+    return () => window.removeEventListener('ww-toggle-character-lock', onToggle)
+  }, [])
+
   // Click outside any image slot (and not on the agent panel) deselects
   // the active image — gives users a way to undo a slot selection.
   useEffect(() => {
@@ -513,6 +534,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
       case 'char': return <CharacterDesign
                             primaryCharacter={brief.character}
                             additionalCharacters={brief.characters || []}
+                            characterLocks={brief.characterLocks || {}}
                             update={update}
                             addCharacter={addCharacter}
                             updateCharacterAt={updateCharacterAt}

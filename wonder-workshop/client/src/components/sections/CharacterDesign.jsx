@@ -48,7 +48,7 @@ function ReferenceThumbs({ slotKey }) {
 // character (brief.character) and any additional characters
 // (brief.characters[i]) — the parent passes a setField callback that
 // knows how to write back to the correct path.
-function CharacterBlock({ character, setField, onRemove, label, dataIndex }) {
+function CharacterBlock({ character, setField, onRemove, label, dataIndex, locked }) {
   const project = useContext(ProjectContext)
   const seed = hashStr((character?.description || '') + (character?.wardrobe || ''))
   const refPrompt = referencePrompt(character)
@@ -112,11 +112,43 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex }) {
     setField('viewOrder', newOrder)
   }
 
+  function toggleCharacterLock() {
+    if (dataIndex == null) return
+    window.dispatchEvent(new CustomEvent('ww-toggle-character-lock', {
+      detail: { characterIndex: dataIndex },
+    }))
+  }
+
   return (
-    <div className="character-block" data-character-index={dataIndex}>
-      {onRemove && (
-        <div className="character-block-header">
-          <span className="character-block-label">{label}</span>
+    <div
+      className={`character-block${locked ? ' character-block-locked' : ''}`}
+      data-character-index={dataIndex}
+      data-character-locked={locked ? 'true' : undefined}
+    >
+      <div className="character-block-header">
+        {label && <span className="character-block-label">{label}</span>}
+        <button
+          type="button"
+          className={`character-block-lock${locked ? ' active' : ''}`}
+          onClick={toggleCharacterLock}
+          title={locked
+            ? 'Unlock this character — chat edits and Regenerate All will affect this character again.'
+            : 'Lock this character — protects every image in this block from regen, even when the chat edits another character.'}
+        >
+          {locked ? (
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.6" fill="currentColor" fillOpacity="0.18"/>
+              <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <rect x="3" y="7" width="10" height="7.5" rx="1.2" stroke="currentColor" strokeWidth="1.6"/>
+              <path d="M5.5 7V5a2.5 2.5 0 0 1 4.6-1.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          )}
+          <span>{locked ? 'UNLOCK CHARACTER' : 'LOCK CHARACTER'}</span>
+        </button>
+        {onRemove && (
           <button className="character-block-remove" onClick={() => {
             // Only confirm if there's something to lose. Empty additional
             // character slots delete instantly.
@@ -128,8 +160,8 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex }) {
               <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
           </button>
-        </div>
-      )}
+        )}
+      </div>
       <ConfirmDialog
         open={confirmRemove}
         title={`Delete ${character?.name?.trim() || 'this character'}?`}
@@ -191,8 +223,10 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex }) {
                 detail: { sectionTitle: 'Character Design', subgroup: 'headshot', characterIndex: dataIndex },
               }))
             }}
-            disabled={!referenceImages.length}
-            title={referenceImages.length
+            disabled={!referenceImages.length || locked}
+            title={locked
+              ? 'Character is locked — unlock to regenerate'
+              : referenceImages.length
               ? 'Regenerate all 4 headshot views from the approved reference (overwrites existing)'
               : 'Generate the REFERENCE image first'}
           >
@@ -244,8 +278,10 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex }) {
                 detail: { sectionTitle: 'Character Design', subgroup: 'fullbody', characterIndex: dataIndex },
               }))
             }}
-            disabled={!referenceImages.length}
-            title={referenceImages.length
+            disabled={!referenceImages.length || locked}
+            title={locked
+              ? 'Character is locked — unlock to regenerate'
+              : referenceImages.length
               ? 'Regenerate all 4 full-body views from the approved reference (overwrites existing)'
               : 'Generate the REFERENCE image first'}
           >
@@ -294,11 +330,13 @@ function isCharacterPopulated(c) {
 export default function CharacterDesign({
   primaryCharacter,
   additionalCharacters,
+  characterLocks,
   update,
   addCharacter,
   updateCharacterAt,
   removeCharacterAt,
 }) {
+  const locks = characterLocks || {}
   const hasPrimary = isCharacterPopulated(primaryCharacter)
   const additional = additionalCharacters || []
   // Empty state per Ed's UX feedback: when no character is populated
@@ -326,6 +364,7 @@ export default function CharacterDesign({
           character={primaryCharacter}
           setField={(field, value) => update(`character.${field}`, value)}
           dataIndex="primary"
+          locked={!!locks.primary}
         />
       )}
 
@@ -338,6 +377,7 @@ export default function CharacterDesign({
           setField={(field, value) => updateCharacterAt?.(idx, field, value)}
           onRemove={() => removeCharacterAt?.(idx)}
           dataIndex={String(idx)}
+          locked={!!locks[String(idx)]}
         />
       ))}
 
