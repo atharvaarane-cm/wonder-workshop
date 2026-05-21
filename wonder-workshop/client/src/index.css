@@ -1701,27 +1701,26 @@ textarea { font-family: var(--font); resize: none; }
 }
 
 /* BRAND COLORS — joined strip of color blocks, no gaps. Hex code fades in
-   on hover. Click to copy. Matches the May 13 mockup. */
+   on hover. Click to copy. Strip grows with swatch count so 7-char hex
+   codes (#RRGGBB) fit without clipping even on 5+ color brands. */
 .bi-colors { display: flex; flex-direction: column; }
-/* Figma: 184px wide × 48px tall strip, 4 swatches × 46px each (no
-   gap), rounded outer corners only. Width matches the logo above. */
 .bi-swatches-strip {
   display: flex; flex-direction: row;
   border-radius: 7px; overflow: hidden;
-  width: 184px; height: 48px;
+  width: max-content; height: 56px;
 }
 .bi-swatch {
-  flex: 1; border: none; padding: 0; cursor: pointer;
+  border: none; padding: 0; cursor: pointer;
   position: relative;
   transition: transform 0.14s;
-  min-width: 0; width: 46px;
+  width: 64px; min-width: 64px; flex-shrink: 0;
 }
 .bi-swatch:hover { transform: translateY(-1px); }
 .bi-swatch:active { transform: translateY(0); }
 .bi-swatch-hex-overlay {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-family: monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  font-family: monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
   color: #fff;
   background: rgba(0,0,0,0.55);
   opacity: 0; transition: opacity 0.14s;
@@ -3715,4 +3714,55 @@ textarea { font-family: var(--font); resize: none; }
   .board-pair-row { break-inside: avoid; }
   .section-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
   body { background: #fff !important; }
+}
+
+/* ── Discover home: cinematic rotating backdrop ───────────────────────── */
+/* A Pollinations-generated image sits behind the home content; the overlay */
+/* darkens it so the greeting + input card remain legible on any subject.   */
+.discover-bg,
+.discover-bg-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.discover-bg {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 0;
+  opacity: 0;
+  animation: discoverBgFadeIn 1.4s ease-out 0.1s forwards;
+}
+.discover-bg-overlay {
+  z-index: 1;
+  background:
+    radial-gradient(ellipse at center, rgba(8, 8, 12, 0.35) 0%, rgba(8, 8, 12, 0.78) 78%, rgba(8, 8, 12, 0.92) 100%),
+    linear-gradient(180deg, rgba(8, 8, 12, 0.10) 0%, rgba(8, 8, 12, 0.55) 100%);
+}
+/* Lift the topbar + form above the bg layers. */
+.discover-right > .discover-topbar,
+.discover-right > .discover-form {
+  position: relative;
+  z-index: 2;
+}
+@keyframes discoverBgFadeIn {
+  to { opacity: 1; }
+}
+/* Soften the input card so the bg shows through subtly. The existing card  */
+/* styles still apply; this only adjusts the home variant.                  */
+.discover-form .input-card {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(20, 20, 26, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+/* Light theme: keep the overlay readable but lift it a touch so the image */
+/* doesn't look black-on-black for users on the light theme.               */
+:root[data-theme="light"] .discover-bg-overlay {
+  background:
+    radial-gradient(ellipse at center, rgba(248, 248, 250, 0.18) 0%, rgba(20, 20, 26, 0.55) 80%, rgba(8, 8, 12, 0.78) 100%);
+}
+:root[data-theme="light"] .discover-form .input-card {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(0, 0, 0, 0.08);
 }
