@@ -246,7 +246,7 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
             <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
               <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
             </svg>
-            {headshotsHasAny ? 'Regenerate All' : 'Generate All'}
+            {headshotsHasAny ? 'Repopulate All' : 'Populate All'}
           </button>
         </div>
         <div className="character-views character-views-4">
@@ -301,7 +301,7 @@ function CharacterBlock({ character, setField, onRemove, label, dataIndex, locke
             <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
               <path d="M9.585.52a.5.5 0 0 1 .226.589L8.144 5.5h3.356a.5.5 0 0 1 .429.756l-5.5 9a.5.5 0 0 1-.846-.522L6.864 10.5H3.5a.5.5 0 0 1-.429-.756l5.5-9a.5.5 0 0 1 .614-.224z"/>
             </svg>
-            {fullbodyHasAny ? 'Regenerate All' : 'Generate All'}
+            {fullbodyHasAny ? 'Repopulate All' : 'Populate All'}
           </button>
         </div>
         <div className="character-views character-views-4">

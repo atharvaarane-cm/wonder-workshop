@@ -36,6 +36,13 @@ const RATIOS = [
 
 const RESOLUTIONS = ['1K', '2K', '4K']
 
+// Spot lengths in seconds. Default to 30s — the most common ad length.
+// :06 / :15 / :30 / :60 / :90 / :120 covers everything from social bumpers
+// to longer-form storytelling. Ed asked for this on the home page so users
+// declare duration before the brief gets built, since downstream sections
+// (storyboard shot counts, scene pacing) depend on it.
+const LENGTHS = ['6s', '15s', '30s', '60s', '90s', '120s']
+
 const NAV_ITEMS = [
   { id: 'home',        label: 'Home',       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 12L12 4l9 8v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-8z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/><path d="M9 21V12h6v9" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg> },
   { id: 'projects',    label: 'Projects',   icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.6"/><path d="M3 9h18" stroke="currentColor" strokeWidth="1.6"/></svg> },
@@ -258,8 +265,10 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   const [error, setError]           = useState(null)
   const [ratio, setRatio]           = useState('16:9')
   const [resolution, setResolution] = useState('1K')
+  const [length, setLength]         = useState('30s')
   const [ratioOpen, setRatioOpen]   = useState(false)
   const [resolutionOpen, setResolutionOpen] = useState(false)
+  const [lengthOpen, setLengthOpen] = useState(false)
   const [quickStart, setQuickStart] = useState(null)
   const [inputFocused, setInputFocused] = useState(false)
   // Attached files (treatments, briefs, scripts) whose text gets folded
@@ -269,6 +278,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   const textRef = useRef(null)
   const ratioRef = useRef(null)
   const resolutionRef = useRef(null)
+  const lengthRef = useRef(null)
   const inputCardRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -276,6 +286,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
     function handleClickOutside(e) {
       if (ratioRef.current && !ratioRef.current.contains(e.target)) setRatioOpen(false)
       if (resolutionRef.current && !resolutionRef.current.contains(e.target)) setResolutionOpen(false)
+      if (lengthRef.current && !lengthRef.current.contains(e.target)) setLengthOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -329,7 +340,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
           attachments.map(a => `--- ${a.name} ---\n${(a.content || '').slice(0, 20000)}`).join('\n\n') +
           '\n=== End attached files ===\n'
         : ''
-      const full = `${text}${attachmentBlock} (aspect ratio: ${ratio}) (resolution: ${resolution})${quickStart ? ` (quick start: ${quickStart})` : ''}`
+      const full = `${text}${attachmentBlock} (aspect ratio: ${ratio}) (resolution: ${resolution}) (length: ${length})${quickStart ? ` (quick start: ${quickStart})` : ''}`
       const brief = await generateBrief(full)
       onGenerate({
         ...brief,
@@ -337,6 +348,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
           ...(brief.generationSettings || {}),
           ratio,
           resolution,
+          length,
         },
       })
     } catch (e) {
@@ -1130,6 +1142,38 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
                   </div>
                 )}
               </div>
+              {/* Length pill — spot duration. Lives next to aspect ratio
+                  + resolution so users declare it before the brief gets
+                  built (downstream sections like the storyboard depend
+                  on it for shot pacing). */}
+              <div className="resolution-dropdown" ref={lengthRef}>
+                <button className="resolution-pill" type="button" onClick={() => setLengthOpen(o => !o)} title="Spot length">
+                  <span className="resolution-pill-label">Length</span>
+                  <span className="resolution-pill-value">{length}</span>
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  </svg>
+                </button>
+                {lengthOpen && (
+                  <div className="resolution-dropdown-menu">
+                    {LENGTHS.map(option => (
+                      <button
+                        key={option}
+                        type="button"
+                        className={`resolution-dropdown-item${length === option ? ' active' : ''}`}
+                        onClick={() => { setLength(option); setLengthOpen(false) }}
+                      >
+                        <span>{option}</span>
+                        {length === option && (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginLeft:'auto'}}>
+                            <path d="M2 6l3 3 5-5" stroke="#7C5CFC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 className="discover-improve-btn"
                 onClick={improvePrompt}
@@ -1145,7 +1189,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
               </button>
               <button
                 className="start-blank-btn"
-                onClick={() => onStartBlank?.({ ratio, resolution })}
+                onClick={() => onStartBlank?.({ ratio, resolution, length })}
                 disabled={loading || improving}
                 title="Start from a blank board — skip AI autofill"
               >
