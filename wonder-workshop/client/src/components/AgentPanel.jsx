@@ -127,7 +127,19 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     if (chatStorageKey) {
       try {
         const stored = JSON.parse(localStorage.getItem(chatStorageKey) || 'null')
-        if (Array.isArray(stored) && stored.length) return stored
+        if (Array.isArray(stored) && stored.length) {
+          // Older sessions persisted duplicate Date.now() ts values that
+          // React then used as keys — rehydrating those crashes the chat.
+          // De-dup defensively by bumping any colliding ts forward.
+          const seen = new Set()
+          let bump = 0
+          return stored.map(m => {
+            let ts = typeof m?.ts === 'number' ? m.ts : Date.now() + (bump++)
+            while (seen.has(ts)) ts += 1
+            seen.add(ts)
+            return ts === m?.ts ? m : { ...m, ts }
+          })
+        }
       } catch {}
     }
     return [{
@@ -317,7 +329,13 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
     const editTsSnapshot = editingTs
     setEditingTs(null)
     setMessages(prev => {
-      const newMsg = { role: 'user', text, attachments: snapshot, ts: Date.now() }
+      // Two setMessages calls happen back-to-back here and at line 397.
+      // Date.now() can return the same millisecond for both, which produces
+      // duplicate React keys (we use ts as the key on line 723) and corrupts
+      // reconciliation enough to crash with "s.map is not a function" deep
+      // in the tree. Ensure ts is strictly greater than the previous msg.
+      const lastTs = prev.length ? (prev[prev.length - 1].ts || 0) : 0
+      const newMsg = { role: 'user', text, attachments: snapshot, ts: Math.max(Date.now(), lastTs + 1) }
       // In edit mode: drop the original message AND everything after it,
       // then append the new attempt. Removes the stale agent response so
       // we don't have duplicates littering the history.
@@ -394,7 +412,13 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
       { role: 'user', content: text },
     ]
 
-    setMessages(prev => [...prev, { role: 'agent', text: '', ts: Date.now() }])
+    setMessages(prev => {
+      // See note above at the user-message setMessages call: Date.now()
+      // can collide with the just-appended user msg's ts, which produces
+      // duplicate React keys and crashes the chat tree.
+      const lastTs = prev.length ? (prev[prev.length - 1].ts || 0) : 0
+      return [...prev, { role: 'agent', text: '', ts: Math.max(Date.now(), lastTs + 1) }]
+    })
 
     try {
       const controller = new AbortController()
