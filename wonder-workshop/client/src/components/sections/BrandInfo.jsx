@@ -6,35 +6,11 @@ function domainFromUrl(url) {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
 }
 
-// Swatch tile per the May 13 mockup — joined into the strip, no labels
-// visible by default. Hex code fades in over the color on hover, and
-// clicking the swatch copies the hex to the clipboard.
-function Swatch({ color, first, last }) {
-  const [copied, setCopied] = useState(false)
-
-  async function copy(e) {
-    e?.stopPropagation()
-    try {
-      await navigator.clipboard.writeText(color.hex)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
-    } catch {}
-  }
-
-  return (
-    <button
-      type="button"
-      className={`bi-swatch${first ? ' first' : ''}${last ? ' last' : ''}${copied ? ' copied' : ''}`}
-      onClick={copy}
-      style={{ background: color.hex }}
-      title={color.name ? `${color.name} · ${color.hex}` : color.hex}
-    >
-      <span className="bi-swatch-hex-overlay">
-        {copied ? '✓ Copied' : color.hex}
-      </span>
-    </button>
-  )
-}
+// Brand color swatches were removed 2026-05-22 — Ravi flagged on the call
+// that they "don't really do much for us" and Logan confirmed in
+// follow-up review. Mood Board now carries visual direction. The
+// brandInfo.colors data field is preserved in storage for back-compat,
+// it just doesn't render anywhere.
 
 export default function BrandInfo({ data, update }) {
   const logoUrl = data.logoUrl || ''
@@ -92,12 +68,11 @@ export default function BrandInfo({ data, update }) {
     else setLogoFailed(true)
   }
 
-  const colors = data.colors || []
-
   return (
     <div className="bi-layout">
 
-      {/* Left column: logo on top, BRAND COLORS strip below. */}
+      {/* Left column: logo + URL lookup. Brand-color strip removed
+          2026-05-22 per Ravi/Logan — visual direction lives in Mood Board. */}
       <div className="bi-left-col">
         <div className={`bi-logo-wrap${fallbacks.length > 0 && !logoFailed ? ' has-logo' : ''}`}>
           {fallbacks.length > 0 && !logoFailed
@@ -143,21 +118,6 @@ export default function BrandInfo({ data, update }) {
           </a>
         )}
 
-        {colors.length > 0 && (
-          <div className="bi-colors">
-            <div className="bi-section-label">Brand Colors</div>
-            <div className="bi-swatches-strip">
-              {colors.map((c, i) => (
-                <Swatch
-                  color={c}
-                  key={i}
-                  first={i === 0}
-                  last={i === colors.length - 1}
-                />
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Right column: brand guidelines */}
