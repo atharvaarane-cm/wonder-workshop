@@ -10,6 +10,7 @@ import { getMentionHandles } from '../utils/mentions.js'
 export default function MentionInput({
   value = '',
   onChange,
+  onKeyDown: externalKeyDown,
   placeholder,
   className = '',
   rows = 2,
@@ -19,7 +20,11 @@ export default function MentionInput({
 }) {
   const project = useContext(ProjectContext)
   const brief = briefProp ?? project?.brief
+  // Alphabetical by label so the dropdown reads predictably regardless
+  // of the order the entities appear in the brief.
   const handles = getMentionHandles(brief)
+    .slice()
+    .sort((a, b) => a.label.localeCompare(b.label))
 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -68,19 +73,34 @@ export default function MentionInput({
   }
 
   function handleKeyDown(e) {
-    if (!open || !filtered.length) return
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setSelected(s => (s + 1) % filtered.length)
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setSelected(s => (s - 1 + filtered.length) % filtered.length)
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
-      pickHandle(filtered[selected])
-    } else if (e.key === 'Escape') {
-      setOpen(false)
+    // Autocomplete navigation when dropdown is open. We intercept first
+    // and only forward the event to the caller's onKeyDown if we didn't
+    // already consume it (e.g., Enter to insert a suggestion shouldn't
+    // also submit the form).
+    if (open && filtered.length) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelected(s => (s + 1) % filtered.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelected(s => (s - 1 + filtered.length) % filtered.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        pickHandle(filtered[selected])
+        return
+      }
+      if (e.key === 'Escape') {
+        setOpen(false)
+        return
+      }
     }
+    // Dropdown wasn't open (or filter was empty) — forward the keydown to
+    // the caller (e.g. chat panel's Enter-to-send handler).
+    externalKeyDown?.(e)
   }
 
   // Hide dropdown when user clicks outside.
@@ -121,7 +141,10 @@ export default function MentionInput({
               onMouseEnter={() => setSelected(i)}
             >
               <span className={`mention-item-kind kind-${h.kind}`}>
-                {h.kind === 'character' ? 'CHAR' : 'LOC'}
+                {h.kind === 'character' ? 'TALENT'
+                  : h.kind === 'location' ? 'LOCATION'
+                  : h.kind === 'product' ? 'ELEMENT'
+                  : String(h.kind || '').toUpperCase()}
               </span>
               <span className="mention-item-name">{h.label}</span>
             </button>
