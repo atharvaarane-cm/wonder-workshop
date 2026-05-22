@@ -15,7 +15,6 @@ import OnePager from '../components/OnePager.jsx'
 import GenerationLogModal from '../components/GenerationLogModal.jsx'
 import ConfirmDialog from '../components/ConfirmDialog.jsx'
 import { ProjectContext } from '../hooks/useProject.js'
-import { generateBrief } from '../hooks/useBrief.js'
 
 // Immutable deep-set. Preserves array-vs-object identity at every level
 // (the old version spread `{ ...arr }` which converted brief.characters
@@ -140,8 +139,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [descOpen, setDescOpen] = useState(false)
-  const [descPrompt, setDescPrompt] = useState('')
-  const [descRegenerating, setDescRegenerating] = useState(false)
   // Project-menu state. Lives inside the title dropdown so Duplicate /
   // Move to folder / Rename / Delete are reachable without leaving the
   // Board screen. Delete uses ConfirmDialog because losing a project is
@@ -618,22 +615,26 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
           Back
         </button>
 
-        {/* Project-name pill — click to rename / regenerate the brief
-            from a new prompt. Per the Figma mockup, this is the only
-            piece of identity in the topbar besides Back + Export. */}
+        {/* Project-name pill — click to open the project menu (Rename /
+            Duplicate / Move to folder / Delete). In readOnly mode (shared
+            brief view) the menu is hidden so we render a flat label
+            without the chevron / click affordance. */}
         <div className="topbar-project-pill-wrap">
-          <button
-            className="topbar-project-pill"
-            onClick={() => {
-              setDescPrompt(brief.originalPrompt || brief.creativeDirection?.description || '')
-              setDescOpen(o => !o)
-            }}
-          >
-            <span className="topbar-project-pill-name">{brief.projectInfo?.projectName || brief.title || 'Untitled'}</span>
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </button>
+          {(!readOnly && projectId) ? (
+            <button
+              className="topbar-project-pill"
+              onClick={() => setDescOpen(o => !o)}
+            >
+              <span className="topbar-project-pill-name">{brief.projectInfo?.projectName || brief.title || 'Untitled'}</span>
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          ) : (
+            <span className="topbar-project-pill topbar-project-pill-static">
+              <span className="topbar-project-pill-name">{brief.projectInfo?.projectName || brief.title || 'Untitled'}</span>
+            </span>
+          )}
           {descOpen && (
             <div className="topbar-desc-dropdown" onClick={e => e.stopPropagation()}>
               {/* Project actions — Rename / Duplicate / Move / Delete.
@@ -720,43 +721,8 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                       </button>
                     </div>
                   )}
-                  <div className="topbar-proj-divider" />
                 </>
               )}
-              <div className="topbar-desc-label">Original prompt</div>
-              <textarea
-                className="topbar-desc-textarea"
-                value={descPrompt}
-                onChange={e => setDescPrompt(e.target.value)}
-                rows={4}
-                placeholder="Describe the shoot…"
-              />
-              {brief.creativeDirection?.format && (
-                <div className="topbar-desc-meta">{brief.creativeDirection.format} · {brief.creativeDirection.shots} shots · {brief.creativeDirection.location}</div>
-              )}
-              <div className="topbar-desc-actions">
-                <button className="topbar-desc-cancel" onClick={() => setDescOpen(false)}>Cancel</button>
-                <button
-                  className="topbar-desc-regen"
-                  disabled={descRegenerating || !descPrompt.trim()}
-                  onClick={async () => {
-                    setDescRegenerating(true)
-                    try {
-                      const newBrief = await generateBrief(descPrompt.trim())
-                      setBrief(newBrief)
-                      onSaveBrief?.(newBrief)
-                      setDescOpen(false)
-                      window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: 'Brief regenerated' } }))
-                    } catch {
-                      window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'error', msg: 'Regeneration failed' } }))
-                    } finally {
-                      setDescRegenerating(false)
-                    }
-                  }}
-                >
-                  {descRegenerating ? 'Regenerating…' : 'Regenerate brief'}
-                </button>
-              </div>
             </div>
           )}
         </div>
