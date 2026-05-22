@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useContext } from 'react'
 import { chatWithTools } from '../hooks/useBrief.js'
 import { ProjectContext } from '../hooks/useProject.js'
 import ChatResultCard from './ChatResultCard.jsx'
+import MentionInput from './MentionInput.jsx'
 
 // Picked at random per chat round so we can match a ww-image-generated
 // event back to the message that triggered it.
@@ -885,13 +886,14 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
             ))}
           </div>
         )}
-        <textarea
+        <MentionInput
           className="panel-textarea"
           placeholder={attachedImages.length ? 'Tell me how to use these references…' : 'What do you want to change about this section?'}
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={setInput}
           onKeyDown={onKey}
           disabled={streaming}
+          brief={brief}
           rows={2}
         />
         <input
