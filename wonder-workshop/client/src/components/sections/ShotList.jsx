@@ -202,6 +202,7 @@ export default function ShotList({ data, updateShot, addShot, removeShot, reorde
           <div className="shot-img-wrap" style={{ aspectRatio: aspectCss }}>
             <ImageSlot
               prompt={prompt}
+              slotId={`shot.${shot.id || `idx-${i}`}`}
               ratio={ratio}
               disableImageDrag
               referenceImages={shotReferenceImages}

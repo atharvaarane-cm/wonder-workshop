@@ -3541,6 +3541,41 @@ textarea { font-family: var(--font); resize: none; }
   padding: 10px 0 12px;
 }
 .onepager-toolbar-title { color: #fff; font-size: 13px; font-weight: 600; opacity: 0.8; }
+/* Production / Full detail mode switch in the one-pager toolbar. */
+.op-mode-switch {
+  display: inline-flex; padding: 3px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06);
+}
+.op-mode-btn {
+  padding: 6px 14px; border: none; background: none;
+  color: rgba(255,255,255,0.65); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+  border-radius: 6px; transition: background 0.12s, color 0.12s;
+}
+.op-mode-btn:hover { color: #fff; }
+.op-mode-btn.active { background: rgba(255,255,255,0.16); color: #fff; }
+/* Elements grid on the one-pager. 4-up product images with name caption. */
+.op-elements-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+}
+.op-element { display: flex; flex-direction: column; gap: 6px; }
+.op-element-img {
+  width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 8px;
+  background: #1a1a1a; border: 1px solid #282828;
+}
+.op-element-empty {
+  width: 100%; aspect-ratio: 1/1; border-radius: 8px;
+  background: #1a1a1a; border: 1px solid #282828;
+}
+.op-element-name {
+  font-size: 13px; font-weight: 700; color: #e2e2e2; text-align: center;
+}
+.op-element-desc { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.4; }
+.op-loc-hero + .op-loc-hero { margin-top: 14px; }
+.op-loc-hero-empty {
+  width: 100%; aspect-ratio: 16/9; border-radius: 10px;
+  background: #1a1a1a; border: 1px solid #282828;
+}
 .onepager-print-btn {
   display: flex; align-items: center; gap: 6px;
   padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);

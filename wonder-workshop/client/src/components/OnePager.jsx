@@ -3,30 +3,60 @@ import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../utils/
 import { expandMentions } from '../utils/mentions.js'
 import { exportPptx } from '../utils/pptxExport.js'
 
-// Resolve a generated image for a given slotKey (= the exact prompt
-// string the corresponding ImageSlot used). Returns the active version's
-// src or null when no image has been generated for that slot.
-function getImg(images, prompt) {
-  if (!images || !prompt) return null
-  const slot = images[prompt]
-  if (!slot?.versions?.length) return null
-  return slot.versions[slot.activeVersion ?? 0]?.src || null
+// Resolve a generated image src by trying the stable slot ID first, then
+// falling back to the legacy prompt-keyed entry. Mirrors ImageSlot's own
+// readSaved() contract so the export sees the same images the UI does,
+// regardless of when (pre or post stable-ID rollout) the image was saved.
+function resolveSlot(images, stableId, legacyPrompt) {
+  if (!images) return null
+  const fromStable = stableId ? images[stableId] : null
+  if (fromStable?.versions?.length) {
+    return fromStable.versions[fromStable.activeVersion ?? 0]?.src || null
+  }
+  const fromLegacy = legacyPrompt ? images[legacyPrompt] : null
+  if (fromLegacy?.versions?.length) {
+    return fromLegacy.versions[fromLegacy.activeVersion ?? 0]?.src || null
+  }
+  return null
 }
+
+// Stable-ID formulas — match the strings each section component uses so
+// the export hits the same keys. Keep these aligned with CharacterDesign,
+// LocationsSetDesign, ClothingProps, and ShotList. (Eventually consolidate
+// to utils/slotIds.js — for now duplicated to keep this PR focused.)
+function charSlotId(key, kind, viewId) {
+  if (kind === 'reference') return `char.${key}.reference`
+  return `char.${key}.${kind}.${viewId}`
+}
+function envSlotId(key) { return `env.${key}` }
+function productSlotId(idx) { return `product.${idx}` }
+function shotSlotId(shot, idx) { return `shot.${shot.id || `idx-${idx}`}` }
 
 function SectionLabel({ children }) {
   return <div className="op-section-label">{children}</div>
 }
 
-// One character "sheet": REFERENCE on the left, name + description on
-// the right, then a strip of Headshots (4 views) and a strip of Full
-// Body (4 views). Used for the primary character (brief.character) and
-// any additional characters (brief.characters[]).
-function CharacterSheet({ character, images, eyebrow }) {
+// Compressed talent block per Ed/Ravi's call: REFERENCE + name +
+// wardrobe + a tight Headshots strip. Full-body grid only renders in
+// 'full' mode (the detail sheet for the video-gen pipeline). Production
+// mode keeps this minimal — the crew + DP don't need 8 angles to talk
+// shot order.
+function CharacterSheet({ character, characterKey, images, eyebrow, mode }) {
   if (!character?.name && !character?.description) return null
 
-  const refSrc = getImg(images, referencePrompt(character))
-  const headshotSrcs = VIEWS.map(v => getImg(images, closeupPrompt(character, v)))
-  const fullBodySrcs = VIEWS.map(v => getImg(images, fullbodyPrompt(character, v)))
+  const refSrc = resolveSlot(images, charSlotId(characterKey, 'reference'), referencePrompt(character))
+  const headshotSrcs = VIEWS.map(v => resolveSlot(
+    images,
+    charSlotId(characterKey, 'headshot', v.id),
+    closeupPrompt(character, v),
+  ))
+  const fullBodySrcs = mode === 'full'
+    ? VIEWS.map(v => resolveSlot(
+        images,
+        charSlotId(characterKey, 'fullbody', v.id),
+        fullbodyPrompt(character, v),
+      ))
+    : []
 
   return (
     <div className="op-section op-character-sheet">
@@ -35,11 +65,13 @@ function CharacterSheet({ character, images, eyebrow }) {
         {refSrc && <img src={refSrc} alt={character.name || 'Reference'} className="op-charsheet-ref" />}
         <div className="op-char-bio-text">
           {character.name && <div className="op-char-name">{character.name}</div>}
-          {character.description && <p className="op-body">{character.description}</p>}
           {character.wardrobe && (
-            <p className="op-body" style={{ marginTop: 6 }}>
+            <p className="op-body">
               <strong>Wardrobe:</strong> {character.wardrobe}
             </p>
+          )}
+          {mode === 'full' && character.description && (
+            <p className="op-body" style={{ marginTop: 6 }}>{character.description}</p>
           )}
         </div>
       </div>
@@ -79,52 +111,81 @@ function CharacterSheet({ character, images, eyebrow }) {
   )
 }
 
-// One-pager export — trimmed to the three sections the meeting brief
-// called out as essential: character sheets, locations, storyboard
-// sequence. Lighting & Mood, Mood Board / Style refs, the Clothing &
-// Props strip, and the dense Shot List table were removed; the
-// storyboard now renders as the actual generated frame images.
+// One-pager export. Hierarchy per Ed + Ravi's 2026-05-21 PM call:
+// storyboard at the top (the 95% conversation piece for production),
+// then talent (compressed), locations, elements/products, then the
+// treatment / creative direction block. Brand colors removed entirely.
+//
+// Two modes:
+//   - production (default): clean sheet for crew / DP / cinematographer.
+//     No full-body grid, no brand-asset chrome.
+//   - full: detail sheet for the video-gen pipeline. Adds full-body
+//     grids + the full description text.
 export default function OnePager({ brief, images = {}, onClose }) {
   const cd    = brief?.creativeDirection || {}
   const pi    = brief?.projectInfo || {}
-  const bi    = brief?.brandInfo || {}
   const shots = brief?.shotList || []
   const env   = brief?.environment || {}
+  const additionalLocations = brief?.environments || []
+  const products = brief?.productElements || []
 
-  // Hero image — uses the same prompt the project's hero generator
-  // would use (no separate hero section in the current Board, so this
-  // is best-effort and usually null).
-  const heroPrompt = `${cd.brand || ''} ${cd.description || ''} cinematic film still, professional photography, high quality`
-  const heroSrc = getImg(images, heroPrompt)
+  const [mode, setMode] = useState('production')
+  const [exportingPptx, setExportingPptx] = useState(false)
 
-  // Locations — single hero per the current LocationsSetDesign.
-  const locHero = env.heroEnvironment || 'cinematic location'
-  const locElements = (env.keyElements || []).slice(0, 3).join(', ')
-  const locPrompt = `${locHero}, ${locElements}, wide establishing shot, golden hour, cinematic photography`
-  const locSrc = getImg(images, locPrompt)
-
-  // Storyboard frames — same prompt construction as ShotList.jsx
-  // (expanded @mentions + framing + camera + "cinematic film still").
-  const shotFrames = shots.map(shot => {
+  // Storyboard frames — stable ID per shot.id, legacy prompt as fallback.
+  const shotFrames = shots.map((shot, idx) => {
     const expanded = expandMentions(shot.description, brief)
-    const prompt = `${expanded}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`
-    return { shot, src: getImg(images, prompt) }
+    const legacyPrompt = `${expanded}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`
+    const src = resolveSlot(images, shotSlotId(shot, idx), legacyPrompt)
+    return { shot, src }
   })
 
-  // All characters: primary + any additional. CharacterSheet skips
-  // entries with no name AND no description.
-  const characters = [
-    brief?.character,
-    ...((brief?.characters) || []),
-  ].filter(Boolean)
+  // Primary character + additional characters with their stable index.
+  const characters = []
+  if (brief?.character?.name || brief?.character?.description) {
+    characters.push({ character: brief.character, key: 'primary' })
+  }
+  for (let i = 0; i < (brief?.characters || []).length; i++) {
+    const c = brief.characters[i]
+    if (c?.name || c?.description) characters.push({ character: c, key: String(i) })
+  }
 
-  const [exportingPptx, setExportingPptx] = useState(false)
+  // Primary location + additional locations.
+  const locations = []
+  if (env?.heroName || env?.heroEnvironment) {
+    const legacyPrompt = `${env.heroEnvironment || 'cinematic location'}, ${(env.keyElements || []).slice(0, 3).join(', ')}, wide establishing shot, golden hour, cinematic photography`
+    locations.push({
+      data: env,
+      src: resolveSlot(images, envSlotId('primary'), legacyPrompt),
+    })
+  }
+  additionalLocations.forEach((loc, i) => {
+    if (!loc?.heroName && !loc?.heroEnvironment) return
+    const legacyPrompt = `${loc.heroEnvironment || 'cinematic location'}, ${(loc.keyElements || []).slice(0, 3).join(', ')}, wide establishing shot, golden hour, cinematic photography`
+    locations.push({
+      data: loc,
+      src: resolveSlot(images, envSlotId(String(i)), legacyPrompt),
+    })
+  })
+
+  // Elements / Products.
+  const elements = products.map((product, i) => {
+    const userDesc = (product.description || '').trim()
+    const userName = (product.name || '').trim()
+    const legacyPrompt = userDesc
+      ? `${userDesc}, product shot, clean white background, studio lighting, commercial photography`
+      : `${userName || 'product'}, product shot, clean white background, studio lighting, commercial photography`
+    return {
+      product,
+      src: resolveSlot(images, productSlotId(i), legacyPrompt),
+    }
+  }).filter(e => e.product?.name || e.product?.description || e.src)
 
   async function handleExportPptx() {
     if (exportingPptx) return
     setExportingPptx(true)
     try {
-      await exportPptx(brief, images)
+      await exportPptx(brief, images, { mode })
     } catch (e) {
       window.dispatchEvent(new CustomEvent('ww-toast', {
         detail: { type: 'error', msg: 'Slides export failed' },
@@ -147,6 +208,26 @@ export default function OnePager({ brief, images = {}, onClose }) {
         {/* Toolbar (hidden in print) */}
         <div className="onepager-toolbar no-print">
           <span className="onepager-toolbar-title">One Pager Preview</span>
+          <div className="op-mode-switch" role="tablist" aria-label="Sheet mode">
+            <button
+              role="tab"
+              aria-selected={mode === 'production'}
+              className={`op-mode-btn${mode === 'production' ? ' active' : ''}`}
+              onClick={() => setMode('production')}
+              title="Clean sheet for crew / DP — storyboard, talent, locations, elements"
+            >
+              Production
+            </button>
+            <button
+              role="tab"
+              aria-selected={mode === 'full'}
+              className={`op-mode-btn${mode === 'full' ? ' active' : ''}`}
+              onClick={() => setMode('full')}
+              title="Full detail sheet for the video-gen pipeline — adds full-body rotations + full descriptions"
+            >
+              Full detail
+            </button>
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="onepager-print-btn" onClick={handleExportPptx} disabled={exportingPptx}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -174,104 +255,26 @@ export default function OnePager({ brief, images = {}, onClose }) {
 
         <div className="onepager-page">
 
-          {/* ── Hero / header ── */}
-          {heroSrc ? (
-            <div className="op-hero">
-              <img src={heroSrc} alt="Hero" className="op-hero-img" />
-              <div className="op-hero-overlay">
-                <div className="op-hero-brand">{cd.brand || pi.clientName}</div>
-                <div className="op-hero-campaign">{pi.brandCampaignName || brief?.title}</div>
-              </div>
+          {/* ── Header ── */}
+          <div className="op-header">
+            <div className="op-header-left">
+              <div className="op-brand">{cd.brand || pi.clientName || '—'}</div>
+              <div className="op-campaign">{pi.brandCampaignName || brief?.title || ''}</div>
             </div>
-          ) : (
-            <div className="op-header">
-              <div className="op-header-left">
-                <div className="op-brand">{cd.brand || pi.clientName || '—'}</div>
-                <div className="op-campaign">{pi.brandCampaignName || brief?.title || ''}</div>
-              </div>
-              <div className="op-header-right">
-                {pi.projectName && <div className="op-meta-row"><span>Project</span>{pi.projectName}</div>}
-                {pi.jobNumber   && <div className="op-meta-row"><span>Job #</span>{pi.jobNumber}</div>}
-                {cd.format      && <div className="op-meta-row"><span>Format</span>{cd.format}</div>}
-                {cd.duration    && <div className="op-meta-row"><span>Duration</span>{cd.duration}</div>}
-                {cd.shots       && <div className="op-meta-row"><span>Shots</span>{cd.shots}</div>}
-                {cd.location    && <div className="op-meta-row"><span>Location</span>{cd.location}</div>}
-              </div>
+            <div className="op-header-right">
+              {pi.projectName && <div className="op-meta-row"><span>Project</span>{pi.projectName}</div>}
+              {pi.jobNumber   && <div className="op-meta-row"><span>Job #</span>{pi.jobNumber}</div>}
+              {cd.format      && <div className="op-meta-row"><span>Format</span>{cd.format}</div>}
+              {cd.duration    && <div className="op-meta-row"><span>Duration</span>{cd.duration}</div>}
+              {cd.shots       && <div className="op-meta-row"><span>Shots</span>{cd.shots}</div>}
+              {cd.location    && <div className="op-meta-row"><span>Location</span>{cd.location}</div>}
             </div>
-          )}
+          </div>
 
-          {heroSrc && (
-            <div className="op-meta-strip">
-              {[
-                pi.projectName && ['Project',  pi.projectName],
-                pi.jobNumber   && ['Job #',    pi.jobNumber],
-                cd.format      && ['Format',   cd.format],
-                cd.duration    && ['Duration', cd.duration],
-                cd.shots       && ['Shots',    String(cd.shots)],
-                cd.location    && ['Location', cd.location],
-              ].filter(Boolean).map(([k, v]) => (
-                <div key={k} className="op-meta-item">
-                  <span className="op-meta-key">{k}</span>
-                  <span className="op-meta-val">{v}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── Creative direction prose ── */}
-          {cd.description && (
-            <div className="op-section op-direction">
-              <SectionLabel>Creative Direction</SectionLabel>
-              <p className="op-body">{cd.description}</p>
-            </div>
-          )}
-
-          {/* ── Brand ── */}
-          {(bi.colors?.length > 0 || bi.rules) && (
-            <div className="op-section">
-              <SectionLabel>Brand</SectionLabel>
-              {bi.colors?.length > 0 && (
-                <div className="op-colors">
-                  {bi.colors.map((c, i) => (
-                    <div className="op-color" key={i}>
-                      <div className="op-color-swatch" style={{ background: c.hex }} />
-                      <div className="op-color-info">
-                        <div className="op-color-hex">{c.hex}</div>
-                        <div className="op-color-name">{c.name}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {bi.rules && <p className="op-body" style={{ marginTop: 6 }}>{bi.rules}</p>}
-            </div>
-          )}
-
-          {/* ── Character sheets (primary + additional) ── */}
-          {characters.map((c, idx) => (
-            <CharacterSheet
-              key={idx}
-              character={c}
-              images={images}
-              eyebrow={idx === 0 ? 'Character' : `Character — ${c.name || idx + 1}`}
-            />
-          ))}
-
-          {/* ── Locations ── */}
-          {locSrc && (
-            <div className="op-section">
-              <SectionLabel>Locations</SectionLabel>
-              <div className="op-loc-hero">
-                <img src={locSrc} alt={env.heroName || 'Location'} className="op-loc-hero-img" />
-                {env.heroName && <div className="op-loc-caption">{env.heroName}</div>}
-              </div>
-            </div>
-          )}
-
-          {/* ── Storyboard sequence (frames, not a table) ── */}
+          {/* ── Storyboard FIRST — the 95% conversation piece in production. */}
           {shotFrames.length > 0 && (
             <div className="op-section">
-              <SectionLabel>Storyboard Sequence</SectionLabel>
+              <SectionLabel>Storyboard</SectionLabel>
               <div className="op-storyboard">
                 {shotFrames.map(({ shot, src }, i) => (
                   <div key={i} className="op-sb-frame">
@@ -292,8 +295,70 @@ export default function OnePager({ brief, images = {}, onClose }) {
             </div>
           )}
 
+          {/* ── Talent — compressed in production mode. */}
+          {characters.length > 0 && (
+            <div className="op-section">
+              <SectionLabel>Talent</SectionLabel>
+              {characters.map(({ character, key }) => (
+                <CharacterSheet
+                  key={key}
+                  character={character}
+                  characterKey={key}
+                  images={images}
+                  mode={mode}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Locations ── */}
+          {locations.length > 0 && (
+            <div className="op-section">
+              <SectionLabel>Locations</SectionLabel>
+              {locations.map(({ data, src }, i) => (
+                <div key={i} className="op-loc-hero">
+                  {src
+                    ? <img src={src} alt={data.heroName || 'Location'} className="op-loc-hero-img" />
+                    : <div className="op-loc-hero-empty" />
+                  }
+                  {data.heroName && <div className="op-loc-caption">{data.heroName}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Elements / Products ── */}
+          {elements.length > 0 && (
+            <div className="op-section">
+              <SectionLabel>Elements</SectionLabel>
+              <div className="op-elements-grid">
+                {elements.map(({ product, src }, i) => (
+                  <div key={i} className="op-element">
+                    {src
+                      ? <img src={src} alt={product?.name || 'Element'} className="op-element-img" />
+                      : <div className="op-element-empty" />
+                    }
+                    {product?.name && <div className="op-element-name">{product.name}</div>}
+                    {mode === 'full' && product?.description && (
+                      <p className="op-body op-element-desc">{product.description}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Treatment / Creative direction — last, as supporting context. */}
+          {cd.description && (
+            <div className="op-section op-direction">
+              <SectionLabel>Treatment</SectionLabel>
+              <p className="op-body">{cd.description}</p>
+            </div>
+          )}
+
           <div className="op-footer">
             <span>WONDER WORKSHOP</span>
+            <span>{mode === 'full' ? 'Full Detail Sheet' : 'Production Sheet'}</span>
             <span>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
           </div>
         </div>

@@ -1,8 +1,14 @@
 // Build a .pptx file from the brief + generated images so the team can
 // open it in Google Slides / PowerPoint / Keynote and keep iterating.
-// Mirrors the on-screen one-pager structure: title slide, brand colors,
-// one character sheet per character, a locations slide, then the
-// storyboard sequence as a 3-column grid of frames.
+// Mirrors the on-screen one-pager structure: storyboard first, then
+// talent, locations, elements, then the treatment block. Brand colors
+// are intentionally absent (per Ravi 2026-05-21 call).
+//
+// Two modes:
+//   - production (default): clean sheet — no full-body grids, no full
+//     descriptions on talent / elements.
+//   - full: detail sheet for the video-gen pipeline. Adds full-body
+//     rotations and full descriptions.
 
 import PptxGenJS from 'pptxgenjs'
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from './characterPrompts.js'
@@ -13,17 +19,34 @@ const LAYOUT_H = 7.5
 const SAFE_X = 0.5
 const SAFE_W = LAYOUT_W - 1.0
 const BG = '111111'
-const CARD = '171717'
 const TEXT = 'FFFFFF'
 const MUTED = '999999'
-const ACCENT = '006DD4'
 
-function getSlot(images, prompt) {
-  if (!images || !prompt) return null
-  const slot = images[prompt]
-  if (!slot?.versions?.length) return null
-  return slot.versions[slot.activeVersion ?? 0]?.src || null
+// Resolve a generated image src by trying the stable slot ID first, then
+// falling back to the legacy prompt-keyed entry. Mirrors ImageSlot's own
+// readSaved() contract so the export sees the same images the UI does.
+function getSlotSrc(images, stableId, legacyPrompt) {
+  if (!images) return null
+  const fromStable = stableId ? images[stableId] : null
+  if (fromStable?.versions?.length) {
+    return fromStable.versions[fromStable.activeVersion ?? 0]?.src || null
+  }
+  const fromLegacy = legacyPrompt ? images[legacyPrompt] : null
+  if (fromLegacy?.versions?.length) {
+    return fromLegacy.versions[fromLegacy.activeVersion ?? 0]?.src || null
+  }
+  return null
 }
+
+// Stable-ID formulas — keep aligned with CharacterDesign, Locations,
+// ClothingProps, and ShotList.
+function charSlotId(key, kind, viewId) {
+  if (kind === 'reference') return `char.${key}.reference`
+  return `char.${key}.${kind}.${viewId}`
+}
+function envSlotId(key) { return `env.${key}` }
+function productSlotId(idx) { return `product.${idx}` }
+function shotSlotId(shot, idx) { return `shot.${shot.id || `idx-${idx}`}` }
 
 // Fetch + base64-encode an image so pptxgenjs can embed it without
 // hitting CORS issues at writeFile time. Returns null on failure
@@ -45,11 +68,6 @@ async function urlToDataUrl(url) {
   }
 }
 
-function addTextOrPlaceholder(slide, text, opts) {
-  if (!text) return
-  slide.addText(String(text), opts)
-}
-
 function addImageBox(slide, dataUrl, opts) {
   if (dataUrl) {
     slide.addImage({ data: dataUrl, ...opts })
@@ -63,10 +81,12 @@ function addImageBox(slide, dataUrl, opts) {
 }
 
 export async function exportPptx(brief, images, opts = {}) {
+  const mode = opts.mode === 'full' ? 'full' : 'production'
   const cd = brief?.creativeDirection || {}
   const pi = brief?.projectInfo || {}
-  const bi = brief?.brandInfo || {}
   const env = brief?.environment || {}
+  const additionalLocations = brief?.environments || []
+  const products = brief?.productElements || []
   const shots = brief?.shotList || []
 
   const pptx = new PptxGenJS()
@@ -77,17 +97,16 @@ export async function exportPptx(brief, images, opts = {}) {
   // ── Slide 1: Title ────────────────────────────────────────────────
   const s1 = pptx.addSlide()
   s1.background = { color: BG }
-  addTextOrPlaceholder(s1, 'BRIEF', {
+  s1.addText('BRIEF', {
     x: SAFE_X, y: 0.55, w: SAFE_W, h: 0.4,
     fontSize: 11, fontFace: 'Instrument Sans', bold: true,
     color: MUTED, charSpacing: 4,
   })
-  addTextOrPlaceholder(s1, pi.projectName || brief?.title || 'Untitled', {
+  s1.addText(pi.projectName || brief?.title || 'Untitled', {
     x: SAFE_X, y: 1.1, w: SAFE_W, h: 2.0,
     fontSize: 60, fontFace: 'Instrument Sans',
     color: 'D4D4D4',
   })
-  // Meta strip
   const metaPairs = [
     pi.clientName && ['Client', pi.clientName],
     pi.brandCampaignName && ['Campaign', pi.brandCampaignName],
@@ -95,6 +114,7 @@ export async function exportPptx(brief, images, opts = {}) {
     cd.duration && ['Duration', String(cd.duration)],
     cd.shots && ['Shots', String(cd.shots)],
     cd.location && ['Location', String(cd.location)],
+    [mode === 'full' ? 'Sheet' : 'Sheet', mode === 'full' ? 'Full Detail' : 'Production'],
   ].filter(Boolean)
   metaPairs.forEach(([k, v], i) => {
     const col = i % 3
@@ -113,159 +133,16 @@ export async function exportPptx(brief, images, opts = {}) {
     })
   })
 
-  // ── Slide 2: Creative direction + brand colors ────────────────────
-  if (cd.description || (bi.colors && bi.colors.length > 0) || bi.rules) {
-    const s2 = pptx.addSlide()
-    s2.background = { color: BG }
-    s2.addText('CREATIVE DIRECTION', {
-      x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
-      fontSize: 11, fontFace: 'Instrument Sans', bold: true,
-      color: MUTED, charSpacing: 3,
-    })
-    if (cd.description) {
-      s2.addText(cd.description, {
-        x: SAFE_X, y: 1.0, w: SAFE_W, h: 3.0,
-        fontSize: 16, fontFace: 'Instrument Sans',
-        color: 'E2E2E2', valign: 'top',
-      })
-    }
-    if (bi.colors && bi.colors.length > 0) {
-      s2.addText('BRAND COLORS', {
-        x: SAFE_X, y: 4.5, w: SAFE_W, h: 0.3,
-        fontSize: 10, fontFace: 'Instrument Sans', bold: true,
-        color: MUTED, charSpacing: 3,
-      })
-      const swatchW = Math.min(1.2, SAFE_W / bi.colors.length - 0.1)
-      bi.colors.slice(0, 8).forEach((c, i) => {
-        const x = SAFE_X + i * (swatchW + 0.1)
-        s2.addShape('rect', {
-          x, y: 4.9, w: swatchW, h: 1.0,
-          fill: { color: (c.hex || '#888888').replace('#', '') },
-          line: { color: '282828', width: 1 },
-        })
-        if (c.hex) {
-          s2.addText(c.hex.toUpperCase(), {
-            x, y: 5.95, w: swatchW, h: 0.25,
-            fontSize: 9, fontFace: 'Instrument Sans',
-            color: MUTED, align: 'center',
-          })
-        }
-        if (c.name) {
-          s2.addText(c.name, {
-            x, y: 6.2, w: swatchW, h: 0.25,
-            fontSize: 10, fontFace: 'Instrument Sans',
-            color: TEXT, align: 'center',
-          })
-        }
-      })
-    }
-  }
-
-  // ── Character sheets (one slide per character) ────────────────────
-  const characters = [brief?.character, ...(brief?.characters || [])]
-    .filter(c => c?.name || c?.description)
-
-  for (let i = 0; i < characters.length; i++) {
-    const char = characters[i]
-    const refDataUrl = await urlToDataUrl(getSlot(images, referencePrompt(char)))
-    const headshotData = await Promise.all(
-      VIEWS.map(v => urlToDataUrl(getSlot(images, closeupPrompt(char, v)))),
-    )
-
-    const s = pptx.addSlide()
-    s.background = { color: BG }
-    s.addText(`CHARACTER ${i + 1}${characters.length > 1 ? ` OF ${characters.length}` : ''}`, {
-      x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
-      fontSize: 11, fontFace: 'Instrument Sans', bold: true,
-      color: MUTED, charSpacing: 3,
-    })
-    // Reference + bio (top half)
-    addImageBox(s, refDataUrl, { x: SAFE_X, y: 1.0, w: 2.4, h: 2.4 })
-    if (char.name) {
-      s.addText(char.name, {
-        x: SAFE_X + 2.7, y: 1.0, w: SAFE_W - 2.7, h: 0.6,
-        fontSize: 32, fontFace: 'Instrument Sans', color: TEXT,
-      })
-    }
-    if (char.description) {
-      s.addText(char.description, {
-        x: SAFE_X + 2.7, y: 1.8, w: SAFE_W - 2.7, h: 1.6,
-        fontSize: 13, fontFace: 'Instrument Sans', color: 'E2E2E2',
-        valign: 'top',
-      })
-    }
-    // Headshots row (bottom half)
-    s.addText('HEADSHOTS', {
-      x: SAFE_X, y: 3.6, w: SAFE_W, h: 0.3,
-      fontSize: 10, fontFace: 'Instrument Sans', bold: true,
-      color: MUTED, charSpacing: 3,
-    })
-    const hsW = (SAFE_W - 0.6) / 4
-    const hsH = 3.0
-    VIEWS.forEach((v, idx) => {
-      const x = SAFE_X + idx * (hsW + 0.2)
-      addImageBox(s, headshotData[idx], { x, y: 4.0, w: hsW, h: hsH })
-      s.addText(v.label, {
-        x, y: 4.0 + hsH + 0.05, w: hsW, h: 0.25,
-        fontSize: 9, fontFace: 'Instrument Sans', bold: true,
-        color: MUTED, align: 'center', charSpacing: 2,
-      })
-    })
-
-    // Second slide: full body
-    const fullBodyData = await Promise.all(
-      VIEWS.map(v => urlToDataUrl(getSlot(images, fullbodyPrompt(char, v)))),
-    )
-    const s2c = pptx.addSlide()
-    s2c.background = { color: BG }
-    s2c.addText(`${char.name || `CHARACTER ${i + 1}`} — FULL BODY`, {
-      x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
-      fontSize: 11, fontFace: 'Instrument Sans', bold: true,
-      color: MUTED, charSpacing: 3,
-    })
-    const fbW = (SAFE_W - 0.6) / 4
-    const fbH = 5.5
-    VIEWS.forEach((v, idx) => {
-      const x = SAFE_X + idx * (fbW + 0.2)
-      addImageBox(s2c, fullBodyData[idx], { x, y: 1.0, w: fbW, h: fbH })
-      s2c.addText(v.label, {
-        x, y: 1.0 + fbH + 0.05, w: fbW, h: 0.25,
-        fontSize: 9, fontFace: 'Instrument Sans', bold: true,
-        color: MUTED, align: 'center', charSpacing: 2,
-      })
-    })
-  }
-
-  // ── Location slide ────────────────────────────────────────────────
-  const locPrompt = `${env.heroEnvironment || 'cinematic location'}, ${(env.keyElements || []).slice(0, 3).join(', ')}, wide establishing shot, golden hour, cinematic photography`
-  const locDataUrl = await urlToDataUrl(getSlot(images, locPrompt))
-  if (env.heroName || env.heroEnvironment || locDataUrl) {
-    const s = pptx.addSlide()
-    s.background = { color: BG }
-    s.addText('LOCATIONS', {
-      x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
-      fontSize: 11, fontFace: 'Instrument Sans', bold: true,
-      color: MUTED, charSpacing: 3,
-    })
-    addImageBox(s, locDataUrl, { x: SAFE_X, y: 1.0, w: SAFE_W, h: 5.0 })
-    if (env.heroName) {
-      s.addText(env.heroName, {
-        x: SAFE_X, y: 6.2, w: SAFE_W, h: 0.6,
-        fontSize: 24, fontFace: 'Instrument Sans', color: TEXT,
-      })
-    }
-  }
-
-  // ── Storyboard slides (6 frames per slide, 3 cols × 2 rows) ───────
+  // ── Storyboard slides FIRST — the 95% conversation piece. ─────────
   if (shots.length > 0) {
     const FRAMES_PER_SLIDE = 6
     for (let i = 0; i < shots.length; i += FRAMES_PER_SLIDE) {
       const chunk = shots.slice(i, i + FRAMES_PER_SLIDE)
       const shotData = await Promise.all(
-        chunk.map(shot => {
+        chunk.map((shot, j) => {
           const expanded = expandMentions(shot.description, brief)
-          const prompt = `${expanded}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`
-          return urlToDataUrl(getSlot(images, prompt))
+          const legacyPrompt = `${expanded}, ${shot.framing} shot, ${shot.camera} camera, cinematic film still`
+          return urlToDataUrl(getSlotSrc(images, shotSlotId(shot, i + j), legacyPrompt))
         }),
       )
       const s = pptx.addSlide()
@@ -305,8 +182,202 @@ export async function exportPptx(brief, images, opts = {}) {
     }
   }
 
+  // ── Talent slides ─────────────────────────────────────────────────
+  const characters = []
+  if (brief?.character?.name || brief?.character?.description) {
+    characters.push({ character: brief.character, key: 'primary' })
+  }
+  for (let i = 0; i < (brief?.characters || []).length; i++) {
+    const c = brief.characters[i]
+    if (c?.name || c?.description) characters.push({ character: c, key: String(i) })
+  }
+
+  for (let i = 0; i < characters.length; i++) {
+    const { character: char, key } = characters[i]
+    const refDataUrl = await urlToDataUrl(getSlotSrc(images, charSlotId(key, 'reference'), referencePrompt(char)))
+    const headshotData = await Promise.all(
+      VIEWS.map(v => urlToDataUrl(getSlotSrc(images, charSlotId(key, 'headshot', v.id), closeupPrompt(char, v)))),
+    )
+
+    const s = pptx.addSlide()
+    s.background = { color: BG }
+    s.addText(`TALENT ${i + 1}${characters.length > 1 ? ` OF ${characters.length}` : ''}`, {
+      x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
+      fontSize: 11, fontFace: 'Instrument Sans', bold: true,
+      color: MUTED, charSpacing: 3,
+    })
+    addImageBox(s, refDataUrl, { x: SAFE_X, y: 1.0, w: 2.4, h: 2.4 })
+    if (char.name) {
+      s.addText(char.name, {
+        x: SAFE_X + 2.7, y: 1.0, w: SAFE_W - 2.7, h: 0.6,
+        fontSize: 32, fontFace: 'Instrument Sans', color: TEXT,
+      })
+    }
+    // Production mode: wardrobe only. Full mode: wardrobe + description.
+    if (char.wardrobe) {
+      s.addText(`Wardrobe: ${char.wardrobe}`, {
+        x: SAFE_X + 2.7, y: 1.7, w: SAFE_W - 2.7, h: 0.5,
+        fontSize: 13, fontFace: 'Instrument Sans', color: 'E2E2E2',
+        valign: 'top',
+      })
+    }
+    if (mode === 'full' && char.description) {
+      s.addText(char.description, {
+        x: SAFE_X + 2.7, y: 2.3, w: SAFE_W - 2.7, h: 1.1,
+        fontSize: 12, fontFace: 'Instrument Sans', color: 'C8C8C8',
+        valign: 'top',
+      })
+    }
+    // Headshots row
+    s.addText('HEADSHOTS', {
+      x: SAFE_X, y: 3.6, w: SAFE_W, h: 0.3,
+      fontSize: 10, fontFace: 'Instrument Sans', bold: true,
+      color: MUTED, charSpacing: 3,
+    })
+    const hsW = (SAFE_W - 0.6) / 4
+    const hsH = 3.0
+    VIEWS.forEach((v, idx) => {
+      const x = SAFE_X + idx * (hsW + 0.2)
+      addImageBox(s, headshotData[idx], { x, y: 4.0, w: hsW, h: hsH })
+      s.addText(v.label, {
+        x, y: 4.0 + hsH + 0.05, w: hsW, h: 0.25,
+        fontSize: 9, fontFace: 'Instrument Sans', bold: true,
+        color: MUTED, align: 'center', charSpacing: 2,
+      })
+    })
+
+    // Full-body slide — only in 'full' mode.
+    if (mode === 'full') {
+      const fullBodyData = await Promise.all(
+        VIEWS.map(v => urlToDataUrl(getSlotSrc(images, charSlotId(key, 'fullbody', v.id), fullbodyPrompt(char, v)))),
+      )
+      const s2c = pptx.addSlide()
+      s2c.background = { color: BG }
+      s2c.addText(`${char.name || `TALENT ${i + 1}`} — FULL BODY`, {
+        x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
+        fontSize: 11, fontFace: 'Instrument Sans', bold: true,
+        color: MUTED, charSpacing: 3,
+      })
+      const fbW = (SAFE_W - 0.6) / 4
+      const fbH = 5.5
+      VIEWS.forEach((v, idx) => {
+        const x = SAFE_X + idx * (fbW + 0.2)
+        addImageBox(s2c, fullBodyData[idx], { x, y: 1.0, w: fbW, h: fbH })
+        s2c.addText(v.label, {
+          x, y: 1.0 + fbH + 0.05, w: fbW, h: 0.25,
+          fontSize: 9, fontFace: 'Instrument Sans', bold: true,
+          color: MUTED, align: 'center', charSpacing: 2,
+        })
+      })
+    }
+  }
+
+  // ── Locations slide(s) ────────────────────────────────────────────
+  const locations = []
+  if (env?.heroName || env?.heroEnvironment) {
+    const legacyPrompt = `${env.heroEnvironment || 'cinematic location'}, ${(env.keyElements || []).slice(0, 3).join(', ')}, wide establishing shot, golden hour, cinematic photography`
+    locations.push({ data: env, src: await urlToDataUrl(getSlotSrc(images, envSlotId('primary'), legacyPrompt)) })
+  }
+  for (let i = 0; i < additionalLocations.length; i++) {
+    const loc = additionalLocations[i]
+    if (!loc?.heroName && !loc?.heroEnvironment) continue
+    const legacyPrompt = `${loc.heroEnvironment || 'cinematic location'}, ${(loc.keyElements || []).slice(0, 3).join(', ')}, wide establishing shot, golden hour, cinematic photography`
+    locations.push({ data: loc, src: await urlToDataUrl(getSlotSrc(images, envSlotId(String(i)), legacyPrompt)) })
+  }
+  if (locations.length > 0) {
+    // One slide per location.
+    for (const { data, src } of locations) {
+      const s = pptx.addSlide()
+      s.background = { color: BG }
+      s.addText('LOCATION', {
+        x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
+        fontSize: 11, fontFace: 'Instrument Sans', bold: true,
+        color: MUTED, charSpacing: 3,
+      })
+      addImageBox(s, src, { x: SAFE_X, y: 1.0, w: SAFE_W, h: 5.0 })
+      if (data.heroName) {
+        s.addText(data.heroName, {
+          x: SAFE_X, y: 6.2, w: SAFE_W, h: 0.6,
+          fontSize: 24, fontFace: 'Instrument Sans', color: TEXT,
+        })
+      }
+    }
+  }
+
+  // ── Elements / Products slide ─────────────────────────────────────
+  if (products.length > 0) {
+    const elementData = await Promise.all(
+      products.map(async (product, i) => {
+        const userDesc = (product.description || '').trim()
+        const userName = (product.name || '').trim()
+        const legacyPrompt = userDesc
+          ? `${userDesc}, product shot, clean white background, studio lighting, commercial photography`
+          : `${userName || 'product'}, product shot, clean white background, studio lighting, commercial photography`
+        const src = await urlToDataUrl(getSlotSrc(images, productSlotId(i), legacyPrompt))
+        return { product, src }
+      }),
+    )
+    // Render elements 4 per row.
+    const PER_SLIDE = 8
+    for (let i = 0; i < elementData.length; i += PER_SLIDE) {
+      const chunk = elementData.slice(i, i + PER_SLIDE)
+      const s = pptx.addSlide()
+      s.background = { color: BG }
+      const labelPart = elementData.length > PER_SLIDE
+        ? ` — ${i + 1}–${Math.min(i + chunk.length, elementData.length)} of ${elementData.length}`
+        : ''
+      s.addText('ELEMENTS' + labelPart, {
+        x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
+        fontSize: 11, fontFace: 'Instrument Sans', bold: true,
+        color: MUTED, charSpacing: 3,
+      })
+      const cols = 4
+      const gap = 0.2
+      const cellW = (SAFE_W - gap * (cols - 1)) / cols
+      const cellH = 2.6
+      chunk.forEach(({ product, src }, idx) => {
+        const col = idx % cols
+        const row = Math.floor(idx / cols)
+        const x = SAFE_X + col * (cellW + gap)
+        const y = 1.1 + row * (cellH + 0.7)
+        addImageBox(s, src, { x, y, w: cellW, h: cellH })
+        if (product?.name) {
+          s.addText(product.name, {
+            x, y: y + cellH + 0.05, w: cellW, h: 0.3,
+            fontSize: 11, fontFace: 'Instrument Sans', bold: true,
+            color: TEXT, align: 'center',
+          })
+        }
+        if (mode === 'full' && product?.description) {
+          s.addText(product.description, {
+            x, y: y + cellH + 0.4, w: cellW, h: 0.25,
+            fontSize: 8, fontFace: 'Instrument Sans',
+            color: MUTED, align: 'center',
+          })
+        }
+      })
+    }
+  }
+
+  // ── Treatment / Creative direction slide (last) ───────────────────
+  if (cd.description) {
+    const s = pptx.addSlide()
+    s.background = { color: BG }
+    s.addText('TREATMENT', {
+      x: SAFE_X, y: 0.5, w: SAFE_W, h: 0.35,
+      fontSize: 11, fontFace: 'Instrument Sans', bold: true,
+      color: MUTED, charSpacing: 3,
+    })
+    s.addText(cd.description, {
+      x: SAFE_X, y: 1.0, w: SAFE_W, h: 5.5,
+      fontSize: 16, fontFace: 'Instrument Sans',
+      color: 'E2E2E2', valign: 'top',
+    })
+  }
+
   const safeName = (pi.projectName || brief?.title || 'wonder-workshop-brief')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'brief'
-  await pptx.writeFile({ fileName: `${safeName}.pptx` })
+  const modeTag = mode === 'full' ? '-full-detail' : '-production'
+  await pptx.writeFile({ fileName: `${safeName}${modeTag}.pptx` })
   opts.onComplete?.()
 }
