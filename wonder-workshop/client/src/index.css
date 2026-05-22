@@ -1189,6 +1189,10 @@ textarea { font-family: var(--font); resize: none; }
   transition: background 0.12s, color 0.12s;
 }
 .topbar-project-pill:hover { background: #1f1f1f; color: #fff; }
+/* Read-only variant — shared brief view has no project menu, so the
+   pill renders as a flat label (no hover, no chevron, no cursor). */
+.topbar-project-pill-static { cursor: default; }
+.topbar-project-pill-static:hover { background: inherit; color: inherit; }
 .topbar-project-pill-name {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 180px;
@@ -1295,9 +1299,6 @@ textarea { font-family: var(--font); resize: none; }
 .topbar-proj-menu-danger { color: #d23a3a; }
 .topbar-proj-menu-danger svg { color: #d23a3a; }
 .topbar-proj-menu-danger:hover { background: rgba(210,58,58,0.08); }
-.topbar-proj-divider {
-  height: 1px; background: var(--border-md); margin: 8px -4px 10px;
-}
 
 /* Inline rename row — replaces the menu while editing. */
 .topbar-proj-rename { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
