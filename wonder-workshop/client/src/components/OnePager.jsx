@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../utils/characterPrompts.js'
 import { expandMentions } from '../utils/mentions.js'
 import { exportPptx } from '../utils/pptxExport.js'
+import { generateTreatmentFromShots, getCachedTreatment, cacheTreatment } from '../utils/treatment.js'
+import { ProjectContext } from '../hooks/useProject.js'
 
 // Resolve a generated image src by trying the stable slot ID first, then
 // falling back to the legacy prompt-keyed entry. Mirrors ImageSlot's own
@@ -36,20 +38,23 @@ function SectionLabel({ children }) {
   return <div className="op-section-label">{children}</div>
 }
 
-// Compressed talent block per Ed/Ravi's call: REFERENCE + name +
-// wardrobe + a tight Headshots strip. Full-body grid only renders in
-// 'full' mode (the detail sheet for the video-gen pipeline). Production
-// mode keeps this minimal — the crew + DP don't need 8 angles to talk
-// shot order.
-function CharacterSheet({ character, characterKey, images, eyebrow, mode }) {
+// Compressed talent block. Production mode (the default) shows ONLY the
+// reference image + name per character — per Logan's 2026-05-22 PDF
+// review: "just one image and name per character please." Full mode adds
+// wardrobe, description, headshots, and full-body for the video-gen
+// pipeline that needs every angle.
+function CharacterSheet({ character, characterKey, images, mode }) {
   if (!character?.name && !character?.description) return null
 
   const refSrc = resolveSlot(images, charSlotId(characterKey, 'reference'), referencePrompt(character))
-  const headshotSrcs = VIEWS.map(v => resolveSlot(
-    images,
-    charSlotId(characterKey, 'headshot', v.id),
-    closeupPrompt(character, v),
-  ))
+
+  const headshotSrcs = mode === 'full'
+    ? VIEWS.map(v => resolveSlot(
+        images,
+        charSlotId(characterKey, 'headshot', v.id),
+        closeupPrompt(character, v),
+      ))
+    : []
   const fullBodySrcs = mode === 'full'
     ? VIEWS.map(v => resolveSlot(
         images,
@@ -59,13 +64,12 @@ function CharacterSheet({ character, characterKey, images, eyebrow, mode }) {
     : []
 
   return (
-    <div className="op-section op-character-sheet">
-      {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
+    <div className={`op-character-sheet${mode === 'production' ? ' op-character-sheet-compact' : ''}`}>
       <div className="op-char-bio">
         {refSrc && <img src={refSrc} alt={character.name || 'Reference'} className="op-charsheet-ref" />}
         <div className="op-char-bio-text">
           {character.name && <div className="op-char-name">{character.name}</div>}
-          {character.wardrobe && (
+          {mode === 'full' && character.wardrobe && (
             <p className="op-body">
               <strong>Wardrobe:</strong> {character.wardrobe}
             </p>
@@ -131,6 +135,9 @@ export default function OnePager({ brief, images = {}, onClose }) {
 
   const [mode, setMode] = useState('production')
   const [exportingPptx, setExportingPptx] = useState(false)
+  const project = useContext(ProjectContext)
+  const [treatment, setTreatment] = useState('')
+  const [treatmentLoading, setTreatmentLoading] = useState(false)
 
   // Storyboard frames — stable ID per shot.id, legacy prompt as fallback.
   const shotFrames = shots.map((shot, idx) => {
@@ -185,7 +192,7 @@ export default function OnePager({ brief, images = {}, onClose }) {
     if (exportingPptx) return
     setExportingPptx(true)
     try {
-      await exportPptx(brief, images, { mode })
+      await exportPptx(brief, images, { mode, treatment })
     } catch (e) {
       window.dispatchEvent(new CustomEvent('ww-toast', {
         detail: { type: 'error', msg: 'Slides export failed' },
@@ -194,6 +201,36 @@ export default function OnePager({ brief, images = {}, onClose }) {
       setExportingPptx(false)
     }
   }
+
+  // Generate the treatment paragraph from the storyboard captions when
+  // the one-pager opens. Synchronous read of the cache first; only fires
+  // the API call when shots changed since last cache. Abort if the user
+  // closes the modal mid-generation.
+  useEffect(() => {
+    let aborted = false
+    const controller = new AbortController()
+    const cached = getCachedTreatment(project?.id, shots)
+    if (cached) {
+      setTreatment(cached)
+      return () => { aborted = true; controller.abort() }
+    }
+    if (!shots.length) {
+      setTreatment('')
+      return () => { aborted = true; controller.abort() }
+    }
+    setTreatmentLoading(true)
+    setTreatment('')
+    generateTreatmentFromShots(brief, { signal: controller.signal })
+      .then(text => {
+        if (aborted) return
+        setTreatment(text)
+        setTreatmentLoading(false)
+        if (text) cacheTreatment(project?.id, shots, text)
+      })
+      .catch(() => { if (!aborted) setTreatmentLoading(false) })
+    return () => { aborted = true; controller.abort() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, shots.length, shots.map(s => `${s.framing || ''}|${s.description || ''}`).join('::')])
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -348,11 +385,20 @@ export default function OnePager({ brief, images = {}, onClose }) {
             </div>
           )}
 
-          {/* ── Treatment / Creative direction — last, as supporting context. */}
-          {cd.description && (
+          {/* ── Treatment — auto-generated narrative from the storyboard
+              captions. Present-tense short story used to pitch the spot.
+              Falls back to the brief's creative-direction prose if
+              generation fails or shots are absent. */}
+          {(treatment || treatmentLoading || cd.description) && (
             <div className="op-section op-direction">
               <SectionLabel>Treatment</SectionLabel>
-              <p className="op-body">{cd.description}</p>
+              {treatmentLoading && !treatment && (
+                <p className="op-body op-treatment-loading">Composing treatment from the storyboard…</p>
+              )}
+              {treatment && <p className="op-body">{treatment}</p>}
+              {!treatment && !treatmentLoading && cd.description && (
+                <p className="op-body">{cd.description}</p>
+              )}
             </div>
           )}
 
