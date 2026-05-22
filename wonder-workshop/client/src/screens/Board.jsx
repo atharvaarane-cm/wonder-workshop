@@ -13,6 +13,7 @@ import ShareModal from '../components/ShareModal.jsx'
 import ExportDropdown from '../components/ExportDropdown.jsx'
 import OnePager from '../components/OnePager.jsx'
 import GenerationLogModal from '../components/GenerationLogModal.jsx'
+import ConfirmDialog from '../components/ConfirmDialog.jsx'
 import { ProjectContext } from '../hooks/useProject.js'
 import { generateBrief } from '../hooks/useBrief.js'
 
@@ -123,7 +124,7 @@ function sectionHasImages(sectionId, brief) {
   return false
 }
 
-export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false, autoGenerateImages = false, onAutoGenerateConsumed }) {
+export default function Board({ brief: initialBrief, onBack, theme, toggleTheme, onSaveBrief, readOnly = false, autoGenerateImages = false, onAutoGenerateConsumed, projectId, projectName, projectFolder, folders = [], onDeleteProject, onDuplicateProject, onRenameProject, onMoveProjectToFolder }) {
   const [brief, setBrief] = useState(initialBrief)
   const [activeId, setActiveId] = useState('cd')
   const [activeImageTarget, setActiveImageTarget] = useState(null)
@@ -141,6 +142,13 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [descOpen, setDescOpen] = useState(false)
   const [descPrompt, setDescPrompt] = useState('')
   const [descRegenerating, setDescRegenerating] = useState(false)
+  // Project-menu state. Lives inside the title dropdown so Duplicate /
+  // Move to folder / Rename / Delete are reachable without leaving the
+  // Board screen. Delete uses ConfirmDialog because losing a project is
+  // unrecoverable from this UI.
+  const [renaming, setRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [confirmDeleteProject, setConfirmDeleteProject] = useState(false)
   const project = useContext(ProjectContext)
   const rowRefs = useRef({})
   const scrollContainerRef = useRef(null)
@@ -628,6 +636,93 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
           </button>
           {descOpen && (
             <div className="topbar-desc-dropdown" onClick={e => e.stopPropagation()}>
+              {/* Project actions — Rename / Duplicate / Move / Delete.
+                  Hidden in readOnly mode (shared brief view). */}
+              {!readOnly && projectId && (
+                <>
+                  {renaming ? (
+                    <div className="topbar-proj-rename">
+                      <input
+                        autoFocus
+                        className="topbar-proj-rename-input"
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            const v = renameValue.trim()
+                            if (v) onRenameProject?.(projectId, v)
+                            setRenaming(false)
+                            setDescOpen(false)
+                          }
+                          if (e.key === 'Escape') { e.preventDefault(); setRenaming(false) }
+                        }}
+                        placeholder="Project name"
+                      />
+                      <button
+                        className="topbar-proj-rename-save"
+                        onClick={() => {
+                          const v = renameValue.trim()
+                          if (v) onRenameProject?.(projectId, v)
+                          setRenaming(false)
+                          setDescOpen(false)
+                        }}
+                      >Save</button>
+                      <button className="topbar-proj-rename-cancel" onClick={() => setRenaming(false)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="topbar-proj-menu">
+                      <button
+                        className="topbar-proj-menu-item"
+                        onClick={() => {
+                          setRenameValue(projectName || brief.projectInfo?.projectName || brief.title || '')
+                          setRenaming(true)
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        Rename
+                      </button>
+                      <button
+                        className="topbar-proj-menu-item"
+                        onClick={() => {
+                          onDuplicateProject?.(projectId)
+                          setDescOpen(false)
+                          window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: 'Duplicated — find the copy on your dashboard' } }))
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="4" y="4" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                        Duplicate
+                      </button>
+                      <label className="topbar-proj-menu-item topbar-proj-menu-folder">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h2.4a1.5 1.5 0 0 1 1.06.44L8 5.5h4.5A1.5 1.5 0 0 1 14 7v5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12V5.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                        <span>Move to folder</span>
+                        <select
+                          className="topbar-proj-menu-select"
+                          value={projectFolder || ''}
+                          onChange={e => {
+                            onMoveProjectToFolder?.(projectId, e.target.value || null)
+                            setDescOpen(false)
+                            window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: e.target.value ? `Moved to "${e.target.value}"` : 'Removed from folder' } }))
+                          }}
+                        >
+                          <option value="">No folder</option>
+                          {folders.map(f => (
+                            <option key={f.name || f} value={f.name || f}>{f.name || f}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        className="topbar-proj-menu-item topbar-proj-menu-danger"
+                        onClick={() => setConfirmDeleteProject(true)}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        Delete project…
+                      </button>
+                    </div>
+                  )}
+                  <div className="topbar-proj-divider" />
+                </>
+              )}
               <div className="topbar-desc-label">Original prompt</div>
               <textarea
                 className="topbar-desc-textarea"
@@ -900,6 +995,18 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmDeleteProject}
+        title="Delete this project?"
+        message="The brief, all generated images, and version history will be removed. This can't be undone."
+        confirmLabel="Delete project"
+        onConfirm={() => {
+          setConfirmDeleteProject(false)
+          setDescOpen(false)
+          if (projectId) onDeleteProject?.(projectId)
+        }}
+        onCancel={() => setConfirmDeleteProject(false)}
+      />
     </div>
   )
 }

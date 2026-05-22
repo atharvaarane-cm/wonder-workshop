@@ -235,6 +235,14 @@ export default function App() {
           onSaveBrief={handleSaveBrief}
           autoGenerateImages={autoGenerateImages}
           onAutoGenerateConsumed={() => setAutoGenerateImages(false)}
+          projectId={project.id}
+          projectName={project.name}
+          projectFolder={project.folder}
+          folders={folders}
+          onDeleteProject={handleDeleteProject}
+          onDuplicateProject={handleDuplicateProject}
+          onRenameProject={handleRenameProject}
+          onMoveProjectToFolder={handleMoveProjectToFolder}
         />
       </ProjectContext.Provider>
     )
