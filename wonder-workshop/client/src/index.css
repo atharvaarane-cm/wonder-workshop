@@ -2624,6 +2624,45 @@ textarea { font-family: var(--font); resize: none; }
 [data-theme="dark"] .panel-intent-option.active { background: rgba(124,92,252,0.18); color: #c8b8ff; }
 [data-theme="dark"] .panel-intent-option.active .panel-intent-hint { color: #c8b8ff; }
 
+/* ── Chat panel — dark-mode LLM aesthetic ────────────────────────────
+   Per Ravi's 2026-05-22 direction: when dark mode is on, the chat
+   should read like ChatGPT / Claude — near-black panel background,
+   dark-gray message bubbles with subtle borders, light text.            */
+[data-theme="dark"] .agent-panel,
+[data-theme="dark"] .agent-panel-collapsed {
+  background: #0c0c0e;
+  border-left-color: #1f1f23;
+}
+[data-theme="dark"] .msg.user .msg-bubble {
+  background: #2a2a2e;
+  color: #ececec;
+  border: 1px solid #2f2f33;
+}
+[data-theme="dark"] .msg.agent .msg-bubble {
+  background: #18181b;
+  color: #e8e8ea;
+  border: 1px solid #232327;
+}
+[data-theme="dark"] .panel-input {
+  border-top-color: #1f1f23;
+  background: #0c0c0e;
+}
+[data-theme="dark"] .panel-attached-row {
+  background: #0c0c0e; border-color: #1f1f23;
+}
+[data-theme="dark"] .panel-intent-btn {
+  background: #18181b; color: #c8c8cc; border-color: #2a2a2e;
+}
+[data-theme="dark"] .panel-intent-btn:hover:not(:disabled) {
+  background: #232327; border-color: #3a3a40; color: #fff;
+}
+[data-theme="dark"] .panel-intent-menu {
+  background: #18181b; border-color: #2a2a2e; color: #e8e8ea;
+}
+[data-theme="dark"] .panel-intent-option:hover { background: #232327; }
+[data-theme="dark"] .panel-intent-label { color: #ececec; }
+[data-theme="dark"] .panel-intent-hint  { color: #a0a0a8; }
+
 /* Input */
 .panel-input { padding: 10px 12px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .panel-textarea {
