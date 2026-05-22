@@ -1595,6 +1595,10 @@ textarea { font-family: var(--font); resize: none; }
   display: inline-flex; align-items: center; gap: 6px;
   line-height: 1;
 }
+/* Editable duration — overrides .editable's dark hover so the click
+   affordance reads against the blue header strip. */
+.cd-feature-duration.editable:hover { background: rgba(255,255,255,0.12); }
+.cd-feature-duration.editable:focus { background: rgba(255,255,255,0.18); box-shadow: 0 0 0 2px rgba(255,255,255,0.3); }
 /* Full-height divider between columns. Grid template reserves the 1px
    column; this element paints it. */
 .cd-feature-sep {

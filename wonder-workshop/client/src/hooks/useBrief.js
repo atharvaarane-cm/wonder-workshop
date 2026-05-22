@@ -357,3 +357,87 @@ export async function chatWithTools(messages, tools, signal) {
   }))
   return { text, actions }
 }
+
+// Rewrites just the shot list (storyboard) at a new total duration —
+// preserves the rest of the brief (creative direction, characters,
+// locations, products). Used by the editable duration in the Creative
+// section header so changing 30s → 60s re-paces the storyboard
+// without regenerating the whole brief.
+//
+// Keeps the existing shot count and shot ids by index so any images
+// already generated for shot 1 still belong to shot 1 after rewrite
+// (descriptions change, but the user can decide whether to regenerate
+// images via the storyboard's section regenerate button).
+export async function regenerateShotList(brief, newDuration) {
+  const cd = brief.creativeDirection || {}
+  const shotCount = brief.shotList?.length || 9
+
+  // Collect every @handle the LLM should use, so the rewritten shots
+  // keep referencing the same characters / locations / products.
+  const handles = []
+  if (brief.character?.name) handles.push(brief.character.name)
+  for (const c of (brief.characters || [])) if (c?.name) handles.push(c.name)
+  if (brief.environment?.heroName) handles.push(brief.environment.heroName)
+  for (const e of (brief.environments || [])) if (e?.heroName) handles.push(e.heroName)
+  for (const p of (brief.productElements || [])) if (p?.name) handles.push(p.name)
+
+  const system = `You rewrite the shot list of an existing video production brief for a new total runtime.
+
+Return ONLY this JSON shape — no markdown fences, no explanation:
+{
+  "shotList": [
+    { "num": "01", "framing": "<EWS|WS|MS|CU|ECU|OTS|POV>", "description": "<short shot description, use @handles>", "camera": "<Drone|Steadicam|Handheld|Tripod|Gimbal>", "duration": "<Xs>" }
+  ]
+}
+
+Rules:
+- shotList must have EXACTLY ${shotCount} items
+- Per-shot durations must SUM to exactly ${newDuration}
+- Number shots zero-padded: 01, 02, 03, ...
+- Vary framing across shots (mix of wide / medium / close)
+- Use these @handles where appropriate: ${handles.map(h => '@' + h).join(', ') || '(none)'}
+- Preserve the original creative direction, tone, and narrative arc
+- Keep each description to one sentence`
+
+  const context = JSON.stringify({
+    creativeDirection: cd,
+    character: brief.character,
+    characters: brief.characters,
+    environment: brief.environment,
+    environments: brief.environments,
+    productElements: brief.productElements,
+  }, null, 2)
+
+  const userMsg = `Rewrite the shot list for a total duration of ${newDuration}.
+
+Brief context:
+${context}
+
+Return ONLY the JSON.`
+
+  const { text } = await chatWithTools(
+    [
+      { role: 'system', content: system },
+      { role: 'user', content: userMsg },
+    ],
+    [],
+  )
+
+  const cleaned = (text || '').replace(/^```(?:json)?\n?/i, '').replace(/```\s*$/, '').trim()
+  let parsed
+  try {
+    parsed = JSON.parse(jsonrepair(cleaned))
+  } catch (e) {
+    throw new Error(`Couldn't parse model response: ${e?.message || e}`)
+  }
+  if (!Array.isArray(parsed?.shotList) || !parsed.shotList.length) {
+    throw new Error('Model returned no shots')
+  }
+  // Preserve the existing shot.id by index so already-generated images
+  // remain attached to their slot. Re-stamp num to stay in order.
+  return parsed.shotList.map((s, i) => ({
+    ...s,
+    id: brief.shotList?.[i]?.id || `shot_${Date.now()}_${i}`,
+    num: String(i + 1).padStart(2, '0'),
+  }))
+}
