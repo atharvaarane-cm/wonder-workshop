@@ -895,6 +895,7 @@ export default function AgentPanel({ activeSection, activeImageTarget, brief, on
           disabled={streaming}
           brief={brief}
           rows={2}
+          placement="top"
         />
         <input
           ref={chatFileInputRef}

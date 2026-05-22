@@ -16,6 +16,11 @@ export default function MentionInput({
   rows = 2,
   brief: briefProp,
   multiline = true,
+  // Where the autocomplete dropdown opens relative to the input. 'bottom'
+  // (default) anchors below — fine when there's room. 'top' flips it
+  // above — needed for the chat input which sits at the bottom of the
+  // panel and clips the dropdown.
+  placement = 'bottom',
   ...rest
 }) {
   const project = useContext(ProjectContext)
@@ -129,7 +134,7 @@ export default function MentionInput({
         {...rest}
       />
       {open && filtered.length > 0 && (
-        <div className="mention-dropdown" role="listbox">
+        <div className={`mention-dropdown placement-${placement}`} role="listbox">
           <div className="mention-dropdown-label">Mention</div>
           {filtered.map((h, i) => (
             <button
