@@ -8,7 +8,7 @@ const RATIO_OPTIONS = ['16:9', '9:16', '1:1', '4:5', '4:3', '2:1']
 // separated by thin light-blue vertical dividers. ASPECT RATIO is a
 // dropdown — picking a new ratio fires onAspectRatioChange so the
 // board can prompt the user about regenerating existing images.
-export default function CreativeDirection({ data, update, currentRatio, onAspectRatioChange }) {
+export default function CreativeDirection({ data, update, currentRatio, onAspectRatioChange, onDurationChange }) {
   const ratio = currentRatio || data.format || data.aspectRatio || '16:9'
   const [menuOpen, setMenuOpen] = useState(false)
   const wrapRef = useRef(null)
@@ -41,7 +41,24 @@ export default function CreativeDirection({ data, update, currentRatio, onAspect
         <span className="cd-feature-sep" aria-hidden="true" />
         <div className="cd-feature-meta-item">
           <span className="cd-feature-meta-label">DURATION</span>
-          <span className="cd-feature-meta-val">{data.duration || '—'}</span>
+          {/* Editable — committing a new value fires onDurationChange,
+              which Board uses to surface a confirm modal asking whether
+              to re-pace the storyboard for the new runtime. The brief's
+              creativeDirection.duration is updated immediately either
+              way (mirrors the aspect-ratio pattern). */}
+          <EditableText
+            tag="span"
+            className="cd-feature-meta-val cd-feature-duration"
+            value={data.duration || ''}
+            onChange={v => {
+              const trimmed = (v || '').trim()
+              const prev = (data.duration || '').trim()
+              if (trimmed === prev) return
+              update('creativeDirection.duration', trimmed)
+              if (trimmed && onDurationChange) onDurationChange(trimmed, prev)
+            }}
+            placeholder="—"
+          />
         </div>
         <span className="cd-feature-sep" aria-hidden="true" />
         <div className="cd-ratio-wrap" ref={wrapRef}>

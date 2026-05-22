@@ -15,6 +15,7 @@ import OnePager from '../components/OnePager.jsx'
 import GenerationLogModal from '../components/GenerationLogModal.jsx'
 import ConfirmDialog from '../components/ConfirmDialog.jsx'
 import { ProjectContext } from '../hooks/useProject.js'
+import { regenerateShotList } from '../hooks/useBrief.js'
 
 // Immutable deep-set. Preserves array-vs-object identity at every level
 // (the old version spread `{ ...arr }` which converted brief.characters
@@ -135,6 +136,11 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [genLogOpen, setGenLogOpen] = useState(false)
   const [ratioMenuOpen, setRatioMenuOpen] = useState(false)
   const [pendingRatio, setPendingRatio] = useState(null)
+  // Duration-change confirm flow — committed value lives in
+  // brief.creativeDirection.duration immediately; this state just gates
+  // the "Re-pace the storyboard for this new runtime?" modal.
+  const [pendingDuration, setPendingDuration] = useState(null)
+  const [regeneratingShots, setRegeneratingShots] = useState(false)
   const [agentPanelOpen, setAgentPanelOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -466,6 +472,32 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     setPendingRatio(null)
   }
 
+  // Duration change from the Creative-section header. The new value is
+  // already in brief.creativeDirection.duration by the time we get here
+  // (the EditableText calls update() before firing this). We just open
+  // the confirm modal so the user can choose whether to re-pace the
+  // storyboard for the new runtime.
+  function handleDurationChange(newDuration, oldDuration) {
+    if (!newDuration || newDuration === oldDuration) return
+    setPendingDuration({ from: oldDuration, to: newDuration })
+  }
+  async function confirmRegenerateShots() {
+    if (!pendingDuration?.to) return
+    const target = pendingDuration.to
+    setPendingDuration(null)
+    setRegeneratingShots(true)
+    window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: `Re-pacing storyboard for ${target}…` } }))
+    try {
+      const newShots = await regenerateShotList(brief, target)
+      update('shotList', newShots)
+      window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'success', msg: 'Storyboard re-paced' } }))
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('ww-toast', { detail: { type: 'error', msg: `Re-pacing failed: ${e?.message?.slice(0, 120) || 'unknown error'}` } }))
+    } finally {
+      setRegeneratingShots(false)
+    }
+  }
+
   // Chat-driven regeneration: AgentPanel calls this when the model returns
   // a regenerate_active_image function call. We just rebroadcast as a
   // window event that the targeted ImageSlot is already listening for.
@@ -547,6 +579,7 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
                             update={update}
                             currentRatio={brief.generationSettings?.ratio || brief.creativeDirection?.format || '16:9'}
                             onAspectRatioChange={handleAspectRatioChange}
+                            onDurationChange={handleDurationChange}
                           />
       case 'bi':  return <BrandInfo data={brief.brandInfo} update={update} />
       case 'mb':  return <MoodBoard
@@ -956,6 +989,28 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
               </button>
               <button className="ww-confirm-primary" onClick={confirmRegenerateAll}>
                 Regenerate all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pendingDuration && (
+        <div className="ww-confirm-backdrop" onClick={() => setPendingDuration(null)}>
+          <div className="ww-confirm-modal" onClick={e => e.stopPropagation()}>
+            <div className="ww-confirm-eyebrow">Duration changed</div>
+            <h3 className="ww-confirm-title">Re-pace the storyboard for {pendingDuration.to}?</h3>
+            <p className="ww-confirm-body">
+              The duration is already saved as {pendingDuration.to}. The storyboard's {brief.shotList?.length || 9} shots
+              still total {pendingDuration.from || 'the previous runtime'} — re-pacing rewrites the shot descriptions and
+              per-shot durations to sum to {pendingDuration.to}. Existing storyboard images stay attached to their
+              shot positions; regenerate them from the Storyboard section if you want them remade for the new shots.
+            </p>
+            <div className="ww-confirm-actions">
+              <button className="ww-confirm-cancel" onClick={() => setPendingDuration(null)}>
+                Keep current shots
+              </button>
+              <button className="ww-confirm-primary" disabled={regeneratingShots} onClick={confirmRegenerateShots}>
+                {regeneratingShots ? 'Re-pacing…' : 'Re-pace storyboard'}
               </button>
             </div>
           </div>
