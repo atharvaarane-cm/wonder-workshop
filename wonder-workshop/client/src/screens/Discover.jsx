@@ -281,6 +281,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   // into the brief-generation prompt as extra context.
   const [attachments, setAttachments] = useState([])
   const [attaching, setAttaching] = useState(false)
+  const [dropActive, setDropActive] = useState(false)
   const textRef = useRef(null)
   const ratioRef = useRef(null)
   const lengthRef = useRef(null)
@@ -1013,7 +1014,47 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
             aria-hidden
           />
           <div className="discover-bg-overlay" aria-hidden />
-          <main className="discover-form">
+          <main
+            className={`discover-form${dropActive ? ' discover-form-drop-active' : ''}`}
+            // Drop-anywhere file attach. Files dropped on this main element
+            // (or any of its children) go through the same handleAttachFiles
+            // pipeline the + Attach button uses, so the user can drag a
+            // PDF / treatment / brief straight onto the home page.
+            onDragEnter={e => {
+              if (!Array.from(e.dataTransfer?.types || []).includes('Files')) return
+              e.preventDefault()
+              setDropActive(true)
+            }}
+            onDragOver={e => {
+              if (!Array.from(e.dataTransfer?.types || []).includes('Files')) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'copy'
+            }}
+            onDragLeave={e => {
+              // Only deactivate when we leave the main itself, not when
+              // moving between children — relatedTarget gives us that.
+              if (e.currentTarget.contains(e.relatedTarget)) return
+              setDropActive(false)
+            }}
+            onDrop={e => {
+              if (!e.dataTransfer?.files?.length) { setDropActive(false); return }
+              e.preventDefault()
+              setDropActive(false)
+              handleAttachFiles(e.dataTransfer.files)
+            }}
+          >
+
+          {dropActive && (
+            <div className="discover-drop-overlay" aria-hidden>
+              <div className="discover-drop-overlay-card">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3v12M7 8l5-5 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M5 17v2a2 2 0 002 2h10a2 2 0 002-2v-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+                <span>Drop to attach as creative reference</span>
+              </div>
+            </div>
+          )}
 
           {error && <div className="discover-error">{error}</div>}
 

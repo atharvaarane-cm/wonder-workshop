@@ -249,6 +249,27 @@ textarea { font-family: var(--font); resize: none; }
   justify-content: center;
   background: transparent; max-width: 860px; width: 100%; margin: 0 auto;
 }
+/* Drop-anywhere file attach on the home page. When the user drags a file
+   over the form, a translucent overlay confirms it's a valid drop target. */
+.discover-form { position: relative; }
+.discover-form-drop-active::after {
+  content: ''; position: absolute; inset: 8px; border-radius: 16px;
+  border: 2px dashed rgba(124, 92, 252, 0.55);
+  background: rgba(124, 92, 252, 0.06);
+  pointer-events: none; z-index: 5;
+}
+.discover-drop-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 6;
+}
+.discover-drop-overlay-card {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 22px 28px; border-radius: 14px;
+  background: rgba(20, 20, 26, 0.85); color: #fff;
+  font-size: 14px; font-weight: 600;
+  border: 1px solid rgba(124, 92, 252, 0.45);
+  backdrop-filter: blur(14px);
+}
 
 /* ── Inner pages (Projects / Inspiration / Boards) ── */
 .discover-page {
