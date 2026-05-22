@@ -3693,6 +3693,12 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── One-pager v2 — character sheet + storyboard frames ───────── */
 .op-character-sheet { margin-bottom: 18px; }
+/* Production mode shows ONLY ref + name per character. Multiple characters
+   stack with a thinner gap between them and no bottom margin on the bio
+   (no headshots grid below it to space against). */
+.op-character-sheet-compact { margin-bottom: 12px; }
+.op-character-sheet-compact .op-char-bio { margin-bottom: 0; }
+.op-treatment-loading { color: var(--muted); font-style: italic; }
 .op-char-bio { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; }
 .op-charsheet-ref {
   width: 130px; height: 130px; object-fit: cover; border-radius: 6px;

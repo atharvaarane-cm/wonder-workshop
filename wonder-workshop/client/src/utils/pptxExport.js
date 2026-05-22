@@ -359,8 +359,11 @@ export async function exportPptx(brief, images, opts = {}) {
     }
   }
 
-  // ── Treatment / Creative direction slide (last) ───────────────────
-  if (cd.description) {
+  // ── Treatment slide (last). Caller passes opts.treatment — the
+  // auto-generated present-tense narrative composed from the shot list
+  // captions. Falls back to cd.description if no treatment was generated.
+  const treatmentText = (opts.treatment || cd.description || '').trim()
+  if (treatmentText) {
     const s = pptx.addSlide()
     s.background = { color: BG }
     s.addText('TREATMENT', {
@@ -368,7 +371,7 @@ export async function exportPptx(brief, images, opts = {}) {
       fontSize: 11, fontFace: 'Instrument Sans', bold: true,
       color: MUTED, charSpacing: 3,
     })
-    s.addText(cd.description, {
+    s.addText(treatmentText, {
       x: SAFE_X, y: 1.0, w: SAFE_W, h: 5.5,
       fontSize: 16, fontFace: 'Instrument Sans',
       color: 'E2E2E2', valign: 'top',
