@@ -34,7 +34,10 @@ const RATIOS = [
   { id: '2:1',    label: '2 : 1',  sub: 'Anamorphic',   w: 34, h: 17 },
 ]
 
-const RESOLUTIONS = ['1K', '2K', '4K']
+// Resolution defaults to 1K and is no longer surfaced on the Discover form
+// — Ravi 2026-05-21 + Logan 2026-05-22. Generation downstream still respects
+// brief.generationSettings.resolution if a project carries one.
+const DEFAULT_RESOLUTION = '1K'
 
 // Spot lengths in seconds. Default to 30s — the most common ad length.
 // :06 / :15 / :30 / :60 / :90 / :120 covers everything from social bumpers
@@ -264,10 +267,8 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   const [improving, setImproving]   = useState(false)
   const [error, setError]           = useState(null)
   const [ratio, setRatio]           = useState('16:9')
-  const [resolution, setResolution] = useState('1K')
   const [length, setLength]         = useState('30s')
   const [ratioOpen, setRatioOpen]   = useState(false)
-  const [resolutionOpen, setResolutionOpen] = useState(false)
   const [lengthOpen, setLengthOpen] = useState(false)
   // Industry pill (Fashion Shoot / Product Ad / Lifestyle / Social) and
   // Inspiration pill (Golden Hour / Dark Studio / etc.) are tracked
@@ -282,7 +283,6 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   const [attaching, setAttaching] = useState(false)
   const textRef = useRef(null)
   const ratioRef = useRef(null)
-  const resolutionRef = useRef(null)
   const lengthRef = useRef(null)
   const inputCardRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -290,7 +290,6 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
   useEffect(() => {
     function handleClickOutside(e) {
       if (ratioRef.current && !ratioRef.current.contains(e.target)) setRatioOpen(false)
-      if (resolutionRef.current && !resolutionRef.current.contains(e.target)) setResolutionOpen(false)
       if (lengthRef.current && !lengthRef.current.contains(e.target)) setLengthOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -351,14 +350,14 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
       const ind = selectedIndustryItem()
       const insp = selectedInspirationItem()
       const tagSuffix = `${ind ? ` (industry: ${ind.label})` : ''}${insp ? ` (inspiration: ${insp.title})` : ''}`
-      const full = `${text}${tagContextString()}${attachmentBlock} (aspect ratio: ${ratio}) (resolution: ${resolution}) (length: ${length})${tagSuffix}`
+      const full = `${text}${tagContextString()}${attachmentBlock} (aspect ratio: ${ratio}) (resolution: ${DEFAULT_RESOLUTION}) (length: ${length})${tagSuffix}`
       const brief = await generateBrief(full)
       onGenerate({
         ...brief,
         generationSettings: {
           ...(brief.generationSettings || {}),
           ratio,
-          resolution,
+          resolution: DEFAULT_RESOLUTION,
           length,
         },
       })
@@ -1183,34 +1182,6 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
                   </div>
                 )}
               </div>
-              <div className="resolution-dropdown" ref={resolutionRef}>
-                <button className="resolution-pill" type="button" onClick={() => setResolutionOpen(o => !o)} title="Resolution">
-                  <span className="resolution-pill-label">Resolution</span>
-                  <span className="resolution-pill-value">{resolution}</span>
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                  </svg>
-                </button>
-                {resolutionOpen && (
-                  <div className="resolution-dropdown-menu">
-                    {RESOLUTIONS.map(option => (
-                      <button
-                        key={option}
-                        type="button"
-                        className={`resolution-dropdown-item${resolution === option ? ' active' : ''}`}
-                        onClick={() => { setResolution(option); setResolutionOpen(false) }}
-                      >
-                        <span>{option}</span>
-                        {resolution === option && (
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginLeft:'auto'}}>
-                            <path d="M2 6l3 3 5-5" stroke="#7C5CFC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
               {/* Length pill — spot duration. Lives next to aspect ratio
                   + resolution so users declare it before the brief gets
                   built (downstream sections like the storyboard depend
@@ -1265,7 +1236,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
               </button>
               <button
                 className="start-blank-btn"
-                onClick={() => onStartBlank?.({ ratio, resolution, length })}
+                onClick={() => onStartBlank?.({ ratio, resolution: DEFAULT_RESOLUTION, length })}
                 disabled={loading || improving}
                 title="Start from a blank board — skip AI autofill"
               >
