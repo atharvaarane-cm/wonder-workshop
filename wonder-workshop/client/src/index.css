@@ -3693,12 +3693,31 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── One-pager v2 — character sheet + storyboard frames ───────── */
 .op-character-sheet { margin-bottom: 18px; }
-/* Production mode shows ONLY ref + name per character. Multiple characters
-   stack with a thinner gap between them and no bottom margin on the bio
-   (no headshots grid below it to space against). */
-.op-character-sheet-compact { margin-bottom: 12px; }
-.op-character-sheet-compact .op-char-bio { margin-bottom: 0; }
 .op-treatment-loading { color: var(--muted); font-style: italic; }
+/* Production talent: name ABOVE headshot, characters side-by-side in
+   a row with comfortable margin between them. Wraps onto a second row
+   when the character count exceeds what fits in one. */
+.op-talent-row {
+  display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start;
+}
+.op-talent-stack { display: flex; flex-direction: column; gap: 18px; }
+.op-character-sheet-compact {
+  display: flex; flex-direction: column; gap: 8px;
+  width: 160px;
+  margin-bottom: 0;
+}
+.op-character-sheet-compact .op-char-name {
+  font-size: 16px; font-weight: 600; color: #111; letter-spacing: -0.01em;
+  margin-bottom: 0;
+}
+.op-character-sheet-compact .op-charsheet-ref {
+  width: 160px; height: 160px; object-fit: cover; border-radius: 8px;
+  border: 1px solid #eee;
+}
+.op-charsheet-ref-empty {
+  width: 160px; height: 160px; border-radius: 8px;
+  background: #f4f4f4; border: 1px solid #eee;
+}
 .op-char-bio { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; }
 .op-charsheet-ref {
   width: 130px; height: 130px; object-fit: cover; border-radius: 6px;

@@ -63,18 +63,34 @@ function CharacterSheet({ character, characterKey, images, mode }) {
       ))
     : []
 
+  // Production layout: name ABOVE the headshot, characters sit in a row
+  // (see the .op-talent-row container below). Full Detail keeps the
+  // ref + bio side-by-side because wardrobe + description need horizontal
+  // space + the headshots grid renders underneath.
+  if (mode === 'production') {
+    return (
+      <div className="op-character-sheet op-character-sheet-compact">
+        {character.name && <div className="op-char-name">{character.name}</div>}
+        {refSrc
+          ? <img src={refSrc} alt={character.name || 'Reference'} className="op-charsheet-ref" />
+          : <div className="op-charsheet-ref-empty" />
+        }
+      </div>
+    )
+  }
+
   return (
-    <div className={`op-character-sheet${mode === 'production' ? ' op-character-sheet-compact' : ''}`}>
+    <div className="op-character-sheet">
       <div className="op-char-bio">
         {refSrc && <img src={refSrc} alt={character.name || 'Reference'} className="op-charsheet-ref" />}
         <div className="op-char-bio-text">
           {character.name && <div className="op-char-name">{character.name}</div>}
-          {mode === 'full' && character.wardrobe && (
+          {character.wardrobe && (
             <p className="op-body">
               <strong>Wardrobe:</strong> {character.wardrobe}
             </p>
           )}
-          {mode === 'full' && character.description && (
+          {character.description && (
             <p className="op-body" style={{ marginTop: 6 }}>{character.description}</p>
           )}
         </div>
@@ -332,19 +348,23 @@ export default function OnePager({ brief, images = {}, onClose }) {
             </div>
           )}
 
-          {/* ── Talent — compressed in production mode. */}
+          {/* ── Talent. Production mode lays the characters out in a row;
+              full-detail stacks the full bio + headshots + full-body grids
+              per character. */}
           {characters.length > 0 && (
             <div className="op-section">
               <SectionLabel>Talent</SectionLabel>
-              {characters.map(({ character, key }) => (
-                <CharacterSheet
-                  key={key}
-                  character={character}
-                  characterKey={key}
-                  images={images}
-                  mode={mode}
-                />
-              ))}
+              <div className={mode === 'production' ? 'op-talent-row' : 'op-talent-stack'}>
+                {characters.map(({ character, key }) => (
+                  <CharacterSheet
+                    key={key}
+                    character={character}
+                    characterKey={key}
+                    images={images}
+                    mode={mode}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
