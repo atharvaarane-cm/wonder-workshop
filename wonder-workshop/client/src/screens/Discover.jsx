@@ -1061,7 +1061,7 @@ export default function Discover({ onGenerate, onStartBlank, projects = [], fold
           {/* Greeting */}
           <div className="discover-greeting">
             <span className="greeting-hi">Hi Atharvaa,</span>
-            <span className="greeting-sub">what do you want to create?</span>
+            <span className="greeting-sub">123 what do you want to create?</span>
           </div>
 
           {/* Industries — pick one to anchor the campaign type. */}
