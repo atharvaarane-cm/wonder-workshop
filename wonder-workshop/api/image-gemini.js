@@ -1,12 +1,11 @@
-// Image generation via Gemini's Nano Banana Pro
-// (gemini-3-pro-image-preview by default). Returns a data: URL so the
-// client can plug it straight into <img src> without an extra hop —
-// matches the contract of /api/image (Pollinations).
+// Image generation via Gemini. Returns a data: URL so the client can
+// plug it straight into <img src> without an extra hop — matches the
+// contract of /api/image (Pollinations).
 //
 // Requires GEMINI_IMAGE_API_KEY in env. Model can be overridden with
 // GEMINI_IMAGE_MODEL if Google ships a newer/cheaper one.
 
-const DEFAULT_MODEL = 'gemini-3-pro-image-preview'
+const DEFAULT_MODEL = 'gemini-2.0-flash-preview-image-generation'
 
 // Gemini accepts an aspectRatio hint via imageConfig; we map our common
 // ratios to the supported set. Anything unrecognised falls back to 1:1.
