@@ -1,32 +1,17 @@
 import express from 'express';
-import { request as httpRequest } from 'http';
+import chatHandler from './api/chat.js';
+import imageGeminiHandler from './api/image-gemini.js';
 
 const app = express();
 const PORT = 4200;
 
 app.use(express.json({ limit: '20mb' }));
 
-function proxyTo(hostname, port, path, body, res) {
-  const data = JSON.stringify(body);
-  const req = httpRequest(
-    { hostname, port, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
-    (upstream) => {
-      res.status(upstream.statusCode);
-      res.setHeader('Content-Type', upstream.headers['content-type'] || 'application/json');
-      upstream.pipe(res);
-    }
-  );
-  req.on('error', () => {
-    if (!res.headersSent) res.status(503).json({ error: 'Service unavailable' });
-  });
-  req.write(data);
-  req.end();
-}
+// Gemini chat (same handler used by Vercel serverless function)
+app.post('/api/chat', (req, res) => chatHandler(req, res));
 
-// Ollama chat proxy
-app.post('/api/chat', (req, res) => {
-  proxyTo('127.0.0.1', 11434, '/api/chat', req.body, res);
-});
+// Gemini image generation (same handler used by Vercel serverless function)
+app.post('/api/image-gemini', (req, res) => imageGeminiHandler(req, res));
 
 // Image generation via Pollinations.ai (free, no API key).
 // Return the URL directly — Pollinations takes 60–90s, which exceeds
