@@ -153,6 +153,18 @@ const INITIAL_STATE = {
     { id: "l2", name: "Track Stadium", handle: "@track", type: "ref", colors: ["#1A1A2E", "#4A6FA5", "#D4D4D4", "#FF4444"], referenceImage: null, generationStatus: "idle", generatedImage: null },
     { id: "l3", name: "Motel Room", handle: "@motel", type: "ai", colors: ["#3D2B1F", "#D4A574", "#8B7355", "#FFE4B5"], referenceImage: null, generationStatus: "idle", generatedImage: null },
   ],
+  // Brand Info — preserved from v1 per Logan's "err on side of features"
+  // rule. Singular (one brand per project), unlike the asset arrays.
+  brand: {
+    name: "Nike",
+    url: "nike.com",
+    logo: null,
+    guidelines: "Bold. Athletic. Authentic. Just Do It.",
+  },
+  // Mood Board — array of visual style references, similar shape to
+  // locations but with a free-form caption instead of structured fields.
+  // Carries v1's Mood Board section forward.
+  moodBoard: [],
   frames: [
     { id: "f1", number: "01", shotType: "WIDE", camera: "Static", brief: "Dawn. Empty road to vanishing point. Heat shimmer. @maya runs toward camera, impossibly small against the landscape.", talentIds: ["t1"], locationId: "l1", productIds: [], cameraAngle: "front", cameraHeight: "eye", lens: "wide", movement: "static", imageStatus: "placeholder", uploadedImage: null },
     { id: "f2", number: "02", shotType: "ECU", camera: "Tracking \xB7 Worm's Eye", brief: "@maya's feet in @ultra. Each strike kicks dust. Breath before music. Rhythm as score.", talentIds: ["t1"], locationId: "l1", productIds: ["p1"], cameraAngle: "front", cameraHeight: "worm", lens: "normal", movement: "track", imageStatus: "placeholder", uploadedImage: null },
@@ -293,6 +305,21 @@ function applyAction(state, action) {
       const id = action.id;
       return { ...state, locations: state.locations.filter(l => l.id !== id), frames: state.frames.map(f => ({ ...f, locationId: f.locationId === id ? null : f.locationId })) };
     }
+    case "UPDATE_BRAND":
+      return { ...state, brand: { ...(state.brand || {}), [action.field]: action.value } };
+    case "UPLOAD_BRAND_LOGO":
+      return { ...state, brand: { ...(state.brand || {}), logo: action.dataUrl } };
+    case "ADD_MOOD": {
+      const mx = Math.max(0, ...((state.moodBoard || []).map(m => parseInt(String(m.id).slice(1)) || 0)));
+      const merged = { id: "m" + (mx + 1), caption: "", image: null, generationStatus: "idle", ...action.data };
+      return { ...state, moodBoard: [...(state.moodBoard || []), merged] };
+    }
+    case "UPDATE_MOOD":
+      return { ...state, moodBoard: (state.moodBoard || []).map(m => m.id === action.id ? { ...m, [action.field]: action.value } : m) };
+    case "DELETE_MOOD":
+      return { ...state, moodBoard: (state.moodBoard || []).filter(m => m.id !== action.id) };
+    case "UPLOAD_MOOD_IMAGE":
+      return { ...state, moodBoard: (state.moodBoard || []).map(m => m.id === action.id ? { ...m, image: action.dataUrl } : m) };
     case "AUTO_DETECT_MENTIONS": {
       return { ...state, frames: state.frames.map(f => {
         const briefLower = f.brief.toLowerCase();
@@ -1423,6 +1450,168 @@ function AssetTabButton({ tab, isActive, onClick }) {
   );
 }
 
+// -- BRAND PANEL (single-record panel, not array) ---------------
+// Logo upload + name + URL + guidelines. Sits inside the Brand tab.
+
+function BrandPanel({ brand, dispatch }) {
+  const fileRef = useRef(null);
+  const logo = brand?.logo;
+
+  function onLogoFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => dispatch({ type: "UPLOAD_BRAND_LOGO", dataUrl: e.target.result });
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+        {/* Logo upload zone — square */}
+        <div
+          onClick={() => fileRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); }}
+          onDrop={e => { e.preventDefault(); onLogoFile(e.dataTransfer.files?.[0]); }}
+          style={{
+            width: 96, height: 96, borderRadius: 10, cursor: "pointer",
+            background: logo ? `url(${logo}) center/contain no-repeat var(--warm-04)` : "var(--warm-04)",
+            border: "1px dashed var(--warm-10)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, transition: "border-color 0.15s ease",
+          }}
+        >
+          {!logo && (
+            <div style={{ textAlign: "center", padding: 6 }}>
+              <SectionIcon name="upload" size={14} color="var(--warm-25)" />
+              <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-25)", marginTop: 4 }}>Upload logo</div>
+            </div>
+          )}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+          onChange={e => { onLogoFile(e.target.files?.[0]); e.target.value = ""; }} />
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+          <div>
+            <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Brand name</label>
+            <input
+              value={brand?.name || ""}
+              onChange={e => dispatch({ type: "UPDATE_BRAND", field: "name", value: e.target.value })}
+              placeholder="Brand name"
+              style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, padding: "7px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm)", outline: "none" }}
+            />
+          </div>
+          <div>
+            <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>URL</label>
+            <input
+              value={brand?.url || ""}
+              onChange={e => dispatch({ type: "UPDATE_BRAND", field: "url", value: e.target.value })}
+              placeholder="nike.com"
+              style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, padding: "7px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm)", outline: "none" }}
+            />
+          </div>
+        </div>
+      </div>
+      <div>
+        <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Guidelines</label>
+        <textarea
+          value={brand?.guidelines || ""}
+          onChange={e => dispatch({ type: "UPDATE_BRAND", field: "guidelines", value: e.target.value })}
+          placeholder="Brand voice, tone, dos and don'ts…"
+          rows={3}
+          style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, lineHeight: 1.6, padding: "8px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm-40)", outline: "none", resize: "vertical" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// -- MOOD PANEL (image grid) ------------------------------------
+// Visual references for tone, palette, composition. Click a tile to
+// upload an image; type a caption to describe what the reference is
+// pointing at.
+
+function MoodPanel({ moodBoard, dispatch }) {
+  const addBtnRef = useRef(null);
+
+  function onTileUpload(id, file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => dispatch({ type: "UPLOAD_MOOD_IMAGE", id, dataUrl: e.target.result });
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+        {moodBoard.map(m => (
+          <MoodTile key={m.id} item={m} dispatch={dispatch} onUpload={onTileUpload} />
+        ))}
+        <button
+          ref={addBtnRef}
+          onClick={() => dispatch({ type: "ADD_MOOD", data: {} })}
+          style={{
+            aspectRatio: "1/1", borderRadius: 8, cursor: "pointer",
+            background: "transparent", border: "1px dashed var(--warm-10)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+            color: "var(--warm-25)", outline: "none",
+          }}
+        >
+          <SectionIcon name="plus" size={14} color="var(--warm-25)" />
+          <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, letterSpacing: "0.02em" }}>Add reference</span>
+        </button>
+      </div>
+      {moodBoard.length === 0 && (
+        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 400, color: "var(--warm-25)", textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>
+          Drop in mood references — color palettes, film stills, photos. They guide tone without driving generation directly.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MoodTile({ item, dispatch, onUpload }) {
+  const fileRef = useRef(null);
+  return (
+    <div style={{ position: "relative" }}>
+      <div
+        onClick={() => fileRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); }}
+        onDrop={e => { e.preventDefault(); onUpload(item.id, e.dataTransfer.files?.[0]); }}
+        style={{
+          aspectRatio: "1/1", borderRadius: 8, cursor: "pointer",
+          background: item.image ? `url(${item.image}) center/cover` : "var(--warm-04)",
+          border: "1px solid var(--warm-08)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+      >
+        {!item.image && <SectionIcon name="image" size={16} color="var(--warm-20)" />}
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={e => { onUpload(item.id, e.target.files?.[0]); e.target.value = ""; }} />
+      <input
+        value={item.caption || ""}
+        onChange={e => dispatch({ type: "UPDATE_MOOD", id: item.id, field: "caption", value: e.target.value })}
+        placeholder="Caption…"
+        style={{ width: "100%", marginTop: 4, fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, padding: "3px 5px", border: "none", background: "transparent", color: "var(--warm-35)", outline: "none" }}
+      />
+      <button
+        onClick={() => dispatch({ type: "DELETE_MOOD", id: item.id })}
+        title="Remove"
+        style={{
+          position: "absolute", top: 3, right: 3,
+          width: 18, height: 18, borderRadius: 4,
+          background: "rgba(0,0,0,0.5)", border: "none", color: "#fff",
+          fontSize: 10, cursor: "pointer", opacity: 0,
+          transition: "opacity 0.15s ease",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = 1; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = 0; }}
+      >×</button>
+    </div>
+  );
+}
+
 // -- ASSET EXPANDED PANEL (scrollable with fade hints) ----------
 
 function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist }) {
@@ -1449,6 +1638,24 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
     const t = setTimeout(checkScroll, 200);
     return () => clearTimeout(t);
   }, [data.talent, data.products, data.locations, expanded, checkScroll]);
+
+  // Brand and Mood don't fit the array-of-cards pattern — they get
+  // their own panels. Branch before the items map so the existing
+  // Talent / Products / Locations rendering stays untouched.
+  if (activeTab === "brand") {
+    return (
+      <div style={{ position: "relative", borderTop: "1px solid var(--warm-06)", marginTop: 8, animation: "fadeIn 0.2s ease", padding: "12px 0" }}>
+        <BrandPanel brand={data.brand} dispatch={dispatch} />
+      </div>
+    );
+  }
+  if (activeTab === "mood") {
+    return (
+      <div style={{ position: "relative", borderTop: "1px solid var(--warm-06)", marginTop: 8, animation: "fadeIn 0.2s ease", padding: "12px 0" }}>
+        <MoodPanel moodBoard={data.moodBoard || []} dispatch={dispatch} />
+      </div>
+    );
+  }
 
   const items = activeTab === "talent" ? data.talent : activeTab === "products" ? data.products : data.locations;
 
@@ -1502,11 +1709,14 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
     { key: "talent", label: "Characters", icon: "users", count: data.talent.length },
     { key: "products", label: "Elements", icon: "box", count: data.products.length },
     { key: "locations", label: "Locations", icon: "map", count: data.locations.length },
+    { key: "brand", label: "Brand", icon: "link", count: data.brand?.logo ? 1 : 0 },
+    { key: "mood", label: "Mood", icon: "image", count: (data.moodBoard || []).length },
   ];
 
-  const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION" }[activeTab] || "TALENT";
+  const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
 
   const activeIndex = tabs.findIndex(t => t.key === activeTab);
+  const W = 100 / tabs.length;
 
   return (
     <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16 }}>
@@ -1523,8 +1733,8 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
           <div style={{
             position: "absolute",
             top: 3, bottom: 3,
-            left: `calc(${activeIndex * (100 / 3)}% + 3px)`,
-            width: `calc(${100 / 3}% - 4px)`,
+            left: `calc(${activeIndex * W}% + 3px)`,
+            width: `calc(${W}% - 4px)`,
             borderRadius: 8,
             background: "var(--warm-08)",
             boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px var(--warm-10)",
