@@ -1076,6 +1076,21 @@ function EditableText({ value, onChange, multiline, style = {}, placeholder }) {
 
 // -- PREMIUM BUTTON -------------------------------------------
 
+// Sliding sheen overlay — drop into any button/container that's
+// position:relative + overflow:hidden to signal something async is
+// running. Uses the existing @keyframes shimmer in App's <style>.
+function ShimmerSweep({ color = "rgba(255,255,255,0.22)" }) {
+  return (
+    <span aria-hidden="true" style={{
+      position: "absolute", inset: 0,
+      background: `linear-gradient(90deg, transparent 0%, ${color} 50%, transparent 100%)`,
+      backgroundSize: "200% 100%",
+      animation: "shimmer 1.4s infinite linear",
+      pointerEvents: "none",
+    }} />
+  );
+}
+
 function PremiumButton({ children, onClick, disabled, loading, complete, variant = "secondary", style = {}, title }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
@@ -1119,13 +1134,15 @@ function PremiumButton({ children, onClick, disabled, loading, complete, variant
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setPressed(false); }}
       onMouseDown={() => setPressed(true)} onMouseUp={() => setPressed(false)}
       title={title}
-      style={{ ...base, ...variants[variant], ...style }}
+      style={{ ...base, ...variants[variant], ...style, overflow: "hidden" }}
     >
-      {loading ? (
-        <span style={{ display: "flex", gap: 3 }}>
-          {[0, 1, 2].map(i => <span key={i} style={{ width: 4, height: 4, borderRadius: 1, background: "currentColor", animation: `pulse 1.2s ease ${i * 0.15}s infinite` }} />)}
-        </span>
-      ) : complete ? "✓" : children}
+      {/* Sliding sheen across the button while loading — keeps the
+          label / icon visible underneath so the user still reads what
+          they kicked off. */}
+      {loading && <ShimmerSweep color={variant === "primary" ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.22)"} />}
+      <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+        {complete ? "✓" : children}
+      </span>
     </button>
   );
 }
@@ -3032,6 +3049,7 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
                 disabled={!customPrompt.trim() || improvingPrompt}
                 title="Use Gemini to expand your prompt into a richer image-generation prompt"
                 style={{
+                  position: "relative", overflow: "hidden",
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 12px", borderRadius: 18,
                   background: "rgba(255,200,87,0.10)",
@@ -3043,11 +3061,14 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
                   opacity: (customPrompt.trim() && !improvingPrompt) ? 1 : 0.5,
                 }}
               >
-                <svg width="11" height="11" viewBox="0 0 18 18" fill="none">
-                  <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-                  <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
-                </svg>
-                {improvingPrompt ? "Improving…" : "Improve with AI"}
+                {improvingPrompt && <ShimmerSweep color="rgba(255,200,87,0.32)" />}
+                <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <svg width="11" height="11" viewBox="0 0 18 18" fill="none">
+                    <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                    <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
+                  </svg>
+                  {improvingPrompt ? "Improving…" : "Improve with AI"}
+                </span>
               </button>
               <div style={{ display: "flex", gap: 6 }}>
                 <button onClick={() => setEditPromptOpen(false)} style={{
@@ -5934,6 +5955,7 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
                 type="button"
                 title="Use Gemini to expand a rough idea into a 100-180 word grounded brief"
                 style={{
+                  position: "relative", overflow: "hidden",
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 12px", borderRadius: 18,
                   background: "rgba(255,200,87,0.10)",
@@ -5956,11 +5978,14 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
                   e.currentTarget.style.borderColor = "rgba(255,200,87,0.5)";
                 }}
               >
-                <svg width="11" height="11" viewBox="0 0 18 18" fill="none">
-                  <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-                  <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
-                </svg>
-                {improving ? "Improving…" : "Improve with AI"}
+                {improving && <ShimmerSweep color="rgba(255,200,87,0.32)" />}
+                <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <svg width="11" height="11" viewBox="0 0 18 18" fill="none">
+                    <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                    <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
+                  </svg>
+                  {improving ? "Improving…" : "Improve with AI"}
+                </span>
               </button>
             </div>
             <textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
