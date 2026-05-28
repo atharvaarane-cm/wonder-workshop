@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext } from "react";
 import { generateBrief, chatWithTools } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
-import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
+import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import {
   newProjectId,
   listProjects,
@@ -2550,9 +2550,29 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
   const [generating, setGenerating] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveText, setImproveText] = useState("");
+  const [upscaleOpen, setUpscaleOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const fileRef = useRef(null);
   const aspectCSS = ratio.replace(":", "/");
+
+  async function handleUpscale(targetRes) {
+    setUpscaleOpen(false);
+    if (!src || locked) return;
+    setGenerating(true);
+    try {
+      const url = await upscaleImage(src, targetRes, ratio);
+      // Reuse onUpload — semantically the upscaled image is replacing the
+      // current one (just like an upload would). Callers wire onUpload to
+      // the correct dispatch for the slot kind.
+      onUpload?.(url);
+      toast(`Upscaled to ${String(targetRes).toUpperCase()}`, { kind: "success" });
+    } catch (e) {
+      console.error("[upscale]", e);
+      toast(`Upscale failed: ${e?.message?.slice(0, 140) || "unknown"}`, { kind: "error" });
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function handleRegen(instruction) {
     if (locked) return;
@@ -2603,7 +2623,7 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
     <>
       <div
         onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => { setHovered(false); setImproveOpen(false); }}
+        onMouseLeave={() => { setHovered(false); setImproveOpen(false); setUpscaleOpen(false); }}
         style={{
           position: "relative", aspectRatio: aspectCSS, borderRadius: 8,
           background: src ? `url(${src}) center/cover` : "var(--warm-04)",
@@ -2650,6 +2670,27 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
             <HoverBarBtn title="Regenerate" disabled={locked} onClick={() => handleRegen()}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </HoverBarBtn>
+            <div style={{ position: "relative" }}>
+              <HoverBarBtn title="Upscale" disabled={locked} active={upscaleOpen} onClick={() => setUpscaleOpen(o => !o)}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 6V3h3M13 10v3h-3M3 13l4-4M13 3l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </HoverBarBtn>
+              {upscaleOpen && (
+                <div onClick={e => e.stopPropagation()} style={{
+                  position: "absolute", top: "calc(100% + 6px)", left: "50%",
+                  transform: "translateX(-50%)",
+                  display: "flex", flexDirection: "column", gap: 2, padding: 4,
+                  minWidth: 70, borderRadius: 6, zIndex: 8,
+                  background: "var(--surface-solid)",
+                  border: "1px solid var(--warm-12)",
+                  boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
+                }}>
+                  <button onClick={() => handleUpscale("2k")} style={upscaleMenuStyle()}>2K</button>
+                  <button onClick={() => handleUpscale("4k")} style={upscaleMenuStyle()}>4K</button>
+                </div>
+              )}
+            </div>
             <HoverBarBtn title="Delete" disabled={locked} onClick={onClear} danger>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </HoverBarBtn>
@@ -5071,6 +5112,17 @@ function projMenuItemStyle() {
     background: "transparent", border: "none",
     fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
     color: "var(--warm-50)", cursor: "pointer", outline: "none",
+  };
+}
+
+function upscaleMenuStyle() {
+  return {
+    width: "100%", textAlign: "center",
+    padding: "5px 10px", borderRadius: 4,
+    background: "transparent", border: "none",
+    fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
+    color: "var(--warm)", cursor: "pointer", outline: "none",
+    letterSpacing: "0.06em",
   };
 }
 

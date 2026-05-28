@@ -90,6 +90,16 @@ export function productPrompt(p) {
   return `Product photography of ${p.name}${note}. Studio lighting, clean neutral background, photorealistic, sharp focus, commercial advertising style.`;
 }
 
+// Upscale — Nano Banana Pro supports image conditioning, so "upscale"
+// is regenerate-with-this-image-as-reference + an explicit enhance
+// prompt. Result is appended (or replaces) the slot's image. Only
+// works on Gemini; Pollinations doesn't support image conditioning.
+export async function upscaleImage(sourceUrl, targetRes = "4k", ratio = "1:1") {
+  const label = String(targetRes).toUpperCase();
+  const prompt = `Upscaled to ${label} resolution, enhanced sharpness, preserve every detail and composition exactly, photorealistic high resolution.`;
+  return generateImage(prompt, { ratio, referenceImages: [sourceUrl] });
+}
+
 export function moodPrompt(text) {
   return `${text}. Cinematic mood reference, evocative atmosphere, photorealistic, no text or watermarks, tone-setting visual.`;
 }
