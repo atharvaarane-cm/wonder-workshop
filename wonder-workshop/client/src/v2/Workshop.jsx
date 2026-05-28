@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
+
+// Shared spring config — used across press/hover feedback so the whole
+// app feels physically coherent. Tuned to feel snappy on click without
+// the bouncy overshoot of a softer spring.
+const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
+const HOVER_SCALE = 1.012;
+const TAP_SCALE = 0.985;
 import { generateBrief, chatWithTools, regenerateShotList } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
@@ -2025,22 +2033,25 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
   const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
 
   return (
-    <div
+    <motion.div
+      layout
+      layoutId={`frame-${frame.id}`}
       draggable onDragStart={e => onDragStart(e, frame.id)}
       onDragOver={e => onDragOver(e, index)}
       onDragLeave={onDragLeave}
       onDragEnd={onDragEnd} onDrop={onDrop} onClick={onClick}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      whileHover={isDragSrc ? undefined : { y: -2, scale: HOVER_SCALE }}
+      whileTap={isDragSrc ? undefined : { scale: TAP_SCALE }}
+      transition={TAP_SPRING}
       style={{
         borderRadius: 8, overflow: "hidden",
         border: selected ? "1px solid var(--warm-20)"
           : highlighted ? "1px solid var(--warm-12)"
           : hovered ? "1px solid var(--warm-08)" : "1px solid var(--warm-04)",
         cursor: isDragSrc ? "grabbing" : "pointer",
-        transition: "all 0.25s cubic-bezier(0.22,1,0.36,1)",
         opacity: isDragSrc ? 0.15 : 1,
-        transform: hovered && !isDragSrc ? "translateY(-1px)" : "translateY(0)",
-        boxShadow: selected ? "0 2px 20px rgba(0,0,0,0.08)" : hovered ? "0 2px 12px rgba(0,0,0,0.04)" : "none",
+        boxShadow: selected ? "0 2px 20px rgba(0,0,0,0.08)" : hovered ? "0 4px 18px rgba(0,0,0,0.06)" : "none",
         animation: highlighted ? "highlightPulse 1.5s ease" : "none",
         background: "var(--card-bg)",
       }}
@@ -2118,7 +2129,7 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
           {renderMentions(frame.brief, data)}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -2921,16 +2932,18 @@ function CharacterTile({ character, onClick }) {
   const externalPending = usePending(`talent.${character.id}.primary`);
   const isPending = status === "generating" || externalPending;
   return (
-    <button
+    <motion.button
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      whileHover={{ scale: HOVER_SCALE, y: -1 }}
+      whileTap={{ scale: TAP_SCALE }}
+      transition={TAP_SPRING}
       style={{
         display: "flex", flexDirection: "column", gap: 6,
         padding: 6, borderRadius: 10, cursor: "pointer",
         background: hovered ? "var(--warm-06)" : "var(--warm-04)",
         border: hovered ? "1px solid var(--warm-12)" : "1px solid var(--warm-06)",
-        transition: "all 0.15s ease",
         outline: "none",
         overflow: "hidden",
       }}
@@ -2990,7 +3003,7 @@ function CharacterTile({ character, onClick }) {
         color: "var(--warm-25)", textAlign: "center",
         letterSpacing: "0.06em", textTransform: "uppercase",
       }}>{character.role || ""}</div>
-    </button>
+    </motion.button>
   );
 }
 
@@ -4020,17 +4033,19 @@ function LocationTile({ location, onClick, aspectCSS = "16/9" }) {
   const externalPending = usePending(`location.${location.id}`);
   const isPending = status === "generating" || externalPending;
   return (
-    <button
+    <motion.button
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      whileHover={{ scale: HOVER_SCALE, y: -1 }}
+      whileTap={{ scale: TAP_SCALE }}
+      transition={TAP_SPRING}
       style={{
         position: "relative",
         aspectRatio: aspectCSS,
         padding: 0, borderRadius: 10, cursor: "pointer",
         background: img ? "transparent" : "var(--warm-04)",
         border: hovered ? "1px solid var(--warm-12)" : "1px solid var(--warm-06)",
-        transition: "all 0.15s ease",
         outline: "none",
         overflow: "hidden",
       }}
@@ -4073,7 +4088,7 @@ function LocationTile({ location, onClick, aspectCSS = "16/9" }) {
           fontSize: 10,
         }}>🔒</div>
       )}
-    </button>
+    </motion.button>
   );
 }
 
@@ -4209,16 +4224,18 @@ function ElementTile({ product, onClick }) {
   const externalPending = usePending(`product.${product.id}`);
   const isPending = status === "generating" || externalPending;
   return (
-    <button
+    <motion.button
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      whileHover={{ scale: HOVER_SCALE, y: -1 }}
+      whileTap={{ scale: TAP_SCALE }}
+      transition={TAP_SPRING}
       style={{
         display: "flex", flexDirection: "column", gap: 6,
         padding: 6, borderRadius: 10, cursor: "pointer",
         background: hovered ? "var(--warm-06)" : "var(--warm-04)",
         border: hovered ? "1px solid var(--warm-12)" : "1px solid var(--warm-06)",
-        transition: "all 0.15s ease",
         outline: "none",
       }}
     >
@@ -4254,7 +4271,7 @@ function ElementTile({ product, onClick }) {
         color: "var(--warm-25)", textAlign: "center",
         letterSpacing: "0.06em", textTransform: "uppercase",
       }}>{product.category || ""}</div>
-    </button>
+    </motion.button>
   );
 }
 
@@ -5090,8 +5107,17 @@ function parseMentions(text, data) {
 }
 
 function ChatMessage({ message: m, data, onMentionClick }) {
+  // Slide-in: subtle 6px rise + fade. Spring transition gives a little
+  // settle instead of the linear bottom-up scrolls every chat UI does.
+  const MotionWrap = ({ children }) => (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.7 }}
+    >{children}</motion.div>
+  );
   if (m.role === "system") {
-    return <div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)", lineHeight: 1.65, padding: "4px 0" }}>{m.text}</div>;
+    return <MotionWrap><div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)", lineHeight: 1.65, padding: "4px 0" }}>{m.text}</div></MotionWrap>;
   }
 
   const renderText = (text) => {
@@ -5116,14 +5142,17 @@ function ChatMessage({ message: m, data, onMentionClick }) {
 
   if (m.role === "user") {
     return (
+      <MotionWrap>
       <div style={{ padding: "8px 12px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid var(--warm-06)" }}>
         <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, color: "var(--warm-60)", lineHeight: 1.5 }}>{renderText(m.text)}</div>
         {m.frameId && <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, color: "var(--warm-15)", marginTop: 4 }}>Frame {m.frameNumber || "?"}</div>}
       </div>
+      </MotionWrap>
     );
   }
 
   return (
+    <MotionWrap>
     <div style={{ padding: "0 0 4px" }}>
       <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, color: "var(--warm-40)", lineHeight: 1.6 }}>{renderText(m.text)}</div>
       {m.changes && m.changes.length > 0 && (
@@ -5137,6 +5166,7 @@ function ChatMessage({ message: m, data, onMentionClick }) {
         </div>
       )}
     </div>
+    </MotionWrap>
   );
 }
 
