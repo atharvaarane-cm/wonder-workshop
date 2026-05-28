@@ -148,9 +148,9 @@ function getThemeVars(isDark) {
 }
 
 const CHAT_SUGGESTIONS = [
-  { label: "Create a character", icon: "users" },
-  { label: "Wardrobe preview", icon: "camera" },
-  { label: "Get location ideas", icon: "map" },
+  { label: "Create a new character based on this project's brief", icon: "users" },
+  { label: "Suggest a new location and add it", icon: "map" },
+  { label: "Add a hero product / element with reference image", icon: "camera" },
 ];
 
 function isCameraDefault(frame) {
@@ -838,6 +838,72 @@ const V2_CHAT_TOOLS = [
     description: "Append a new frame to the storyboard. The frame starts with placeholder content the user can refine.",
     parameters: { type: "object", properties: {} },
   },
+  {
+    name: "create_talent",
+    description: "Create a new character (talent) in the project. By default also generates the primary headshot image — set generateImage:false to skip. Use this when the user asks to add a character, suggest a casting option, etc.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Full character name, e.g. 'Maya Chen'." },
+        role: { type: "string", description: "Lead | Supporting | Cameo | similar role label. Default 'Supporting'." },
+        note: { type: "string", description: "Physical / wardrobe description. Stick to appearance — age range, ethnicity, build, hair, wardrobe — and avoid expression / pose directions (they bias every generated frame)." },
+        generateImage: { type: "boolean", description: "Default true. Set false only if the user explicitly says 'don't generate an image'." },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "create_location",
+    description: "Create a new location in the project. By default also generates the establishing-shot reference image. Use this when the user asks to add a setting / place.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Short location name, e.g. 'Brooklyn Brownstone Rooftop'." },
+        note: { type: "string", description: "Time of day, weather, architecture, atmosphere." },
+        generateImage: { type: "boolean", description: "Default true." },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "create_product",
+    description: "Create a new product / element (props, branded items, hero objects). By default also generates the product photography reference.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Product / element name." },
+        category: { type: "string", description: "Footwear | Apparel | Beverage | Accessory | etc." },
+        note: { type: "string", description: "Color, material, shape, key details." },
+        generateImage: { type: "boolean", description: "Default true." },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "generate_asset_image",
+    description: "Generate (or regenerate) the image for an EXISTING asset — talent primary headshot, location reference, product reference. Use this when the user asks to 'remake' or 'try a different look for' an asset.",
+    parameters: {
+      type: "object",
+      properties: {
+        assetType: { type: "string", enum: ["talent", "location", "product"] },
+        assetName: { type: "string", description: "Current name of the asset (case-insensitive substring match)." },
+        promptOverride: { type: "string", description: "Optional custom prompt that replaces the base prompt. Leave blank to regenerate from the asset's existing description." },
+      },
+      required: ["assetType", "assetName"],
+    },
+  },
+  {
+    name: "generate_frame_image",
+    description: "Generate (or regenerate) the storyboard image for a frame. Uses the frame's brief + tagged @-handles as references.",
+    parameters: {
+      type: "object",
+      properties: {
+        frameNumber: { type: "string", description: "Zero-padded frame number." },
+        promptOverride: { type: "string", description: "Optional custom prompt." },
+      },
+      required: ["frameNumber"],
+    },
+  },
 ];
 
 // Apply a single chat tool call to the v2 reducer. Returns metadata
@@ -904,6 +970,96 @@ function applyChatToolCall(action, data, dispatch) {
     case "add_frame": {
       dispatch({ type: "ADD_FRAME" });
       return { applied: true, kind: "frame", field: "added" };
+    }
+    case "create_talent": {
+      if (!args.name) return null;
+      // Derive a unique @-handle from the first name. Reducer doesn't
+      // validate uniqueness so we do it here.
+      const firstWord = String(args.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+      const existingHandles = new Set((data.talent || []).map(t => (t.handle || "").toLowerCase()));
+      let handle = `@${firstWord || "char"}`;
+      let n = 2;
+      while (existingHandles.has(handle.toLowerCase())) { handle = `@${firstWord}${n++}`; }
+      const initials = String(args.name).trim().split(/\s+/).map(w => w[0] || "").join("").slice(0, 2).toUpperCase();
+      dispatch({ type: "ADD_TALENT", data: {
+        name: args.name,
+        handle,
+        role: args.role || "Supporting",
+        note: args.note || "",
+        initials,
+      }});
+      const wantImage = args.generateImage !== false;
+      return {
+        applied: true, kind: "talent", field: "created",
+        effect: wantImage ? { type: "generateTalentPrimary", talentName: args.name } : null,
+        message: `Created character ${args.name} ${handle}${wantImage ? " — generating headshot…" : ""}`,
+      };
+    }
+    case "create_location": {
+      if (!args.name) return null;
+      const firstWord = String(args.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+      const existingHandles = new Set((data.locations || []).map(l => (l.handle || "").toLowerCase()));
+      let handle = `@${firstWord || "loc"}`;
+      let n = 2;
+      while (existingHandles.has(handle.toLowerCase())) { handle = `@${firstWord}${n++}`; }
+      dispatch({ type: "ADD_LOCATION", data: {
+        name: args.name,
+        handle,
+        note: args.note || "",
+        type: "ai",
+      }});
+      const wantImage = args.generateImage !== false;
+      return {
+        applied: true, kind: "location", field: "created",
+        effect: wantImage ? { type: "generateLocationImage", locationName: args.name } : null,
+        message: `Created location ${args.name} ${handle}${wantImage ? " — generating reference…" : ""}`,
+      };
+    }
+    case "create_product": {
+      if (!args.name) return null;
+      const firstWord = String(args.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+      const existingHandles = new Set((data.products || []).map(p => (p.handle || "").toLowerCase()));
+      let handle = `@${firstWord || "prod"}`;
+      let n = 2;
+      while (existingHandles.has(handle.toLowerCase())) { handle = `@${firstWord}${n++}`; }
+      dispatch({ type: "ADD_PRODUCT", data: {
+        name: args.name,
+        handle,
+        category: args.category || "Other",
+        note: args.note || "",
+      }});
+      const wantImage = args.generateImage !== false;
+      return {
+        applied: true, kind: "product", field: "created",
+        effect: wantImage ? { type: "generateProductImage", productName: args.name } : null,
+        message: `Created element ${args.name} ${handle}${wantImage ? " — generating reference…" : ""}`,
+      };
+    }
+    case "generate_asset_image": {
+      if (!args.assetType || !args.assetName) return null;
+      return {
+        applied: true, kind: args.assetType, field: "regenerating",
+        effect: {
+          type: "generateAssetImage",
+          assetType: args.assetType,
+          assetName: args.assetName,
+          promptOverride: args.promptOverride || null,
+        },
+        message: `Generating new ${args.assetType} image for ${args.assetName}…`,
+      };
+    }
+    case "generate_frame_image": {
+      const id = findFrameId(args.frameNumber);
+      if (!id) return null;
+      return {
+        applied: true, kind: "frame", frameId: id, field: "regenerating",
+        effect: {
+          type: "generateFrameImage",
+          frameId: id,
+          promptOverride: args.promptOverride || null,
+        },
+        message: `Generating new image for frame ${args.frameNumber}…`,
+      };
     }
     default:
       return null;
@@ -2052,6 +2208,59 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Description</label>
             <textarea value={frame.brief} onChange={e => update("brief", e.target.value)} style={{ ...inp, minHeight: 90, resize: "vertical", lineHeight: 1.75 }} />
+            {/* Tagged-asset preview — same colored chip palette as the
+                storyboard sheet. Only entities present in the project
+                show as chips; @-words that don't match a real asset
+                (e.g. "@Manhattan" when there's no Manhattan location)
+                are rendered as plain prose by renderMentions. Click
+                a chip to focus the chat with that asset's name so
+                you can ask the AI to do something with it. */}
+            {(() => {
+              const tagged = [];
+              const seen = new Set();
+              const re = /@[\w-]+/g;
+              for (const m of (frame.brief || "").matchAll(re)) {
+                const handle = m[0].toLowerCase();
+                if (seen.has(handle)) continue;
+                const t = data.talent.find(x => (x.handle || "").toLowerCase() === handle);
+                if (t) { tagged.push({ asset: t, type: "talent" }); seen.add(handle); continue; }
+                const l = data.locations.find(x => (x.handle || "").toLowerCase() === handle);
+                if (l) { tagged.push({ asset: l, type: "location" }); seen.add(handle); continue; }
+                const p = data.products.find(x => (x.handle || "").toLowerCase() === handle);
+                if (p) { tagged.push({ asset: p, type: "product" }); seen.add(handle); continue; }
+              }
+              if (tagged.length === 0) return null;
+              return (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, alignItems: "center" }}>
+                  <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Tagged</span>
+                  {tagged.map(({ asset, type }) => {
+                    const colors = MENTION_COLORS[type];
+                    return (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        title={`Open ${asset.name} in the chat`}
+                        onClick={() => {
+                          onFocusChat?.();
+                          toast(`${asset.name} ${asset.handle} ready to discuss in chat`, { kind: "info", ttl: 2500 });
+                        }}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 4,
+                          padding: "2px 8px", borderRadius: 999,
+                          background: colors.bg,
+                          color: colors.text,
+                          border: `1px solid ${colors.border}`,
+                          fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+                          cursor: "pointer", outline: "none",
+                        }}
+                      >
+                        {asset.handle || `@${asset.name?.split(/\s+/)[0]?.toLowerCase()}`}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Shot Type + Camera Movement side by side */}
@@ -4533,7 +4742,10 @@ function renderMentions(text, data, opts = {}) {
     if (part.type === "text") return <span key={i}>{part.value}</span>;
     const colors = MENTION_COLORS[part.asset?._type];
     if (!colors) {
-      return <span key={i} style={{ color: "var(--warm-25)" }}>{part.handle}</span>;
+      // No matching asset → strip the leading @ so things like
+      // "@Manhattan" read as plain prose ("Manhattan") instead of a
+      // phantom tag for nothing.
+      return <span key={i}>{part.handle.replace(/^@/, "")}</span>;
     }
     return (
       <span
@@ -6791,6 +7003,91 @@ export default function WorkshopV2() {
     toast(`Deleted folder "${name}"`, { kind: "info", ttl: 2500 });
   }
 
+  // Run a chat-driven side-effect. The chat tool handlers return
+  // descriptors like { type: "generateTalentPrimary", talentName }
+  // when the model asks for an image to be generated; this function
+  // dispatches the actual gen + writeback. It uses dataRef.current so
+  // newly-created assets (which were just dispatched a tick ago) are
+  // visible.
+  async function runChatEffect(effect) {
+    const current = dataRef.current;
+    if (!current || !effect) return;
+    const findByName = (list, name) => {
+      const lc = String(name || "").toLowerCase();
+      return list.find(x => x.name?.toLowerCase().includes(lc)) || null;
+    };
+
+    switch (effect.type) {
+      case "generateTalentPrimary": {
+        const t = findByName(current.talent || [], effect.talentName);
+        if (!t) return;
+        dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
+        try {
+          const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
+          dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
+          dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
+          dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
+        } catch (e) {
+          console.error("[chat talent gen]", e);
+          dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
+          toast(`Couldn't generate headshot for ${t.name}: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+        }
+        return;
+      }
+      case "generateLocationImage": {
+        const l = findByName(current.locations || [], effect.locationName);
+        if (!l) return;
+        const aspect = current.meta?.aspect || "16:9";
+        dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
+        try {
+          const url = await generateImage(locationPrompt(l), { ratio: aspect });
+          dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
+        } catch (e) {
+          console.error("[chat location gen]", e);
+          dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
+          toast(`Couldn't generate ${l.name}: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+        }
+        return;
+      }
+      case "generateProductImage": {
+        const p = findByName(current.products || [], effect.productName);
+        if (!p) return;
+        dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
+        try {
+          const url = await generateImage(productPrompt(p), { ratio: "1:1" });
+          dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
+        } catch (e) {
+          console.error("[chat product gen]", e);
+          dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
+          toast(`Couldn't generate ${p.name}: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+        }
+        return;
+      }
+      case "generateAssetImage": {
+        const list = effect.assetType === "talent" ? current.talent
+          : effect.assetType === "location" ? current.locations
+          : effect.assetType === "product" ? current.products
+          : [];
+        const asset = findByName(list, effect.assetName);
+        if (!asset) return;
+        if (effect.assetType === "talent") {
+          await runChatEffect({ type: "generateTalentPrimary", talentName: asset.name });
+        } else if (effect.assetType === "location") {
+          await runChatEffect({ type: "generateLocationImage", locationName: asset.name });
+        } else if (effect.assetType === "product") {
+          await runChatEffect({ type: "generateProductImage", productName: asset.name });
+        }
+        return;
+      }
+      case "generateFrameImage": {
+        await regenerateOneFrame(effect.frameId);
+        return;
+      }
+      default:
+        console.warn("[runChatEffect] unknown effect type", effect.type);
+    }
+  }
+
   // Regenerate a single frame's image inline. Used by the SheetFrame
   // error state — when bulk auto-gen drops a frame on a rate limit,
   // the frame card shows "Failed — Retry" and clicking it calls this.
@@ -7352,7 +7649,15 @@ export default function WorkshopV2() {
 
     const systemPrompt = [
       "You are a creative production assistant editing a storyboard.",
-      "When the user asks for changes, use the provided tools to make them.",
+      "Use the provided tools to make changes — DON'T just describe what you'd do, actually do it via tool calls.",
+      "",
+      "Tool selection guide:",
+      "- 'Create a character / location / product' → use create_talent / create_location / create_product. These also generate the reference image by default.",
+      "- 'Make a new image / regenerate this' → use generate_asset_image or generate_frame_image.",
+      "- Editing existing fields → update_talent / update_location / update_product / update_frame_brief / update_frame_camera / update_meta.",
+      "",
+      "When creating a character: keep the `note` field to APPEARANCE only (age range, ethnicity, build, hair color/length, wardrobe). Do NOT put expression / pose / mood directions in the note — those bias every generated frame. The system will neutralize them but it's better not to add them.",
+      "",
       "Prefer specific, narrow edits — change one frame at a time when possible, change every frame when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
       focusedFrame ? `The user has frame ${focusedFrame.number} selected — prefer edits to that frame unless they say otherwise.` : "No frame is selected — global / multi-frame edits are appropriate.",
       "After making changes, briefly explain what you changed in 1-2 sentences. Don't restate every tool call.",
@@ -7375,10 +7680,12 @@ export default function WorkshopV2() {
 
       const applied = [];
       const highlights = new Set();
+      const effects = [];
       for (const action of (actions || [])) {
         const result = applyChatToolCall(action, currentData, dispatch);
         if (result?.applied) applied.push(result);
         if (result?.frameId) highlights.add(result.frameId);
+        if (result?.effect) effects.push(result.effect);
       }
       if (highlights.size > 0) setHighlightedFrames(highlights);
 
@@ -7391,6 +7698,17 @@ export default function WorkshopV2() {
         text: summary,
         changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field })),
       }]);
+
+      // Fire async side-effects (image generation for newly created
+      // assets, etc). Each effect resolves against the latest data
+      // via dataRef, so it sees the asset the reducer just added.
+      if (effects.length > 0) {
+        // Give React a tick to flush the dispatches so dataRef updates.
+        await new Promise(r => setTimeout(r, 50));
+        for (const eff of effects) {
+          runChatEffect(eff).catch(e => console.error("[chat effect]", eff.type, e));
+        }
+      }
     } catch (e) {
       console.error("[chat] failed", e);
       setChatMessages(prev => [...prev, {
