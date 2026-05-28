@@ -4784,7 +4784,6 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
   const didDrag = useRef(false);
   const [brandHovered, setBrandHovered] = useState(false);
-  const [treatmentExpanded, setTreatmentExpanded] = useState(false);
 
   const dragRef = useRef({ id: null, targetPos: null });
   const dragGhostRef = useRef(null);
@@ -4913,7 +4912,6 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
             </div>
             {(() => {
               const treatmentText = data.meta.treatment || "";
-              const isLong = treatmentText.length > 450;
               return (
                 <div style={{
                   background: "var(--warm-04)",
@@ -4921,29 +4919,18 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                   borderRadius: 10,
                   padding: "16px 18px",
                   minHeight: 96,
+                  // Cap the panel height so a 12-paragraph brief doesn't
+                  // push the rest of the workshop off screen. Scrollbar
+                  // appears only when content actually exceeds the cap.
+                  // The textarea (EditableText) self-caps to the same
+                  // 600 when editing, so the two stay aligned.
+                  maxHeight: 600,
+                  overflowY: "auto",
                 }}>
-                  <div style={{ position: "relative" }}>
-                    <div style={{
-                      maxHeight: (!isLong || treatmentExpanded) ? "none" : 96,
-                      overflow: "hidden",
-                      transition: "max-height 0.35s cubic-bezier(0.22,1,0.36,1)",
-                      ...(isLong && !treatmentExpanded ? {
-                        maskImage: "linear-gradient(to bottom, black 40%, transparent 100%)",
-                        WebkitMaskImage: "linear-gradient(to bottom, black 40%, transparent 100%)",
-                      } : {}),
-                    }}>
-                      <EditableText value={treatmentText} onChange={v => onUpdateMeta("treatment", v)} multiline
-                        style={{ fontFamily: "var(--f)", fontSize: 15, fontWeight: 300, color: "var(--warm-50)", lineHeight: 1.7, display: "block", minHeight: 64 }}
-                        placeholder="Click here to write or paste the brief — the spot's setup, characters, tone, and intent." />
-                    </div>
-                  </div>
-                  {isLong && (
-                    <button onClick={() => setTreatmentExpanded(!treatmentExpanded)} style={{
-                      fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm-40)",
-                      background: "none", border: "none", cursor: "pointer", padding: "8px 0 0",
-                      outline: "none", transition: "color 0.15s ease",
-                    }}>{treatmentExpanded ? "Show less" : "Show more"}</button>
-                  )}
+                  <EditableText value={treatmentText} onChange={v => onUpdateMeta("treatment", v)} multiline
+                    maxHeight={560}
+                    style={{ fontFamily: "var(--f)", fontSize: 15, fontWeight: 300, color: "var(--warm-50)", lineHeight: 1.7, display: "block", minHeight: 64 }}
+                    placeholder="Click here to write or paste the brief — the spot's setup, characters, tone, and intent." />
                 </div>
               );
             })()}
