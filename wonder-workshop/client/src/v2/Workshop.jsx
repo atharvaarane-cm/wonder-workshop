@@ -5447,7 +5447,8 @@ function timeAgo(ts) {
 // shot list sums to the new total.
 function TargetDurationControl({ value, onChange }) {
   const [open, setOpen] = useState(false);
-  const FORMATS = ["15", "30", "60", "90", "120"];
+  // Match v1's LENGTHS (6 / 15 / 30 / 60 / 90 / 120 seconds).
+  const FORMATS = ["6", "15", "30", "60", "90", "120"];
   useEffect(() => {
     if (!open) return;
     function onDoc(e) { if (!e.target.closest?.(".ww-format-control")) setOpen(false); }
@@ -5501,7 +5502,8 @@ function TargetDurationControl({ value, onChange }) {
 // (saves new ratio + asks whether to regenerate all images).
 function AspectRatioControl({ value, onChange }) {
   const [open, setOpen] = useState(false);
-  const RATIOS = ["16:9", "9:16", "1:1", "4:5", "2.39", "4:3"];
+  // Match v1's RATIOS (16:9 / 9:16 / 1:1 / 4:5 / 4:3 / 2:1).
+  const RATIOS = ["16:9", "9:16", "1:1", "4:5", "4:3", "2:1"];
   useEffect(() => {
     if (!open) return;
     function onDoc(e) { if (!e.target.closest?.(".ww-aspect-control")) setOpen(false); }
@@ -5585,12 +5587,41 @@ function SaveIndicator({ status, lastSavedAt }) {
   );
 }
 
+// Length options (seconds, suffixed "s"). Direct port of v1's LENGTHS.
+const BRIEF_LENGTHS = ["6s", "15s", "30s", "60s", "90s", "120s"];
+// Aspect ratio options. Direct port of v1's RATIOS.
+const BRIEF_RATIOS = [
+  { id: "16:9", label: "16 : 9", sub: "Widescreen" },
+  { id: "9:16", label: "9 : 16", sub: "Portrait" },
+  { id: "1:1",  label: "1 : 1",  sub: "Square" },
+  { id: "4:5",  label: "4 : 5",  sub: "Portrait 4:5" },
+  { id: "4:3",  label: "4 : 3",  sub: "Classic" },
+  { id: "2:1",  label: "2 : 1",  sub: "Anamorphic" },
+];
+// Cinematic landing backdrops from v1. One picked per BriefForm mount
+// so each visit to the landing page shows a different image (matches
+// the "fresh canvas" feeling Ravi designed for).
+const HOME_BG_IMAGES = [
+  "/landing-bg/bg-01.jpg", "/landing-bg/bg-02.jpg",
+  "/landing-bg/bg-03.jpg", "/landing-bg/bg-04.jpg",
+  "/landing-bg/bg-05.jpg", "/landing-bg/bg-06.jpg",
+  "/landing-bg/bg-07.jpg", "/landing-bg/bg-08.jpg",
+];
+function pickHomeBackground() {
+  return HOME_BG_IMAGES[Math.floor(Math.random() * HOME_BG_IMAGES.length)];
+}
+
 function BriefForm({ onGenerate, generating = false, error = null }) {
+  // Blank by default — no Nike/Long Run prefill anymore. v1's form
+  // starts empty and so should v2. Length defaults to "30s" since
+  // most spots are 30s; aspect defaults to "16:9" because most edits
+  // are widescreen.
   const [meta, setMeta] = useState({
-    title: INITIAL_STATE.meta.title, client: INITIAL_STATE.meta.client,
-    format: INITIAL_STATE.meta.format, aspect: INITIAL_STATE.meta.aspect,
-    treatment: INITIAL_STATE.meta.treatment,
+    title: "", client: "",
+    format: "30", aspect: "16:9",
+    treatment: "",
   });
+  const [bg] = useState(pickHomeBackground);
   const [files, setFiles] = useState([]);
   const [fileDragOver, setFileDragOver] = useState(false);
   const [improving, setImproving] = useState(false);
@@ -5655,7 +5686,21 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
   const fmtType = (t) => t.startsWith("image/") ? "IMG" : t === "application/pdf" ? "PDF" : t.includes("word") ? "DOC" : t.startsWith("text/") ? "TXT" : "FILE";
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "5vh 5% 4vh" }}>
+    <div style={{ position: "relative" }}>
+      {/* Cinematic backdrop — one of 8 pre-generated landing images
+          picked at random on mount. Matches v1's home page. Sits
+          absolute behind the form so the content stays scrollable. */}
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
+        backgroundImage: `url(${bg})`,
+        backgroundSize: "cover", backgroundPosition: "center",
+        opacity: 0.55,
+      }} />
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
+        background: "linear-gradient(180deg, rgba(10,10,10,0.4) 0%, rgba(10,10,10,0.7) 60%, rgba(10,10,10,0.95) 100%)",
+      }} />
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: "5vh 5% 4vh", position: "relative", zIndex: 1 }}>
       <Reveal>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "3%" }}>
           <WLogo color="rgba(224,224,224,0.25)" size={28} />
@@ -5681,16 +5726,16 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
             <div><label style={lbl}>Client</label><input value={meta.client} onChange={e => setMeta(m => ({ ...m, client: e.target.value }))} style={inp} /></div>
             <ChevronDropdown
-              label="Format"
+              label="Length"
               value={meta.format}
-              options={[{ value: "15", label: ":15" }, { value: "30", label: ":30" }, { value: "60", label: ":60" }, { value: "90", label: ":90" }]}
+              options={BRIEF_LENGTHS.map(s => ({ value: s.replace(/s$/, ""), label: `:${s.replace(/s$/, "")}` }))}
               onChange={v => setMeta(m => ({ ...m, format: v }))}
               style={{}}
             />
             <AspectDropdown
               label="Aspect Ratio"
               value={meta.aspect}
-              options={[{ value: "16:9", label: "16:9" }, { value: "9:16", label: "9:16" }, { value: "2.39", label: "Anamorphic" }, { value: "1:1", label: "1:1" }]}
+              options={BRIEF_RATIOS.map(r => ({ value: r.id, label: r.label }))}
               onChange={v => setMeta(m => ({ ...m, aspect: v }))}
             />
           </div>
@@ -5806,6 +5851,7 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
           </p>
         )}
       </Reveal>
+    </div>
     </div>
   );
 }
