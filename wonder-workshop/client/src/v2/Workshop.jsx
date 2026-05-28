@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext } from "react";
-import { generateBrief, chatWithTools } from "../hooks/useBrief.js";
+import { generateBrief, chatWithTools, regenerateShotList } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import {
@@ -9,9 +9,13 @@ import {
   saveProject,
   deleteProject,
   renameProject,
+  setProjectFolder,
   getActiveProjectId,
   setActiveProjectId,
   migrateLegacyState,
+  listFolders,
+  createFolder,
+  deleteFolder,
 } from "./persistence.js";
 
 /*
@@ -4948,7 +4952,7 @@ function LiquidGlassButton({ onClick, children }) {
 // to switch; the current project saves automatically before the
 // switch so no work is lost.
 
-function ProjectSidebar({ projects, activeProjectId, onSwitch, onNew, onDelete, onRename }) {
+function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onNew, onDelete, onRename, onMoveToFolder, onNewFolder, onDeleteFolder }) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -4994,22 +4998,36 @@ function ProjectSidebar({ projects, activeProjectId, onSwitch, onNew, onDelete, 
           <WLogo color="var(--warm-50)" size={16} />
           <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, color: "var(--warm-50)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Workshop</span>
         </div>
-        <button onClick={onNew} style={{
-          width: "100%",
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "8px 10px", borderRadius: 7, cursor: "pointer",
-          background: "var(--warm-06)", border: "1px solid var(--warm-10)",
-          color: "var(--warm)", outline: "none",
-          fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-        }}>
-          <SectionIcon name="plus" size={12} color="var(--warm)" />
-          New project
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={onNew} style={{
+            flex: 1,
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "8px 10px", borderRadius: 7, cursor: "pointer",
+            background: "var(--warm-06)", border: "1px solid var(--warm-10)",
+            color: "var(--warm)", outline: "none",
+            fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+          }}>
+            <SectionIcon name="plus" size={12} color="var(--warm)" />
+            New project
+          </button>
+          <button
+            onClick={onNewFolder}
+            title="New folder"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "8px 10px", borderRadius: 7, cursor: "pointer",
+              background: "var(--warm-04)", border: "1px solid var(--warm-08)",
+              color: "var(--warm-40)", outline: "none",
+            }}
+          >
+            <SectionIcon name="map" size={12} color="var(--warm-40)" />
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: "0 14px 6px" }}>
         <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-          Projects · {projects.length}
+          Projects · {projects.length}{folders.length ? ` · ${folders.length} folder${folders.length === 1 ? "" : "s"}` : ""}
         </div>
       </div>
 
@@ -5019,102 +5037,200 @@ function ProjectSidebar({ projects, activeProjectId, onSwitch, onNew, onDelete, 
             No projects yet. Generate a brief to create one.
           </div>
         ) : (
-          projects.map(p => {
-            const isActive = p.id === activeProjectId;
-            const isRenaming = renamingId === p.id;
-            return (
-              <div key={p.id} style={{
-                display: "flex", alignItems: "center",
-                padding: "6px 8px", borderRadius: 6, marginBottom: 2,
-                background: isActive ? "var(--warm-08)" : "transparent",
-                cursor: isRenaming ? "default" : "pointer",
-                position: "relative",
-              }}
-              onClick={() => !isRenaming && onSwitch(p.id)}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--warm-06)"; }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
-              >
-                <div style={{
-                  width: 6, height: 6, borderRadius: "50%",
-                  background: isActive ? "#7CFC9C" : "var(--warm-12)",
-                  marginRight: 8, flexShrink: 0,
-                }} />
-                {isRenaming ? (
-                  <input
-                    ref={renameInputRef}
-                    value={renameValue}
-                    onChange={e => setRenameValue(e.target.value)}
-                    onBlur={commitRename}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") commitRename();
-                      if (e.key === "Escape") { setRenamingId(null); setRenameValue(""); }
-                    }}
-                    onClick={e => e.stopPropagation()}
-                    style={{
-                      flex: 1, minWidth: 0,
-                      fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-                      background: "var(--warm-04)", border: "1px solid var(--warm-12)",
-                      borderRadius: 4, padding: "3px 6px",
-                      color: "var(--warm)", outline: "none",
-                    }}
-                  />
-                ) : (
-                  <span
-                    onDoubleClick={e => { e.stopPropagation(); setRenamingId(p.id); setRenameValue(p.name); }}
-                    title={`Double-click to rename · Updated ${timeAgo(p.updatedAt)}`}
-                    style={{
-                      flex: 1, fontFamily: "var(--f)", fontSize: 12,
-                      fontWeight: isActive ? 600 : 500,
-                      color: isActive ? "var(--warm)" : "var(--warm-50)",
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}
-                  >{p.name || "Untitled"}</span>
-                )}
-                {!isRenaming && (
-                  <button
-                    className="ww-proj-more"
-                    onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === p.id ? null : p.id); }}
-                    style={{
-                      width: 20, height: 20, borderRadius: 4,
-                      background: "transparent", border: "none", color: "var(--warm-30)",
-                      cursor: "pointer", outline: "none",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 16, lineHeight: 1, flexShrink: 0,
-                    }}
-                  >⋯</button>
-                )}
-                {menuOpenId === p.id && (
-                  <div className="ww-proj-menu" onClick={e => e.stopPropagation()} style={{
-                    position: "absolute", right: 4, top: "100%", zIndex: 20,
-                    background: "var(--surface-solid)",
-                    border: "1px solid var(--warm-10)", borderRadius: 8,
-                    boxShadow: "0 8px 28px rgba(0,0,0,0.32)",
-                    padding: 4, minWidth: 130, marginTop: 2,
-                  }}>
-                    <button onClick={() => { setMenuOpenId(null); setRenamingId(p.id); setRenameValue(p.name); }} style={projMenuItemStyle()}>Rename</button>
-                    <button
-                      onClick={async () => {
-                        setMenuOpenId(null);
-                        const ok = await uiConfirm({
-                          title: `Delete "${p.name}"?`,
-                          message: "This deletes the project and all its generated images. This can't be undone.",
-                          confirmLabel: "Delete project",
-                          danger: true,
-                        });
-                        if (ok) {
-                          onDelete(p.id);
-                          toast(`Deleted "${p.name}"`, { kind: "info" });
-                        }
-                      }}
-                      style={{ ...projMenuItemStyle(), color: "#FF8A80" }}
-                    >Delete</button>
-                  </div>
-                )}
-              </div>
+          (() => {
+            // Group: unfiled first, then each folder.
+            const unfiled = projects.filter(p => !p.folder);
+            const byFolder = new Map();
+            for (const f of folders) byFolder.set(f, []);
+            for (const p of projects) {
+              if (!p.folder) continue;
+              if (!byFolder.has(p.folder)) byFolder.set(p.folder, []);
+              byFolder.get(p.folder).push(p);
+            }
+            const renderRow = (p) => (
+              <ProjectRow
+                key={p.id}
+                project={p}
+                isActive={p.id === activeProjectId}
+                isRenaming={renamingId === p.id}
+                renameValue={renameValue}
+                renameInputRef={renameInputRef}
+                setRenameValue={setRenameValue}
+                setRenamingId={setRenamingId}
+                commitRename={commitRename}
+                menuOpenId={menuOpenId}
+                setMenuOpenId={setMenuOpenId}
+                folders={folders}
+                onSwitch={onSwitch}
+                onDelete={onDelete}
+                onMoveToFolder={onMoveToFolder}
+              />
             );
-          })
+            return (
+              <>
+                {unfiled.map(renderRow)}
+                {[...byFolder.entries()].map(([fname, fprojects]) => (
+                  <FolderGroup
+                    key={fname}
+                    name={fname}
+                    projects={fprojects}
+                    renderRow={renderRow}
+                    onDeleteFolder={onDeleteFolder}
+                  />
+                ))}
+              </>
+            );
+          })()
         )}
       </div>
+    </div>
+  );
+}
+
+// Single project row — extracted so the same render works inside
+// folder groups and the top-level unfiled list.
+function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInputRef, setRenameValue, setRenamingId, commitRename, menuOpenId, setMenuOpenId, folders, onSwitch, onDelete, onMoveToFolder }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center",
+      padding: "6px 8px", borderRadius: 6, marginBottom: 2,
+      background: isActive ? "var(--warm-08)" : "transparent",
+      cursor: isRenaming ? "default" : "pointer",
+      position: "relative",
+    }}
+    onClick={() => !isRenaming && onSwitch(p.id)}
+    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--warm-06)"; }}
+    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+    >
+      <div style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: isActive ? "#7CFC9C" : "var(--warm-12)",
+        marginRight: 8, flexShrink: 0,
+      }} />
+      {isRenaming ? (
+        <input
+          ref={renameInputRef}
+          value={renameValue}
+          onChange={e => setRenameValue(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={e => {
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") { setRenamingId(null); setRenameValue(""); }
+          }}
+          onClick={e => e.stopPropagation()}
+          style={{
+            flex: 1, minWidth: 0,
+            fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+            background: "var(--warm-04)", border: "1px solid var(--warm-12)",
+            borderRadius: 4, padding: "3px 6px",
+            color: "var(--warm)", outline: "none",
+          }}
+        />
+      ) : (
+        <span
+          onDoubleClick={e => { e.stopPropagation(); setRenamingId(p.id); setRenameValue(p.name); }}
+          title={`Double-click to rename · Updated ${timeAgo(p.updatedAt)}`}
+          style={{
+            flex: 1, fontFamily: "var(--f)", fontSize: 12,
+            fontWeight: isActive ? 600 : 500,
+            color: isActive ? "var(--warm)" : "var(--warm-50)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}
+        >{p.name || "Untitled"}</span>
+      )}
+      {!isRenaming && (
+        <button
+          className="ww-proj-more"
+          onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === p.id ? null : p.id); }}
+          style={{
+            width: 20, height: 20, borderRadius: 4,
+            background: "transparent", border: "none", color: "var(--warm-30)",
+            cursor: "pointer", outline: "none",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 16, lineHeight: 1, flexShrink: 0,
+          }}
+        >⋯</button>
+      )}
+      {menuOpenId === p.id && (
+        <div className="ww-proj-menu" onClick={e => e.stopPropagation()} style={{
+          position: "absolute", right: 4, top: "100%", zIndex: 20,
+          background: "var(--surface-solid)",
+          border: "1px solid var(--warm-10)", borderRadius: 8,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.32)",
+          padding: 4, minWidth: 160, marginTop: 2,
+        }}>
+          <button onClick={() => { setMenuOpenId(null); setRenamingId(p.id); setRenameValue(p.name); }} style={projMenuItemStyle()}>Rename</button>
+          {/* Move to folder — inline submenu. Folders array + No folder. */}
+          <div style={{ padding: "4px 8px 2px", fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Move to</div>
+          <button onClick={() => { setMenuOpenId(null); onMoveToFolder?.(p.id, null); }} style={{ ...projMenuItemStyle(), fontWeight: !p.folder ? 700 : 500 }}>
+            {!p.folder ? "✓ " : ""}No folder
+          </button>
+          {folders.map(f => (
+            <button key={f} onClick={() => { setMenuOpenId(null); onMoveToFolder?.(p.id, f); }} style={{ ...projMenuItemStyle(), fontWeight: p.folder === f ? 700 : 500 }}>
+              {p.folder === f ? "✓ " : ""}{f}
+            </button>
+          ))}
+          <div style={{ height: 1, background: "var(--warm-08)", margin: "4px 6px" }} />
+          <button
+            onClick={async () => {
+              setMenuOpenId(null);
+              const ok = await uiConfirm({
+                title: `Delete "${p.name}"?`,
+                message: "This deletes the project and all its generated images. This can't be undone.",
+                confirmLabel: "Delete project",
+                danger: true,
+              });
+              if (ok) {
+                onDelete(p.id);
+                toast(`Deleted "${p.name}"`, { kind: "info" });
+              }
+            }}
+            style={{ ...projMenuItemStyle(), color: "#FF8A80" }}
+          >Delete</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Collapsible folder group in the project sidebar.
+function FolderGroup({ name, projects, renderRow, onDeleteFolder }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div
+        onClick={() => setCollapsed(c => !c)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 6px", borderRadius: 5, cursor: "pointer",
+          color: "var(--warm-30)",
+        }}
+      >
+        <span style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: 9, lineHeight: 1 }}>▾</span>
+        <span style={{ flex: 1, fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+          {name} <span style={{ opacity: 0.5 }}>· {projects.length}</span>
+        </span>
+        {hovered && onDeleteFolder && (
+          <button
+            onClick={e => { e.stopPropagation(); onDeleteFolder(name); }}
+            title="Delete folder"
+            style={{
+              background: "transparent", border: "none", color: "var(--warm-25)",
+              cursor: "pointer", padding: 0, lineHeight: 1, fontSize: 14, outline: "none",
+            }}
+          >×</button>
+        )}
+      </div>
+      {!collapsed && (
+        <div style={{ paddingLeft: 6 }}>
+          {projects.length === 0 ? (
+            <div style={{ padding: "4px 8px", fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-20)", fontStyle: "italic" }}>Empty</div>
+          ) : projects.map(renderRow)}
+        </div>
+      )}
     </div>
   );
 }
@@ -5147,6 +5263,60 @@ function timeAgo(ts) {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} hr ago`;
   return `${Math.floor(diff / 86_400_000)} days ago`;
+}
+
+// Target-duration dropdown shown next to the aspect-ratio pill. Editable
+// list of standard runtimes. Picking a new value updates meta.format
+// immediately, then prompts whether to re-pace the storyboard so the
+// shot list sums to the new total.
+function TargetDurationControl({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const FORMATS = ["15", "30", "60", "90", "120"];
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e) { if (!e.target.closest?.(".ww-format-control")) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  return (
+    <div className="ww-format-control" style={{ position: "relative" }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: "flex", alignItems: "center", gap: 4,
+        padding: "4px 9px", borderRadius: 6,
+        background: "var(--warm-04)", border: "1px solid var(--warm-08)",
+        color: "var(--warm-40)", cursor: "pointer", outline: "none",
+        fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
+        letterSpacing: "0.04em",
+      }} title="Change target runtime (re-paces the storyboard)">
+        :{value || "30"}
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 8,
+          display: "flex", flexDirection: "column", gap: 2, padding: 4,
+          minWidth: 70, borderRadius: 6,
+          background: "var(--surface-solid)",
+          border: "1px solid var(--warm-12)",
+          boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
+        }}>
+          {FORMATS.map(f => (
+            <button key={f} onClick={() => { setOpen(false); onChange?.(f); }}
+              style={{
+                padding: "5px 10px", textAlign: "left",
+                background: f === value ? "var(--warm-08)" : "transparent",
+                border: "none", borderRadius: 4, cursor: "pointer", outline: "none",
+                fontFamily: "var(--f)", fontSize: 11, fontWeight: f === value ? 700 : 500,
+                color: f === value ? "var(--warm)" : "var(--warm-40)",
+              }}
+            >:{f}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Aspect ratio dropdown shown in the topbar when a project is open.
@@ -5488,6 +5658,7 @@ export default function WorkshopV2() {
   }
   const [activeProjectId, setActiveProjectIdState] = useState(bootstrap.current.activeId);
   const [projects, setProjects] = useState(() => listProjects());
+  const [folders, setFolders] = useState(() => listFolders());
   const [{ past, present, future }, dispatch] = useReducer(storyboardReducer, {
     past: [], present: bootstrap.current.data || INITIAL_STATE, future: [],
   });
@@ -5672,6 +5843,35 @@ export default function WorkshopV2() {
     renameProject(projectId, newName);
     setProjects(listProjects());
   }
+  function handleMoveToFolder(projectId, folder) {
+    setProjectFolder(projectId, folder || null);
+    setProjects(listProjects());
+    setFolders(listFolders());
+    toast(folder ? `Moved to "${folder}"` : "Removed from folder", { kind: "info", ttl: 2500 });
+  }
+  async function handleNewFolder() {
+    const name = window.prompt("Folder name?");
+    if (!name) return;
+    const created = createFolder(name);
+    if (created) {
+      setFolders(listFolders());
+      toast(`Created folder "${created}"`, { kind: "success", ttl: 2500 });
+    }
+  }
+  async function handleDeleteFolder(name) {
+    const ok = await uiConfirm({
+      title: `Delete folder "${name}"?`,
+      message: "Projects inside will be moved out of the folder, but their data stays untouched.",
+      confirmLabel: "Delete folder",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
+    deleteFolder(name);
+    setProjects(listProjects());
+    setFolders(listFolders());
+    toast(`Deleted folder "${name}"`, { kind: "info", ttl: 2500 });
+  }
 
   // Change project aspect ratio. The new ratio is saved immediately
   // (so future generations use it), then we prompt whether to also
@@ -5732,6 +5932,71 @@ export default function WorkshopV2() {
     }
     await Promise.allSettled(tasks);
     toast("Aspect-ratio regeneration complete", { kind: "success" });
+  }
+
+  // Change target runtime. Saves new value immediately, then asks
+  // whether to re-pace the storyboard so per-shot durations sum to the
+  // new total. Uses v1's regenerateShotList helper which calls Gemini
+  // with the existing brief + new duration constraint.
+  async function handleDurationChange(newFormat) {
+    if (!newFormat || newFormat === data.meta?.format) return;
+    dispatch({ type: "UPDATE_META", field: "format", value: newFormat });
+    const wantsRepace = await uiConfirm({
+      title: `Change target runtime to :${newFormat}?`,
+      message: "Re-pacing rewrites each shot's brief + duration so the storyboard sums to the new total. Existing storyboard images stay attached to their frame positions; regenerate them from the Storyboard if you want them remade for the new shots.",
+      confirmLabel: "Re-pace storyboard",
+      cancelLabel: "Keep current shots",
+      danger: false,
+    });
+    if (!wantsRepace) return;
+    toast(`Re-pacing storyboard for :${newFormat}…`, { kind: "info", ttl: 4000 });
+    try {
+      // Build a minimal v1-shape brief for the helper.
+      const v1Brief = {
+        creativeDirection: {
+          brand: data.brand?.name || data.meta?.client || "",
+          description: data.meta?.treatment || "",
+          duration: `${newFormat}s`,
+          format: data.meta?.aspect || "16:9",
+        },
+        character: data.talent?.[0] ? { name: data.talent[0].name, description: data.talent[0].note || "", wardrobe: "" } : {},
+        characters: (data.talent || []).slice(1).map(t => ({ name: t.name, description: t.note || "", wardrobe: "" })),
+        environment: data.locations?.[0] ? { heroName: data.locations[0].name, heroEnvironment: data.locations[0].note || "" } : {},
+        environments: (data.locations || []).slice(1).map(l => ({ heroName: l.name, heroEnvironment: l.note || "" })),
+        productElements: (data.products || []).map(p => ({ name: p.name, description: p.note || "" })),
+        shotList: (data.frames || []).map(f => ({
+          num: f.number,
+          framing: f.shotType,
+          description: f.brief,
+          camera: f.camera,
+          duration: f.duration,
+        })),
+      };
+      const newShots = await regenerateShotList(v1Brief, `${newFormat}s`);
+      // Apply each new shot back into v2's frame shape. Preserve the
+      // existing frame id by index so attached images don't orphan.
+      for (let i = 0; i < newShots.length; i++) {
+        const existing = data.frames?.[i];
+        if (!existing) continue;
+        const s = newShots[i];
+        dispatch({ type: "UPDATE_FRAME", frameId: existing.id, field: "brief", value: s.description || existing.brief });
+        if (s.duration) {
+          const m = String(s.duration).match(/[\d.]+/);
+          if (m) dispatch({ type: "UPDATE_FRAME", frameId: existing.id, field: "duration", value: `${m[0]}s` });
+        }
+        if (s.framing) {
+          const mapped = { EWS: "WIDE", WS: "WIDE", MS: "MED", CU: "CU", ECU: "ECU", OTS: "OTS", POV: "POV" }[s.framing] || existing.shotType;
+          dispatch({ type: "UPDATE_FRAME", frameId: existing.id, field: "shotType", value: mapped });
+        }
+      }
+      // Re-fire mention detection so any new @-handles in the brief
+      // text get attached to the right talent/products.
+      dispatch({ type: "AUTO_DETECT_MENTIONS" });
+      toast("Storyboard re-paced", { kind: "success" });
+    } catch (e) {
+      console.error("[duration repace]", e);
+      toast(`Re-pacing failed: ${e?.message?.slice(0, 140) || "unknown"}`, { kind: "error" });
+    }
   }
 
   // Auto-detect mentions in briefs
@@ -6274,6 +6539,10 @@ export default function WorkshopV2() {
               value={data.meta.aspect}
               onChange={(newRatio) => handleAspectChange(newRatio)}
             />
+            <TargetDurationControl
+              value={data.meta.format}
+              onChange={(f) => handleDurationChange(f)}
+            />
             <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)" }}>
               {data.meta.client}
               {data.meta.format ? ` · target :${data.meta.format}` : ""}
@@ -6329,11 +6598,15 @@ export default function WorkshopV2() {
         {/* Left: project sidebar (always visible — multi-project nav) */}
         <ProjectSidebar
           projects={projects}
+          folders={folders}
           activeProjectId={activeProjectId}
           onSwitch={switchToProject}
           onNew={startNewProject}
           onDelete={handleDeleteProject}
           onRename={handleRenameProject}
+          onMoveToFolder={handleMoveToFolder}
+          onNewFolder={handleNewFolder}
+          onDeleteFolder={handleDeleteFolder}
         />
         {/* Main */}
         <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>

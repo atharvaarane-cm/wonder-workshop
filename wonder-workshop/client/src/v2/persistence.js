@@ -13,6 +13,7 @@
 const PROJECTS_KEY = "ww_v2_projects";
 const ACTIVE_KEY = "ww_v2_active";
 const PROJECT_PREFIX = "ww_v2_project_";
+const FOLDERS_KEY = "ww_v2_folders"; // list of empty folder names (folders with no projects yet)
 const LEGACY_KEY = "ww_v2_state";
 
 let storageOk = null;
@@ -179,6 +180,60 @@ export function setActiveProjectId(id) {
     if (id) localStorage.setItem(ACTIVE_KEY, id);
     else localStorage.removeItem(ACTIVE_KEY);
   } catch {}
+}
+
+// Folders — listed by combining all folder names referenced by
+// projects + an extras list for empty folders the user created
+// before assigning anything to them.
+
+function loadExtraFolders() {
+  if (!storageAvailable()) return [];
+  try {
+    const raw = localStorage.getItem(FOLDERS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter(s => typeof s === "string" && s.trim()) : [];
+  } catch { return []; }
+}
+
+function saveExtraFolders(list) {
+  if (!storageAvailable()) return;
+  try { localStorage.setItem(FOLDERS_KEY, JSON.stringify(list)); } catch {}
+}
+
+export function listFolders() {
+  const projectFolders = new Set();
+  for (const p of listProjects()) {
+    if (p.folder) projectFolders.add(p.folder);
+  }
+  for (const f of loadExtraFolders()) projectFolders.add(f);
+  return [...projectFolders].sort((a, b) => a.localeCompare(b));
+}
+
+export function createFolder(name) {
+  const cleaned = (name || "").trim();
+  if (!cleaned) return null;
+  if (listFolders().includes(cleaned)) return cleaned;
+  const extras = loadExtraFolders();
+  extras.push(cleaned);
+  saveExtraFolders(extras);
+  return cleaned;
+}
+
+export function deleteFolder(name) {
+  const cleaned = (name || "").trim();
+  if (!cleaned) return;
+  // Unfile every project in this folder.
+  const list = listProjects();
+  let changed = false;
+  for (const p of list) {
+    if (p.folder === cleaned) {
+      setProjectFolder(p.id, null);
+      changed = true;
+    }
+  }
+  // Drop from extras.
+  saveExtraFolders(loadExtraFolders().filter(n => n !== cleaned));
 }
 
 // One-time migration: the previous version saved to a single
