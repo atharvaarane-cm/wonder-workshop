@@ -2664,8 +2664,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
           color: "var(--warm-40)", outline: "none",
           fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
         }}>
-          <SectionIcon name="chevron-right" size={11} color="var(--warm-40)" />
-          <span style={{ transform: "rotate(180deg)", display: "inline-block" }}>‹</span> Back
+          <span>‹</span> Back
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <EditableText
@@ -2976,7 +2975,7 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
         onMouseLeave={() => { setHovered(false); setImproveOpen(false); setUpscaleOpen(false); }}
         style={{
           position: "relative", aspectRatio: aspectCSS, borderRadius: 8,
-          background: src ? `url(${src}) center/cover` : "var(--warm-04)",
+          background: "var(--warm-04)",
           border: "1px solid var(--warm-08)",
           display: "flex", alignItems: "center", justifyContent: "center",
           cursor: src ? "zoom-in" : "pointer", overflow: "hidden",
@@ -2986,8 +2985,27 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
           else if (!generating && !locked) handleRegen();
         }}
       >
+        {/* Render the image as a real <img> rather than a CSS
+            background-image. background-image + border-radius +
+            objectFit:cover leaves a 1–2px anti-aliasing band of
+            background-color at the rounded edges of the box on some
+            browsers (visible as a faint horizontal line at the top of
+            every tile). A position:absolute <img> covers the whole
+            box exactly. */}
+        {src && (
+          <img
+            src={src}
+            alt=""
+            style={{
+              position: "absolute", inset: 0,
+              width: "100%", height: "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
+          />
+        )}
         {!src && !generating && (
-          <div style={{ textAlign: "center", color: "var(--warm-25)" }}>
+          <div style={{ textAlign: "center", color: "var(--warm-25)", position: "relative", zIndex: 1 }}>
             <SectionIcon name="plus" size={16} color="var(--warm-25)" />
             <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
           </div>

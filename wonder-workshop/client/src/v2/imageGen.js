@@ -52,21 +52,39 @@ export async function generateImage(prompt, opts = {}) {
 // awkward laughing pose. Strip those out so the reference shots stay
 // neutral — the storyboard frames can still direct expression per-shot
 // via the frame's own brief.
+//
+// IMPORTANT: image-gen models (Nano Banana, SDXL, etc.) are
+// notoriously bad at negation — saying "no smile" often produces a
+// smile. So we both (a) strip expressive words from the note, and (b)
+// stack POSITIVE neutral descriptors in the prompt rather than relying
+// on "NOT laughing".
 function neutralizeCharacterNote(note) {
   if (!note) return "";
   return note
-    .replace(/\b(laugh(ing|s|ter)?|smil(ing|es?)|chuckl(ing|es?)|grinn?(ing|s)?|tears?|crying|frown(ing)?|scowl(ing)?|winking?|pout(ing)?)\b/gi, "")
-    .replace(/\b(head[- ]tilt(ed)?|tilted head|cocked head|hand on (hip|chin)|arms? crossed)\b/gi, "")
-    .replace(/\b(joyful|cheerful|gleeful|exuberant|enthusiastic)\b/gi, "")
+    // Expressions of emotion
+    .replace(/\b(laugh(ing|s|ter|ed)?|smil(ing|es?|ed)|chuckl(ing|es?|ed)|grinn?(ing|s|ed)?|tears?|crying|cried|frown(ing|ed)?|scowl(ing|ed)?|wink(ing|ed|s)?|pout(ing|ed)?|sneer(ing|ed)?|gasp(ing|ed)?)\b/gi, "")
+    // Pose / staging cues
+    .replace(/\b(head[- ]?tilt(ed|ing)?|tilt(ing|ed)? (her |his |their )?head|cocked head|head cocked|hand on (hip|chin|face)|arms? crossed|leaning|posed|posing)\b/gi, "")
+    // Mood adjectives that bias toward joyful performance
+    .replace(/\b(joyful|joyfully|cheerful|cheerfully|gleeful|gleefully|exuberant|exuberantly|enthusiastic|enthusiastically|playful|playfully|radiant|beaming|bright[- ]?eyed|wide[- ]?eyed|expressive|emotive|animated|dynamic|charismatic|warm[- ]?hearted|spirited|lively|vivacious)\b/gi, "")
+    // Tidy up punctuation
     .replace(/\s+,/g, ",")
     .replace(/,\s*,/g, ",")
+    .replace(/,\s*\./g, ".")
     .replace(/\s{2,}/g, " ")
+    .replace(/^[,\s]+|[,\s]+$/g, "")
     .trim();
 }
 
+// POSITIVE neutral descriptors — stacked because image models respond
+// to repetition. We never use "no smile / not laughing" — that
+// actively summons smiles in most diffusion models.
+const NEUTRAL_FACE = "calm composed expression, mouth closed, lips relaxed and neutral, eyes open looking directly at camera, deadpan stoic face, passport-style neutral pose";
+const REFERENCE_STYLE = "photorealistic studio reference photograph, neutral seamless gray studio backdrop, soft even diffused reference lighting, sharp focus, head facing forward squarely toward camera, head level not tilted, casting reference for production";
+
 export function talentPrompt(t) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
-  return `Character reference portrait headshot of ${t.name}${note}. Neutral relaxed expression, looking directly at camera. Photorealistic, neutral seamless studio background, soft even reference lighting, sharp focus on subject, professional reference photography. NOT cinematic, NOT performed, NOT laughing or smiling — straight reference shot.`;
+  return `Character casting reference headshot of ${t.name}${note}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
 }
 
 // View-specific prompts for the 4-up Headshots and Full Body grids in
@@ -90,13 +108,13 @@ const FULLBODY_VIEW_PHRASES = {
 export function talentHeadshotPrompt(t, view) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = HEADSHOT_VIEW_PHRASES[view] || HEADSHOT_VIEW_PHRASES.front;
-  return `Character reference headshot of ${t.name}${note}, ${phrase}. Neutral relaxed expression, no laughing or smiling. Photorealistic, neutral seamless studio background, soft even reference lighting, sharp focus, professional reference photography. NOT cinematic, NOT performed — straight reference shot.`;
+  return `Character casting reference headshot of ${t.name}${note}, ${phrase}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
 }
 
 export function talentFullBodyPrompt(t, view) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = FULLBODY_VIEW_PHRASES[view] || FULLBODY_VIEW_PHRASES.front;
-  return `Character reference full body shot of ${t.name}${note}, ${phrase}. Neutral relaxed standing pose, arms at sides, no performance, no laughing or smiling. Photorealistic, neutral seamless studio background, even reference lighting, full body in frame head to toe, professional reference photography. NOT cinematic, NOT performed — straight reference shot.`;
+  return `Character casting reference full body shot of ${t.name}${note}, ${phrase}. Calm composed expression, mouth closed, lips relaxed, eyes open, deadpan stoic face. Arms relaxed at sides, neutral upright standing posture, weight evenly distributed, feet shoulder-width apart, no performance gesture. Photorealistic studio reference photograph, neutral seamless gray backdrop, soft even diffused reference lighting, full body in frame head to toe, casting reference for production.`;
 }
 
 export function locationPrompt(l) {
