@@ -3962,7 +3962,7 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
 
 // -- ONE-SHEET WORKSPACE (drag-drop grid) ---------------------
 
-function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist }) {
+function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist, onRetryFrame }) {
   const [dragId, setDragId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
   const didDrag = useRef(false);
@@ -4171,7 +4171,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                     <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={i} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={dragId === f.id}
-                      onRetry={regenerateOneFrame}
+                      onRetry={onRetryFrame}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
                       onClick={() => clickF(f.id)} />
                   ));
@@ -4189,7 +4189,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                     <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={origIdx} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={false}
-                      onRetry={regenerateOneFrame}
+                      onRetry={onRetryFrame}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
                       onClick={() => clickF(f.id)} />
                   );
@@ -7405,7 +7405,8 @@ export default function WorkshopV2() {
               onUpdateMeta={(field, value) => dispatch({ type: "UPDATE_META", field, value })}
               dispatch={dispatch}
               assetTabOpen={assetTabOpen} onToggleAssetTab={handleToggleAssetTab}
-              onAIAssist={handleAssetAIAssist} />
+              onAIAssist={handleAssetAIAssist}
+              onRetryFrame={regenerateOneFrame} />
           )}
           {built && productionFrameId && prodFrame && (
             <ProductionView frame={prodFrame} data={data} dispatch={dispatch}
