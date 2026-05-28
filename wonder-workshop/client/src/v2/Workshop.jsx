@@ -2537,12 +2537,33 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
   const fileRef = useRef(null);
   const logo = brand?.logo;
   const [refetching, setRefetching] = useState(false);
-  // Clearbit's free logo API is unreliable in 2026 (returns 404 for
-  // many domains). Track whether the current logo URL loaded — if it
-  // failed, render the upload placeholder instead of an empty square.
+  // Logo fallback chain — Clearbit's free API returns 404 for many
+  // domains in 2026, so we fall back to Google's favicon endpoints
+  // (which work for basically every registered domain). Match the v1
+  // behavior: try the explicit logo URL first, then s2/favicons,
+  // then gstatic/faviconV2, then show the upload placeholder.
+  function domainFrom(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
+  }
+  function domainGuessFromName(name) {
+    const slug = String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return slug ? `${slug}.com` : "";
+  }
+  const domain = domainFrom(brand?.url) || domainFrom(logo) || domainGuessFromName(brand?.name);
+  const fallbacks = [
+    logo,
+    domain && `https://www.google.com/s2/favicons?domain=${domain}&sz=256`,
+    domain && `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`,
+  ].filter(Boolean);
+  const [srcIdx, setSrcIdx] = useState(0);
   const [logoFailed, setLogoFailed] = useState(false);
-  useEffect(() => { setLogoFailed(false); }, [logo]);
-  const logoUsable = logo && !logoFailed;
+  useEffect(() => { setSrcIdx(0); setLogoFailed(false); }, [logo, brand?.url, brand?.name]);
+  const handleLogoError = () => {
+    if (srcIdx + 1 < fallbacks.length) setSrcIdx(i => i + 1);
+    else setLogoFailed(true);
+  };
+  const logoUsable = fallbacks.length > 0 && !logoFailed;
+  const currentLogoSrc = logoUsable ? fallbacks[srcIdx] : null;
 
   function onLogoFile(file) {
     if (sectionLocked) return;
@@ -2615,16 +2636,16 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
             position: "relative", overflow: "hidden",
           }}
         >
-          {logo && (
+          {currentLogoSrc && (
             <img
-              src={logo}
+              key={currentLogoSrc}
+              src={currentLogoSrc}
               alt=""
-              onError={() => setLogoFailed(true)}
+              onError={handleLogoError}
               style={{
                 position: "absolute", inset: 6,
                 width: "calc(100% - 12px)", height: "calc(100% - 12px)",
                 objectFit: "contain",
-                display: logoUsable ? "block" : "none",
               }}
             />
           )}
