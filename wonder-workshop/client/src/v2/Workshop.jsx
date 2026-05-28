@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback, useReducer, createContext, us
 import { createPortal } from "react-dom";
 import { generateBrief, chatWithTools, regenerateShotList } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
+import { briefFromV2Data } from "./briefFromV2Data.js";
+import OnePager from "../components/OnePager.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import {
   newProjectId,
@@ -8103,29 +8105,9 @@ export default function WorkshopV2() {
         input:focus, textarea:focus, select:focus { outline: none; border-color: var(--warm-20) !important; }
         select { appearance: none; cursor: pointer; }
         select option { background: var(--select-bg); color: var(--warm); }
-        /* Print stylesheet — hides everything except the one-sheet
-           export when the user prints to PDF from the Export modal.
-           ww-print-area is set on the OneSheetExport container; we
-           detach it visually from its modal scaffolding for print. */
-        @media print {
-          body * { visibility: hidden !important; }
-          #ww-print-area, #ww-print-area * { visibility: visible !important; }
-          #ww-print-area {
-            position: fixed !important;
-            inset: 0 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            background: #fff !important;
-            border-radius: 0 !important;
-            color: #000 !important;
-            box-shadow: none !important;
-            transform: none !important;
-            width: 100% !important;
-            height: 100% !important;
-            max-height: none !important;
-          }
-          @page { size: landscape; margin: 0.4in; }
-        }
+        /* Print rules live in index.css scoped to the v1 OnePager
+           (.onepager-page / .op-*). v2 now exports via that component
+           — see briefFromV2Data.js + the ExportModal swap below. */
         .grain {
           position: fixed; inset: 0; pointer-events: none; z-index: 9998; opacity: 0.02;
           background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence baseFrequency='0.75' numOctaves='4' type='fractalNoise'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
@@ -8134,7 +8116,13 @@ export default function WorkshopV2() {
       `}</style>
 
       <div className="grain" />
-      {exportOpen && <ExportModal data={data} onClose={() => setExportOpen(false)} />}
+      {exportOpen && (() => {
+        // v2 export uses the proven v1 OnePager component instead of v2's
+        // OneSheetExport. briefFromV2Data adapts the data + images shape so
+        // OnePager resolves slot images via its existing stable-ID keys.
+        const { brief, images } = briefFromV2Data(data);
+        return <OnePager brief={brief} images={images} onClose={() => setExportOpen(false)} />;
+      })()}
 
       {/* Read-only banner — surfaces when the project was loaded from
           a #share=<base64> URL hash. Save-as-copy clones the data into

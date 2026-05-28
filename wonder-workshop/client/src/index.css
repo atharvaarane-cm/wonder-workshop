@@ -3909,33 +3909,79 @@ textarea { font-family: var(--font); resize: none; }
   font-size: 10px; color: #444; line-height: 1.4; margin: 0;
 }
 
-/* ── Print CSS ── */
+/* ── Print CSS ──
+   Goal: the OnePager must paginate naturally across multiple printed
+   pages. The old rules used `position: fixed; inset: 0` on `.onepager-page`,
+   which clips fixed elements to a single printed page — anything past the
+   bottom of page 1 silently dropped (this is why Maya kept disappearing
+   from Pepsi exports). Replace with normal flow + break-inside rules on
+   atomic blocks (frames, characters, locations, elements) so the printer
+   pages without splitting individual cards. */
+@page {
+  size: Letter;
+  margin: 14mm 16mm;
+}
 @media print {
-  /* When printing the one pager, hide everything except the page itself */
-  .onepager-backdrop * { visibility: hidden; }
-  .onepager-page, .onepager-page * { visibility: visible; }
-  .onepager-backdrop {
-    position: fixed; inset: 0; overflow: visible;
-    background: none; padding: 0;
-  }
-  .onepager-shell { max-width: none; }
-  .onepager-toolbar { display: none; }
-  .onepager-page {
-    position: fixed; inset: 0; border-radius: 0;
-    padding: 20mm 22mm; box-shadow: none;
-    width: 100%; height: 100%;
-  }
-  /* When printing the board normally (no one pager open) */
+  /* Hide everything outside the OnePager modal when printing. We can't
+     use `body > *:not(.onepager-backdrop)` because the modal isn't always
+     a direct body child — instead hide every known chrome region. */
   .topbar, .agent-panel, .agent-panel-collapsed,
   .board-nav-dots, .readonly-banner,
   .img-hover-nav, .img-version-badge,
-  .img-slot-btn, .section-card-actions { display: none !important; }
+  .img-slot-btn, .section-card-actions,
+  .no-print, .onepager-toolbar { display: none !important; }
+
+  /* Strip the modal scrim + sizing constraints so the page flows. */
+  .onepager-backdrop {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  .onepager-shell {
+    max-width: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .onepager-page {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  /* Keep atomic blocks intact across page breaks. The page itself flows. */
+  .op-header { break-after: avoid; }
+  .op-section { break-inside: auto; }
+  .op-section-label { break-after: avoid; }
+  .op-sb-frame { break-inside: avoid; }
+  .op-character-sheet,
+  .op-character-sheet-compact { break-inside: avoid; }
+  .op-loc-hero { break-inside: avoid; }
+  .op-element { break-inside: avoid; }
+  .op-char-views-group { break-inside: avoid; }
+  .op-footer { break-inside: avoid; }
+
+  /* When printing the board directly (no OnePager open) — legacy path. */
   .board-body { display: block !important; }
   .board-content { display: block !important; }
   .board-scroll { overflow: visible !important; height: auto !important; padding: 0 !important; }
   .board-pair-row { break-inside: avoid; }
   .section-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+
   body { background: #fff !important; }
+  /* Force image rendering — some browsers strip backgrounds and aggressively
+     compress in print; this hints to preserve color/contrast. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 
 /* ── Discover home: cinematic rotating backdrop ───────────────────────── */
