@@ -2242,10 +2242,13 @@ function MoodTile({ item, dispatch, locked, versions = [] }) {
   // blue hover bar (Expand / Download / Replace / Improve with AI /
   // Regenerate / Delete) as every other image in v2. Caption sits
   // below the tile and stays inline-editable.
-  async function regenerate(instruction) {
+  async function regenerate(opts) {
     const captionText = (item.caption || "Mood reference, cinematic, evocative").trim();
     const base = moodPrompt(captionText);
-    const prompt = instruction ? `${base} Refinement: ${instruction}. Keep the same mood; apply the refinement.` : base;
+    let prompt = base;
+    if (opts && typeof opts === "object" && opts.customPrompt) prompt = opts.customPrompt;
+    else if (opts && typeof opts === "object" && opts.instruction) prompt = `${base} Refinement: ${opts.instruction}. Keep the same mood; apply the refinement.`;
+    else if (typeof opts === "string" && opts) prompt = `${base} Refinement: ${opts}. Keep the same mood; apply the refinement.`;
     const url = await generateImage(prompt, { ratio: "1:1" });
     dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: url });
     return url;
@@ -2464,27 +2467,36 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
   // Effective lock = section lock OR per-character lock. Either blocks regen.
   const effLocked = sectionLocked || character.locked;
 
-  // Optional `instruction` is the user's Improve-with-AI text. When
-  // present, append it as a refinement clause so the model knows
-  // what tweak to apply while keeping the subject + composition.
-  function applyInstruction(base, instruction) {
-    if (!instruction) return base;
-    return `${base} Refinement: ${instruction}. Keep the same subject and composition; apply the refinement.`;
+  // `opts` is what V2ImageSlot's onRegenerate passes:
+  //   undefined → just regen with the slot's base prompt
+  //   "string"  → treat as Improve-with-AI refinement (append clause)
+  //   { customPrompt } → bypass base, use the user's text verbatim
+  //   { instruction } → same as the string form
+  function resolvePrompt(basePrompt, opts) {
+    if (opts && typeof opts === "object") {
+      if (opts.customPrompt) return opts.customPrompt;
+      if (opts.instruction) return `${basePrompt} Refinement: ${opts.instruction}. Keep the same subject and composition; apply the refinement.`;
+      return basePrompt;
+    }
+    if (typeof opts === "string" && opts) {
+      return `${basePrompt} Refinement: ${opts}. Keep the same subject and composition; apply the refinement.`;
+    }
+    return basePrompt;
   }
-  async function regenerateReference(instruction) {
-    const url = await generateImage(applyInstruction(talentPrompt(character), instruction), { ratio: "1:1" });
+  async function regenerateReference(opts) {
+    const url = await generateImage(resolvePrompt(talentPrompt(character), opts), { ratio: "1:1" });
     dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: url });
     return url;
   }
-  async function regenerateHeadshot(view, instruction) {
+  async function regenerateHeadshot(view, opts) {
     const refs = character.headshot ? [character.headshot] : [];
-    const url = await generateImage(applyInstruction(talentHeadshotPrompt(character, view), instruction), { ratio: "1:1", referenceImages: refs });
+    const url = await generateImage(resolvePrompt(talentHeadshotPrompt(character, view), opts), { ratio: "1:1", referenceImages: refs });
     dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url });
     return url;
   }
-  async function regenerateFullBody(view, instruction) {
+  async function regenerateFullBody(view, opts) {
     const refs = character.headshot ? [character.headshot] : [];
-    const url = await generateImage(applyInstruction(talentFullBodyPrompt(character, view), instruction), { ratio: "3:4", referenceImages: refs });
+    const url = await generateImage(resolvePrompt(talentFullBodyPrompt(character, view), opts), { ratio: "3:4", referenceImages: refs });
     dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url });
     return url;
   }
@@ -2677,6 +2689,9 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveText, setImproveText] = useState("");
   const [upscaleOpen, setUpscaleOpen] = useState(false);
+  const [editPromptOpen, setEditPromptOpen] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [improvingPrompt, setImprovingPrompt] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const fileRef = useRef(null);
   const aspectCSS = ratio.replace(":", "/");
@@ -2697,6 +2712,63 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
       toast(`Upscale failed: ${e?.message?.slice(0, 140) || "unknown"}`, { kind: "error" });
     } finally {
       setGenerating(false);
+    }
+  }
+
+  // Run a "custom prompt" generation — bypasses the slot's base
+  // prompt entirely and uses whatever the user typed. Caller's
+  // onRegenerate accepts an opts arg that can be either a string
+  // (refinement) or { customPrompt } (full override).
+  async function handleCustomGenerate() {
+    const text = customPrompt.trim();
+    if (!text || locked) return;
+    setEditPromptOpen(false);
+    setGenerating(true);
+    try {
+      await onRegenerate?.({ customPrompt: text });
+      toast("Generated from custom prompt", { kind: "success", ttl: 2500 });
+    } catch (e) {
+      console.error("[custom prompt]", e);
+      toast(`Generation failed: ${e?.message?.slice(0, 140) || "unknown"}`, { kind: "error" });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // "Improve prompt with AI" inside the Edit prompt modal — sends
+  // the current text to Gemini and asks for a richer image-gen
+  // prompt, replaces the textarea.
+  async function handleImprovePrompt() {
+    const text = customPrompt.trim();
+    if (!text || improvingPrompt) return;
+    setImprovingPrompt(true);
+    try {
+      const messages = [
+        { role: "system", content: [
+          "You are a senior image-prompt engineer for cinematic / editorial photography.",
+          "Take the user's rough prompt and rewrite it as a single richer prompt that:",
+          "- Keeps the same SUBJECT and INTENT (don't change what's being shown)",
+          "- Adds specific visual detail: lighting, mood, composition, framing, lens, color palette, texture",
+          "- Stays in one paragraph, no lists or headings",
+          "- Does NOT include preamble, quotes, or explanations",
+          "- Returns ONLY the improved prompt text, ready to paste into an image generator",
+        ].join("\n") },
+        { role: "user", content: text },
+      ];
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, stream: false }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const improved = (data?.message?.content || "").trim().replace(/^["'`]+|["'`]+$/g, "");
+      if (improved) setCustomPrompt(improved);
+    } catch (e) {
+      console.error("[improve prompt]", e);
+      toast(`Improve failed: ${e?.message?.slice(0, 120) || "unknown"}`, { kind: "error" });
+    } finally {
+      setImprovingPrompt(false);
     }
   }
 
@@ -2822,6 +2894,11 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
                 <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
               </svg>
             </HoverBarBtn>
+            <HoverBarBtn title="Edit prompt" disabled={locked} onClick={() => setEditPromptOpen(true)}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M11.3 2.3l2.4 2.4L5.8 12.6 3 13.4l.8-2.8 7.5-8.3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </HoverBarBtn>
             <HoverBarBtn title="Regenerate" disabled={locked} onClick={() => handleRegen()}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </HoverBarBtn>
@@ -2905,6 +2982,91 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
       </div>
       {lightboxOpen && src && (
         <V2Lightbox src={src} label={label} onClose={() => setLightboxOpen(false)} />
+      )}
+      {editPromptOpen && (
+        <div onClick={() => setEditPromptOpen(false)} style={{
+          position: "fixed", inset: 0, zIndex: 9500,
+          background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: "min(100%, 560px)", padding: 22, borderRadius: 12,
+            background: "var(--surface-solid)", border: "1px solid var(--warm-12)",
+            boxShadow: "0 16px 64px rgba(0,0,0,0.5)",
+            animation: "fadeIn 0.18s ease",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-30)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
+                  Edit image prompt{label ? ` · ${label}` : ""}
+                </div>
+                <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-30)", lineHeight: 1.5 }}>
+                  Write a custom prompt that replaces the slot's default. Use Improve with AI to enrich it.
+                </div>
+              </div>
+              <button onClick={() => setEditPromptOpen(false)} style={{
+                width: 28, height: 28, borderRadius: 6, cursor: "pointer",
+                background: "transparent", border: "1px solid var(--warm-08)",
+                color: "var(--warm-30)", outline: "none",
+                fontFamily: "var(--f)", fontSize: 16,
+              }}>×</button>
+            </div>
+            <textarea
+              autoFocus
+              value={customPrompt}
+              onChange={e => setCustomPrompt(e.target.value)}
+              rows={6}
+              disabled={improvingPrompt}
+              placeholder="Describe what you want in the image — subject, setting, lighting, framing, mood…"
+              style={{
+                width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 300,
+                padding: "10px 12px", borderRadius: 8,
+                background: "var(--warm-04)", border: "1px solid var(--warm-10)",
+                color: "var(--warm)", outline: "none", resize: "vertical",
+                lineHeight: 1.6, opacity: improvingPrompt ? 0.6 : 1,
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14 }}>
+              <button
+                onClick={handleImprovePrompt}
+                disabled={!customPrompt.trim() || improvingPrompt}
+                title="Use Gemini to expand your prompt into a richer image-generation prompt"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 12px", borderRadius: 18,
+                  background: "rgba(255,200,87,0.10)",
+                  border: "1px solid rgba(255,200,87,0.5)",
+                  color: "#FFC857",
+                  cursor: (customPrompt.trim() && !improvingPrompt) ? "pointer" : "not-allowed",
+                  outline: "none",
+                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
+                  opacity: (customPrompt.trim() && !improvingPrompt) ? 1 : 0.5,
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 18 18" fill="none">
+                  <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                  <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
+                </svg>
+                {improvingPrompt ? "Improving…" : "Improve with AI"}
+              </button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => setEditPromptOpen(false)} style={{
+                  fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+                  padding: "7px 14px", borderRadius: 7, cursor: "pointer",
+                  background: "transparent", border: "1px solid var(--warm-12)",
+                  color: "var(--warm-40)", outline: "none",
+                }}>Cancel</button>
+                <button onClick={handleCustomGenerate} disabled={!customPrompt.trim()} style={{
+                  fontFamily: "var(--f)", fontSize: 12, fontWeight: 700,
+                  padding: "7px 16px", borderRadius: 7, cursor: customPrompt.trim() ? "pointer" : "not-allowed",
+                  background: "var(--warm)", border: "none",
+                  color: "var(--bg)", outline: "none",
+                  opacity: customPrompt.trim() ? 1 : 0.4,
+                }}>✦ Generate</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -3055,9 +3217,12 @@ function LocationTile({ location, onClick }) {
 function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = "16:9", onBack }) {
   const effLocked = sectionLocked || location.locked;
   const versions = data?.versionHistory?.[`location.${location.id}`] || [];
-  async function regenerateReference(instruction) {
+  async function regenerateReference(opts) {
     const base = locationPrompt(location);
-    const prompt = instruction ? `${base} Refinement: ${instruction}. Keep the same location; apply the refinement.` : base;
+    let prompt = base;
+    if (opts && typeof opts === "object" && opts.customPrompt) prompt = opts.customPrompt;
+    else if (opts && typeof opts === "object" && opts.instruction) prompt = `${base} Refinement: ${opts.instruction}. Keep the same location; apply the refinement.`;
+    else if (typeof opts === "string" && opts) prompt = `${base} Refinement: ${opts}. Keep the same location; apply the refinement.`;
     const url = await generateImage(prompt, { ratio: aspect });
     dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: url });
     return url;
@@ -3233,9 +3398,12 @@ function ElementTile({ product, onClick }) {
 function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
   const effLocked = sectionLocked || product.locked;
   const versions = data?.versionHistory?.[`product.${product.id}`] || [];
-  async function regenerateReference(instruction) {
+  async function regenerateReference(opts) {
     const base = productPrompt(product);
-    const prompt = instruction ? `${base} Refinement: ${instruction}. Keep the same product; apply the refinement.` : base;
+    let prompt = base;
+    if (opts && typeof opts === "object" && opts.customPrompt) prompt = opts.customPrompt;
+    else if (opts && typeof opts === "object" && opts.instruction) prompt = `${base} Refinement: ${opts.instruction}. Keep the same product; apply the refinement.`;
+    else if (typeof opts === "string" && opts) prompt = `${base} Refinement: ${opts}. Keep the same product; apply the refinement.`;
     const url = await generateImage(prompt, { ratio: "1:1" });
     dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: url });
     return url;
