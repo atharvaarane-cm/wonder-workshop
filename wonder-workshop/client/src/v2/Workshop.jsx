@@ -776,42 +776,55 @@ function UIProvider({ children }) {
           })}
         </div>
       )}
-      {/* Confirm modal — centered overlay, click backdrop to cancel */}
+      {/* Confirm modal — centered overlay, click backdrop to cancel. */}
       {confirmState && (
         <div onClick={() => handleConfirmResolve(false)} style={{
           position: "fixed", inset: 0, zIndex: 11000,
-          background: "rgba(0,0,0,0.6)",
+          background: "rgba(0,0,0,0.78)",
           display: "flex", alignItems: "center", justifyContent: "center",
           padding: 24,
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: "var(--surface-solid)",
-            border: "1px solid var(--warm-12)", borderRadius: 12,
-            padding: 22, width: "min(100%, 440px)",
-            boxShadow: "0 16px 64px rgba(0,0,0,0.5)",
+            // Solid lifted surface so the modal reads as a clearly
+            // separate layer from the page behind it.
+            background: "#1A1A1D",
+            border: "1px solid rgba(255, 255, 255, 0.18)",
+            borderRadius: 12,
+            padding: "24px 26px",
+            width: "min(100%, 460px)",
+            boxShadow: "0 24px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.4)",
             animation: "fadeIn 0.18s ease",
           }}>
-            <div style={{ fontFamily: "var(--f)", fontSize: 15, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em", marginBottom: 8 }}>
+            <div style={{
+              fontFamily: "var(--f)", fontSize: 17, fontWeight: 600,
+              color: "#FFFFFF", letterSpacing: "-0.01em", marginBottom: 10,
+            }}>
               {confirmState.title}
             </div>
             {confirmState.message && (
-              <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, color: "var(--warm-40)", lineHeight: 1.6, marginBottom: 18 }}>
+              <div style={{
+                fontFamily: "var(--f)", fontSize: 13, fontWeight: 400,
+                color: "rgba(255, 255, 255, 0.78)", lineHeight: 1.6, marginBottom: 22,
+              }}>
                 {confirmState.message}
               </div>
             )}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button onClick={() => handleConfirmResolve(false)} style={{
-                fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-                padding: "7px 14px", borderRadius: 7, cursor: "pointer",
-                background: "transparent", border: "1px solid var(--warm-12)",
-                color: "var(--warm-40)", outline: "none",
+                fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
+                padding: "9px 18px", borderRadius: 7, cursor: "pointer",
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.18)",
+                color: "#FFFFFF", outline: "none",
               }}>{confirmState.cancelLabel}</button>
               <button onClick={() => handleConfirmResolve(true)} style={{
-                fontFamily: "var(--f)", fontSize: 12, fontWeight: 600,
-                padding: "7px 16px", borderRadius: 7, cursor: "pointer",
-                background: confirmState.danger ? "#E04141" : "var(--warm)",
-                border: "none",
-                color: confirmState.danger ? "#fff" : "var(--bg)",
+                fontFamily: "var(--f)", fontSize: 13, fontWeight: 600,
+                padding: "9px 18px", borderRadius: 7, cursor: "pointer",
+                background: confirmState.danger ? "#E04141" : "#FFFFFF",
+                border: confirmState.danger ? "1px solid #E04141" : "1px solid #FFFFFF",
+                color: confirmState.danger ? "#fff" : "#111",
                 outline: "none",
               }}>{confirmState.confirmLabel}</button>
             </div>
