@@ -3993,19 +3993,27 @@ function LocationTab({ data, dispatch }) {
       />
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
         gap: 12,
       }}>
-        {data.locations.map(l => (
-          <LocationTile key={l.id} location={l} onClick={() => setViewingId(l.id)} />
-        ))}
-        <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} />
+        {(() => {
+          const asp = data.meta?.aspect || "16:9";
+          const aspectCSS = asp.includes(":") ? asp.replace(":", "/") : `${asp}/1`;
+          return (
+            <>
+              {data.locations.map(l => (
+                <LocationTile key={l.id} location={l} onClick={() => setViewingId(l.id)} aspectCSS={aspectCSS} />
+              ))}
+              <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} aspectCSS={aspectCSS} />
+            </>
+          );
+        })()}
       </div>
     </div>
   );
 }
 
-function LocationTile({ location, onClick }) {
+function LocationTile({ location, onClick, aspectCSS = "16/9" }) {
   const [hovered, setHovered] = useState(false);
   const img = location.generatedImage || location.referenceImage;
   const status = location.generationStatus;
@@ -4017,42 +4025,54 @@ function LocationTile({ location, onClick }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: "flex", flexDirection: "column", gap: 6,
-        padding: 6, borderRadius: 10, cursor: "pointer",
-        background: hovered ? "var(--warm-06)" : "var(--warm-04)",
+        position: "relative",
+        aspectRatio: aspectCSS,
+        padding: 0, borderRadius: 10, cursor: "pointer",
+        background: img ? "transparent" : "var(--warm-04)",
         border: hovered ? "1px solid var(--warm-12)" : "1px solid var(--warm-06)",
         transition: "all 0.15s ease",
         outline: "none",
+        overflow: "hidden",
       }}
     >
+      {img && (
+        <img
+          src={img}
+          alt=""
+          style={{
+            position: "absolute", inset: 0,
+            width: "100%", height: "100%",
+            objectFit: "cover",
+          }}
+        />
+      )}
+      {!img && !isPending && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <SectionIcon name="map" size={24} color="var(--warm-25)" />
+        </div>
+      )}
+      {isPending && !img && <ShimmerOverlay />}
+      {/* Bottom gradient + name overlay — keeps the title legible without
+          stealing vertical space from the image. */}
       <div style={{
+        position: "absolute", left: 0, right: 0, bottom: 0,
+        padding: "16px 10px 8px",
+        background: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.72) 100%)",
         fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-        color: "var(--warm-50)", textAlign: "center",
+        color: "#fff", textAlign: "left",
         letterSpacing: "0.02em",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        pointerEvents: "none",
       }}>{location.name || "Unnamed"}</div>
-      <div style={{
-        aspectRatio: "16/9", borderRadius: 8,
-        background: img ? `url(${img}) center/cover` : "var(--warm-04)",
-        border: "1px solid var(--warm-08)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        position: "relative",
-        overflow: "hidden",
-      }}>
-        {!img && !isPending && (
-          <SectionIcon name="map" size={20} color="var(--warm-25)" />
-        )}
-        {isPending && !img && <ShimmerOverlay />}
-        {location.locked && (
-          <div title="Locked" style={{
-            position: "absolute", top: 4, right: 4, zIndex: 4,
-            width: 18, height: 18, borderRadius: 4,
-            background: "rgba(0,0,0,0.6)", color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10,
-          }}>🔒</div>
-        )}
-      </div>
+      {location.locked && (
+        <div title="Locked" style={{
+          position: "absolute", top: 6, right: 6, zIndex: 4,
+          width: 18, height: 18, borderRadius: 4,
+          background: "rgba(0,0,0,0.6)", color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10,
+        }}>🔒</div>
+      )}
     </button>
   );
 }
@@ -4412,8 +4432,34 @@ function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, gen
   );
 }
 
-function AddTile({ label, iconName, onClick }) {
+function AddTile({ label, iconName, onClick, aspectCSS }) {
   const [hovered, setHovered] = useState(false);
+  // When aspectCSS is passed (e.g. from LocationsTab matching the project
+  // aspect), the whole button becomes a single aspect-ratio'd dashed cell
+  // — no padding, no helper rows — so it lines up edge-to-edge with the
+  // new image-fills-tile LocationTile.
+  if (aspectCSS) {
+    return (
+      <button
+        onClick={onClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          position: "relative", aspectRatio: aspectCSS,
+          padding: 0, borderRadius: 10, cursor: "pointer",
+          background: "transparent",
+          border: hovered ? "1px dashed var(--warm-25)" : "1px dashed var(--warm-10)",
+          transition: "all 0.15s ease",
+          outline: "none",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+          color: hovered ? "var(--warm-50)" : "var(--warm-25)",
+        }}
+      >
+        <SectionIcon name="plus" size={22} color={hovered ? "var(--warm-50)" : "var(--warm-25)"} />
+        <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, letterSpacing: "0.04em" }}>{label}</span>
+      </button>
+    );
+  }
   return (
     <button
       onClick={onClick}
@@ -4993,17 +5039,51 @@ function parseMentions(text, data) {
     ...data.products.map(p => ({ ...p, _type: "product" })),
     ...data.locations.map(l => ({ ...l, _type: "location" })),
   ];
+  if (!text) return [];
+  // Build a single regex that matches either:
+  //   - an explicit @handle (legacy v1 path — LLM-emitted)
+  //   - a bare asset name with word boundaries (so "Maya and Marcus walk
+  //     into frame" chips even though the LLM didn't add @-prefixes)
+  // Longest-name-first so "Maya Chen" matches before "Maya". Aliases per
+  // asset: prefer the @handle without "@", the name, and the initials if
+  // they're letters. Render in original case from the input text.
+  const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const aliases = []; // { token, asset, isHandle }
+  for (const a of allAssets) {
+    if (a.handle) {
+      const bare = a.handle.replace(/^@/, "");
+      if (bare) aliases.push({ token: bare, asset: a, isHandle: true });
+    }
+    if (a.name) aliases.push({ token: a.name, asset: a, isHandle: false });
+  }
+  if (!aliases.length) return [{ type: "text", value: text }];
+  // De-dup by lowercase token, keep first occurrence (handles win when tied).
+  const seen = new Set();
+  const unique = [];
+  for (const al of aliases) {
+    const k = al.token.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    unique.push(al);
+  }
+  unique.sort((a, b) => b.token.length - a.token.length);
+  const pattern = unique.map(al =>
+    al.isHandle
+      ? `(?:@${escapeRe(al.token)})(?![A-Za-z0-9_])`
+      : `\\b${escapeRe(al.token)}\\b`
+  ).join("|");
+  const re = new RegExp(`(${pattern})`, "gi");
   const parts = [];
-  const regex = /(^|\s)(@\w+)/g;
   let last = 0;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const before = text.slice(last, match.index + match[1].length);
-    if (before) parts.push({ type: "text", value: before });
-    const handle = match[2];
-    const asset = allAssets.find(a => a.handle === handle);
-    parts.push({ type: "mention", handle, asset, matched: !!asset });
-    last = match.index + match[0].length;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type: "text", value: text.slice(last, m.index) });
+    const raw = m[0];
+    const key = raw.toLowerCase().replace(/^@/, "");
+    const alias = unique.find(al => al.token.toLowerCase() === key);
+    const asset = alias?.asset || null;
+    parts.push({ type: "mention", handle: raw, asset, matched: !!asset });
+    last = m.index + raw.length;
   }
   if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
   return parts;
