@@ -4637,13 +4637,22 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
 export default function WorkshopV2() {
   // First mount: migrate any legacy single-project state, then resolve
   // the active project id. If a project's already active, restore its
-  // data and jump straight to the OneSheet workspace.
+  // data and jump straight to the OneSheet workspace. If the active ID
+  // points at a project whose data blob is missing (corruption, manual
+  // localStorage edit, mid-save crash) we clear the stale pointer so
+  // we don't end up stuck — active in the sidebar but never able to
+  // load the workspace.
   const bootstrap = useRef(null);
   if (!bootstrap.current) {
     migrateLegacyState();
-    const activeId = getActiveProjectId();
-    const data = activeId ? loadProject(activeId) : null;
-    bootstrap.current = { activeId, data };
+    let activeId = getActiveProjectId();
+    let initialData = activeId ? loadProject(activeId) : null;
+    if (activeId && !initialData) {
+      console.warn("[v2] active project pointer is stale (no data blob); clearing");
+      setActiveProjectId(null);
+      activeId = null;
+    }
+    bootstrap.current = { activeId, data: initialData };
   }
   const [activeProjectId, setActiveProjectIdState] = useState(bootstrap.current.activeId);
   const [projects, setProjects] = useState(() => listProjects());
@@ -4703,13 +4712,25 @@ export default function WorkshopV2() {
 
   // Project switcher — load a different project into the workspace.
   // Saves the current one first so no work is lost in the transition.
+  // Only no-op when we're already inside the same project's workspace
+  // (id matches AND built); otherwise we want to load the data even
+  // if the active ID happens to already match (e.g. after a stale-
+  // pointer recovery on first mount).
   function switchToProject(projectId) {
-    if (!projectId || projectId === activeProjectId) return;
-    if (activeProjectId && built) {
+    if (!projectId) return;
+    if (projectId === activeProjectId && built) return;
+    if (activeProjectId && built && activeProjectId !== projectId) {
       saveProject(activeProjectId, data);
     }
     const next = loadProject(projectId);
-    if (!next) return;
+    if (!next) {
+      console.warn("[v2] couldn't load project", projectId, "— stale metadata?");
+      // Remove the orphaned entry so the sidebar doesn't keep
+      // showing a project the user can't open.
+      deleteProject(projectId);
+      setProjects(listProjects());
+      return;
+    }
     setActiveProjectId(projectId);
     setActiveProjectIdState(projectId);
     dispatch({ type: "SET_DATA", data: next });
