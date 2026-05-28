@@ -1454,12 +1454,34 @@ function Tag({ children, lit, onClick }) {
   );
 }
 
-function EditableText({ value, onChange, multiline, style = {}, placeholder }) {
+function EditableText({ value, onChange, multiline, style = {}, placeholder, maxHeight }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const ref = useRef(null);
   useEffect(() => { setDraft(value); }, [value]);
-  useEffect(() => { if (editing && ref.current) { ref.current.focus(); if (ref.current.select) ref.current.select(); } }, [editing]);
+  // Auto-grow the textarea to fit content, bounded by maxHeight (defaults
+  // to 600px so a 12-paragraph brief doesn't push the storyboard off
+  // screen). Recompute on every draft change so it tracks typing.
+  const cap = maxHeight ?? 600;
+  const autoSize = () => {
+    const el = ref.current;
+    if (!el || !multiline) return;
+    el.style.height = "auto";
+    const next = Math.min(el.scrollHeight, cap);
+    el.style.height = next + "px";
+    el.style.overflowY = el.scrollHeight > cap ? "auto" : "hidden";
+  };
+  useEffect(() => {
+    if (editing && ref.current) {
+      ref.current.focus();
+      if (ref.current.select) ref.current.select();
+      // Defer one tick so the textarea is in the DOM with its computed
+      // width before we measure scrollHeight.
+      requestAnimationFrame(autoSize);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
+  useEffect(() => { if (editing) autoSize(); /* eslint-disable-next-line */ }, [draft]);
   if (editing) {
     const s = {
       ...style, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.18)",
@@ -1467,13 +1489,19 @@ function EditableText({ value, onChange, multiline, style = {}, placeholder }) {
       width: "100%", boxSizing: "border-box", fontFamily: "inherit",
       fontSize: style.fontSize || "inherit", fontWeight: style.fontWeight || "inherit",
       color: style.color || "var(--warm)", letterSpacing: style.letterSpacing || "inherit",
-      lineHeight: style.lineHeight || "inherit", resize: multiline ? "vertical" : "none",
+      lineHeight: style.lineHeight || "inherit",
+      // Multiline auto-grows — disable manual resize handle so users
+      // can't drag past the cap. Single-line is unchanged.
+      resize: multiline ? "none" : "none",
+      // Sensible floor while typing (overridden by style.minHeight if passed).
+      minHeight: style.minHeight ?? (multiline ? 96 : undefined),
+      maxHeight: multiline ? cap : undefined,
     };
     const commit = () => { setEditing(false); if (draft !== value) onChange(draft); };
     const cancel = () => { setEditing(false); setDraft(value); };
     const onKey = e => { if (e.key === "Enter" && !multiline) { e.preventDefault(); commit(); } if (e.key === "Escape") cancel(); };
     return multiline
-      ? <textarea ref={ref} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={onKey} style={s} rows={3} />
+      ? <textarea ref={ref} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={onKey} style={s} />
       : <input ref={ref} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={onKey} style={s} />;
   }
   return (
