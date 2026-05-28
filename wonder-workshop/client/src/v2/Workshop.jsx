@@ -5870,18 +5870,20 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
   const fmtType = (t) => t.startsWith("image/") ? "IMG" : t === "application/pdf" ? "PDF" : t.includes("word") ? "DOC" : t.startsWith("text/") ? "TXT" : "FILE";
 
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", minHeight: "100%" }}>
       {/* Cinematic backdrop — one of 8 pre-generated landing images
           picked at random on mount. Matches v1's home page. Sits
-          absolute behind the form so the content stays scrollable. */}
+          ABSOLUTE inside the BriefForm's parent (the <main> column),
+          NOT fixed to the viewport, so the project sidebar stays
+          visible and clickable to the left. */}
       <div style={{
-        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
+        position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
         backgroundImage: `url(${bg})`,
         backgroundSize: "cover", backgroundPosition: "center",
         opacity: 0.55,
       }} />
       <div style={{
-        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
+        position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
         background: "linear-gradient(180deg, rgba(10,10,10,0.4) 0%, rgba(10,10,10,0.7) 60%, rgba(10,10,10,0.95) 100%)",
       }} />
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "5vh 5% 4vh", position: "relative", zIndex: 1 }}>
