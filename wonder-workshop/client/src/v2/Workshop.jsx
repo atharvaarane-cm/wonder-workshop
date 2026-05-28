@@ -2389,6 +2389,7 @@ function MoodTile({ item, dispatch, locked, versions = [] }) {
         label="Mood"
         ratio="1:1"
         locked={locked}
+        basePrompt={moodPrompt((item.caption || "Mood reference, cinematic, evocative").trim())}
         versions={versions}
         onSelectVersion={src => dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: src })}
         onRegenerate={regenerate}
@@ -2719,6 +2720,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
             label="Reference"
             ratio="1:1"
             locked={effLocked}
+            basePrompt={talentPrompt(character)}
             versions={data.versionHistory?.[`talent.${character.id}.headshot`] || []}
             onSelectVersion={src => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: src })}
             onRegenerate={regenerateReference}
@@ -2736,6 +2738,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         slots={character.headshots || {}}
         ratio="1:1"
         locked={effLocked}
+        basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentHeadshotPrompt(character, v)]))}
         versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.headshots.${v}`] || []]))}
         onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: src })}
         onRegenerate={regenerateHeadshot}
@@ -2754,6 +2757,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         slots={character.fullBody || {}}
         ratio="3:4"
         locked={effLocked}
+        basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentFullBodyPrompt(character, v)]))}
         versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.fullBody.${v}`] || []]))}
         onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: src })}
         onRegenerate={regenerateFullBody}
@@ -2779,7 +2783,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
 // view. Each cell is a V2ImageSlot; clicking the slot triggers
 // per-view regeneration. "Populate All" fires all four in sequence
 // (matches v1's button label).
-function SlotGrid({ label, views, viewLabel, slots, ratio, locked, versionsBySlot = {}, onSelectVersion, onRegenerate, onClear, onUpload, onPopulateAll }) {
+function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByView = {}, versionsBySlot = {}, onSelectVersion, onRegenerate, onClear, onUpload, onPopulateAll }) {
   const [populating, setPopulating] = useState(false);
   const hasAny = views.some(v => slots[v]);
 
@@ -2813,6 +2817,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, versionsBySlo
               label={viewLabel[view]}
               ratio={ratio}
               locked={locked}
+              basePrompt={basePromptByView[view]}
               versions={versionsBySlot[view] || []}
               onSelectVersion={src => onSelectVersion?.(view, src)}
               onRegenerate={instruction => onRegenerate(view, instruction)}
@@ -2835,7 +2840,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, versionsBySlo
 // the placeholder to fire onRegenerate. Real shimmer + lightbox + the
 // full v1 hover toolbar (8 actions) land in a follow-up — this is the
 // minimum surface for the redesign to feel right.
-function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion, onRegenerate, onClear, onUpload }) {
+function V2ImageSlot({ src, label, ratio, locked, basePrompt, versions = [], onSelectVersion, onRegenerate, onClear, onUpload }) {
   const [hovered, setHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
@@ -3155,6 +3160,7 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
         <V2Lightbox
           src={src}
           label={label}
+          basePrompt={basePrompt}
           versions={versions}
           onSelectVersion={onSelectVersion}
           onRegenerate={locked ? undefined : (opts) => onRegenerate?.(opts)}
@@ -3264,11 +3270,26 @@ function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion
 // transformed ancestor in CSS, which was causing the lightbox to be
 // constrained inside the asset panel.
 function V2Lightbox({
-  src, label, onClose,
+  src, label, basePrompt, onClose,
   versions = [], onSelectVersion,
   onRegenerate, onUpload,
 }) {
-  const [prompt, setPrompt] = useState("");
+  // Seed the textarea with the prompt that actually produced this
+  // image so the user can iterate on it (Logan: "for us to improve
+  // on the prompt, we need to see the original prompt used to make
+  // the images"). Falls back to empty if the caller didn't pass one.
+  const [prompt, setPrompt] = useState(basePrompt || "");
+  // If the basePrompt changes (e.g. the user navigates between
+  // versions of a slot whose prompt is view-derived), pick up the
+  // new value — but only if the user hasn't typed their own edits yet.
+  const seededRef = useRef(basePrompt || "");
+  useEffect(() => {
+    if (basePrompt && prompt === seededRef.current) {
+      setPrompt(basePrompt);
+      seededRef.current = basePrompt;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basePrompt]);
   const [improving, setImproving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const fileRef = useRef(null);
@@ -3319,7 +3340,6 @@ function V2Lightbox({
     try {
       await onRegenerate({ customPrompt: text });
       toast("Generated from your prompt", { kind: "success", ttl: 2500 });
-      setPrompt("");
     } catch (e) {
       console.error("[lightbox generate]", e);
       toast(`Generation failed: ${e?.message?.slice(0, 140) || "unknown"}`, { kind: "error" });
@@ -3653,6 +3673,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
             label="Reference"
             ratio="16:9"
             locked={effLocked}
+            basePrompt={locationPrompt(location)}
             versions={versions}
             onSelectVersion={src => dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: src })}
             onRegenerate={regenerateReference}
@@ -3839,6 +3860,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
             label="Reference"
             ratio="1:1"
             locked={effLocked}
+            basePrompt={productPrompt(product)}
             versions={versions}
             onSelectVersion={src => dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: src })}
             onRegenerate={regenerateReference}
