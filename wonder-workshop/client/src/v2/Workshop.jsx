@@ -5324,11 +5324,31 @@ export default function WorkshopV2() {
   }
 
   function handleDeleteProject(projectId) {
+    // If we're deleting the active project, clear pending auto-saves
+    // FIRST so a ceiling timeout doesn't fire seconds later and recreate
+    // the project from in-memory state. Then clear active state. Then
+    // delete the blob + refresh the sidebar.
+    const wasActive = projectId === activeProjectId;
+    if (wasActive) {
+      if (pendingSaveRef.current.debounce) {
+        clearTimeout(pendingSaveRef.current.debounce);
+        pendingSaveRef.current.debounce = null;
+      }
+      if (pendingSaveRef.current.ceiling) {
+        clearTimeout(pendingSaveRef.current.ceiling);
+        pendingSaveRef.current.ceiling = null;
+      }
+      // Update refs immediately so beforeunload + any in-flight ceiling
+      // callbacks see the cleared state, not waiting for the next render.
+      activeRef.current = null;
+      builtRef.current = false;
+      setActiveProjectId(null);
+      setActiveProjectIdState(null);
+      dispatch({ type: "SET_DATA", data: INITIAL_STATE });
+      setBuilt(false);
+    }
     deleteProject(projectId);
     setProjects(listProjects());
-    if (projectId === activeProjectId) {
-      startNewProject();
-    }
   }
   function handleRenameProject(projectId, newName) {
     renameProject(projectId, newName);
