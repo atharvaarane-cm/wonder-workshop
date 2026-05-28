@@ -1416,35 +1416,45 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   );
 }
 
-// -- ASSET TAB BUTTON (pill toggle segment) --------------------
+// -- ASSET TAB BUTTON (left-rail vertical row) -----------------
 
 function AssetTabButton({ tab, isActive, onClick }) {
   const [hovered, setHovered] = useState(false);
+  const bg = isActive ? "var(--warm-08)" : hovered ? "var(--warm-04)" : "transparent";
+  const accent = isActive ? "var(--warm)" : hovered ? "var(--warm-50)" : "var(--warm-30)";
+  const iconColor = isActive ? "var(--warm)" : hovered ? "var(--warm-40)" : "var(--warm-25)";
   return (
     <button onClick={onClick}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
-        flex: 1,
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-        padding: "7px 0", borderRadius: 8, cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 10,
+        width: "100%", padding: "10px 12px",
+        borderRadius: 8, cursor: "pointer",
         outline: "none", border: "none",
-        fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-        background: "transparent",
-        color: isActive ? "var(--warm)" : hovered ? "var(--warm-50)" : "var(--warm-30)",
-        transition: "color 0.2s ease",
+        fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
+        background: bg,
+        color: accent,
+        textAlign: "left",
         position: "relative",
-        zIndex: 1,
+        transition: "background 0.15s ease, color 0.15s ease",
       }}
     >
-      <SectionIcon name={tab.icon} size={13} color={isActive ? "var(--warm)" : hovered ? "var(--warm-40)" : "var(--warm-25)"} />
-      <span>{tab.label}</span>
+      {/* Left edge accent on active */}
+      {isActive && (
+        <div style={{
+          position: "absolute", left: 0, top: 6, bottom: 6, width: 2,
+          background: "var(--warm-40)", borderRadius: 1,
+        }} />
+      )}
+      <SectionIcon name={tab.icon} size={14} color={iconColor} />
+      <span style={{ flex: 1 }}>{tab.label}</span>
       <span style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 18, height: 18, borderRadius: "50%",
-        background: isActive ? "var(--warm-10)" : "var(--warm-06)",
+        minWidth: 20, height: 18, padding: "0 5px", borderRadius: 9,
+        background: isActive ? "var(--warm-12)" : "var(--warm-06)",
         fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-        color: isActive ? "var(--warm-50)" : "var(--warm-20)",
-        marginLeft: 2, flexShrink: 0, lineHeight: 1,
+        color: isActive ? "var(--warm-50)" : "var(--warm-25)",
+        flexShrink: 0, lineHeight: 1,
       }}>{tab.count}</span>
     </button>
   );
@@ -1644,14 +1654,14 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   // Talent / Products / Locations rendering stays untouched.
   if (activeTab === "brand") {
     return (
-      <div style={{ position: "relative", borderTop: "1px solid var(--warm-06)", marginTop: 8, animation: "fadeIn 0.2s ease", padding: "12px 0" }}>
+      <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
         <BrandPanel brand={data.brand} dispatch={dispatch} />
       </div>
     );
   }
   if (activeTab === "mood") {
     return (
-      <div style={{ position: "relative", borderTop: "1px solid var(--warm-06)", marginTop: 8, animation: "fadeIn 0.2s ease", padding: "12px 0" }}>
+      <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
         <MoodPanel moodBoard={data.moodBoard || []} dispatch={dispatch} />
       </div>
     );
@@ -1662,7 +1672,6 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   return (
     <div style={{
       position: "relative",
-      borderTop: "1px solid var(--warm-06)", marginTop: 8,
       animation: "fadeIn 0.2s ease",
     }}>
       {/* Top fade */}
@@ -1700,61 +1709,67 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   );
 }
 
-// -- ASSET TAB BAR (clean icon + label + count only) -----------
+// -- ASSET TAB BAR (left-rail nav + right content) -------------
+// Restructured per Logan 2026-05-27: instead of a horizontal pill bar
+// with content stacked below, the asset section is now a tall 2-column
+// container — vertical tab stack on the left, persistent content on the
+// right. Brand Info opens by default. Clicking a tab switches the
+// right pane (no toggle-to-close — something is always selected).
 
 function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
   const [expanded, setExpanded] = useState(null);
 
   const tabs = [
+    { key: "brand", label: "Brand", icon: "link", count: data.brand?.logo ? 1 : 0 },
     { key: "talent", label: "Characters", icon: "users", count: data.talent.length },
     { key: "products", label: "Elements", icon: "box", count: data.products.length },
     { key: "locations", label: "Locations", icon: "map", count: data.locations.length },
-    { key: "brand", label: "Brand", icon: "link", count: data.brand?.logo ? 1 : 0 },
     { key: "mood", label: "Mood", icon: "image", count: (data.moodBoard || []).length },
   ];
 
   const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
 
-  const activeIndex = tabs.findIndex(t => t.key === activeTab);
-  const W = 100 / tabs.length;
-
   return (
     <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16 }}>
-      {/* Tab bar -- full-width pill toggle with sliding indicator */}
       <div style={{
-        display: "flex", alignItems: "center",
-        padding: 3, borderRadius: 11,
+        display: "grid",
+        gridTemplateColumns: "200px 1fr",
+        gap: 20,
+        minHeight: 520,
+        borderRadius: 12,
         background: "var(--warm-04)",
         border: "1px solid var(--warm-06)",
-        position: "relative",
+        padding: 12,
       }}>
-        {/* Sliding pill indicator */}
-        {activeTab && (
-          <div style={{
-            position: "absolute",
-            top: 3, bottom: 3,
-            left: `calc(${activeIndex * W}% + 3px)`,
-            width: `calc(${W}% - 4px)`,
-            borderRadius: 8,
-            background: "var(--warm-08)",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px var(--warm-10)",
-            transition: "left 0.3s cubic-bezier(0.22,1,0.36,1)",
-            zIndex: 0,
-          }} />
-        )}
-        {tabs.map(tab => {
-          const isActive = activeTab === tab.key;
-          return (
-            <AssetTabButton key={tab.key} tab={tab} isActive={isActive} onClick={() => onToggleTab(tab.key)} />
-          );
-        })}
-      </div>
+        {/* LEFT RAIL — vertical tab stack */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {tabs.map(tab => (
+            <AssetTabButton
+              key={tab.key}
+              tab={tab}
+              isActive={activeTab === tab.key}
+              onClick={() => onToggleTab(tab.key)}
+            />
+          ))}
+        </div>
 
-      {/* Expanded panel */}
-      {activeTab && (
-        <AssetExpandedPanel activeTab={activeTab} data={data} dispatch={dispatch}
-          expanded={expanded} setExpanded={setExpanded} typeKey={typeKey} onAIAssist={onAIAssist} />
-      )}
+        {/* RIGHT PANE — selected tab content */}
+        <div style={{
+          borderLeft: "1px solid var(--warm-06)",
+          paddingLeft: 20,
+          minWidth: 0,
+        }}>
+          <AssetExpandedPanel
+            activeTab={activeTab}
+            data={data}
+            dispatch={dispatch}
+            expanded={expanded}
+            setExpanded={setExpanded}
+            typeKey={typeKey}
+            onAIAssist={onAIAssist}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -3291,7 +3306,9 @@ export default function WorkshopV2() {
   const [exportOpen, setExportOpen] = useState(false);
   const [highlightedFrames, setHighlightedFrames] = useState(new Set());
   const [chatAssetContext, setChatAssetContext] = useState(null);
-  const [assetTabOpen, setAssetTabOpen] = useState(null);
+  // Default to "brand" so the asset rail opens with Brand Info visible —
+  // per Logan's left-rail redesign, something is always selected.
+  const [assetTabOpen, setAssetTabOpen] = useState("brand");
   const [chatFocusTrigger, setChatFocusTrigger] = useState(0);
   const [theme, setTheme] = useState("dark");
   const isDark = theme === "dark";
@@ -3385,8 +3402,12 @@ export default function WorkshopV2() {
     setChatFocusTrigger(prev => prev + 1);
   }, []);
 
+  // Left-rail nav — always selects the clicked tab (no toggle-to-close).
+  // Something is always visible on the right, so this is a switch, not
+  // a toggle. The argument name "Toggle" is kept for back-compat with
+  // the prop wired through OneSheetWorkspace.
   const handleToggleAssetTab = useCallback((tabKey) => {
-    setAssetTabOpen(prev => prev === tabKey ? null : tabKey);
+    setAssetTabOpen(tabKey);
   }, []);
 
   // Production view frame navigation
