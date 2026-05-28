@@ -3801,25 +3801,29 @@ function V2Lightbox({
       background: "rgba(0,0,0,0.92)",
       display: "flex", alignItems: "stretch",
     }}>
-      {/* Preview pane */}
-      <div onClick={e => e.stopPropagation()} style={{
-        flex: 1, minWidth: 0,
+      {/* Preview pane — clicks in the black space around the image close
+          the lightbox (matching macOS Quick Look / Apple Preview). Only the
+          image itself + the version navigator absorb clicks. */}
+      <div style={{
+        flex: 1, minWidth: 0, cursor: "zoom-out",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 40, position: "relative",
       }}>
-        <img src={src} alt={label || ""} style={{
+        <img src={src} alt={label || ""} onClick={e => e.stopPropagation()} style={{
           maxWidth: "100%", maxHeight: "100%", objectFit: "contain",
           borderRadius: 4, boxShadow: "0 12px 64px rgba(0,0,0,0.6)",
+          cursor: "default",
         }} />
         {/* Version navigator — bottom-center over the image */}
         {count >= 2 && (
-          <div style={{
+          <div onClick={e => e.stopPropagation()} style={{
             position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
             display: "flex", alignItems: "center", gap: 4,
             padding: "5px 10px", borderRadius: 16,
             background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
             fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
             color: "#fff", letterSpacing: "0.04em",
+            cursor: "default",
           }}>
             <button onClick={() => selectIdx(activeIdx - 1)} disabled={activeIdx <= 0}
               style={{ background: "transparent", border: "none", color: "#fff", cursor: activeIdx > 0 ? "pointer" : "not-allowed", opacity: activeIdx > 0 ? 1 : 0.35, padding: "0 6px", fontSize: 16, lineHeight: 1, outline: "none" }}>‹</button>
