@@ -34,18 +34,18 @@ function parseShareHash() {
   }
 }
 
-// V2 redesign gate. The new IA per Ravi's wireframe lives at /?v=2.
-// Current production stays the default until the v2 backend (real AI,
-// persistence, locks, exports) is wired up and signed off. Once that
-// happens, this gate flips and the legacy screens move behind ?v=1.
+// V2 is now the default Workshop experience. Legacy screens stay
+// reachable behind ?v=1 for fallback / comparison while v2's backend
+// wires up. Once v2 is fully signed off, the legacy code can be
+// removed entirely.
 function useIsV2() {
   const [isV2, setIsV2] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return new URLSearchParams(window.location.search).get('v') === '2'
+    if (typeof window === 'undefined') return true
+    return new URLSearchParams(window.location.search).get('v') !== '1'
   })
   useEffect(() => {
     function onPop() {
-      setIsV2(new URLSearchParams(window.location.search).get('v') === '2')
+      setIsV2(new URLSearchParams(window.location.search).get('v') !== '1')
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)

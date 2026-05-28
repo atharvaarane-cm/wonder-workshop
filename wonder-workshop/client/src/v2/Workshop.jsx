@@ -6394,7 +6394,9 @@ function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onN
             );
             return (
               <>
-                {unfiled.map(renderRow)}
+                <UnfiledDropZone onDropProject={pid => onMoveToFolder?.(pid, null)}>
+                  {unfiled.map(renderRow)}
+                </UnfiledDropZone>
                 {[...byFolder.entries()].map(([fname, fprojects]) => (
                   <FolderGroup
                     key={fname}
@@ -6402,6 +6404,7 @@ function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onN
                     projects={fprojects}
                     renderRow={renderRow}
                     onDeleteFolder={onDeleteFolder}
+                    onDropProject={pid => onMoveToFolder?.(pid, fname)}
                   />
                 ))}
               </>
@@ -6414,16 +6417,25 @@ function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onN
 }
 
 // Single project row — extracted so the same render works inside
-// folder groups and the top-level unfiled list.
+// folder groups and the top-level unfiled list. Draggable: dragging
+// onto a FolderDropZone or an Unfiled zone reassigns p.folder via
+// onMoveToFolder.
 function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInputRef, setRenameValue, setRenamingId, commitRename, menuOpenId, setMenuOpenId, folders, onSwitch, onDelete, onMoveToFolder }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center",
-      padding: "6px 8px", borderRadius: 6, marginBottom: 2,
-      background: isActive ? "var(--warm-08)" : "transparent",
-      cursor: isRenaming ? "default" : "pointer",
-      position: "relative",
-    }}
+    <div
+      draggable={!isRenaming}
+      onDragStart={e => {
+        if (isRenaming) return;
+        e.dataTransfer.setData("application/x-ww-project-id", p.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      style={{
+        display: "flex", alignItems: "center",
+        padding: "6px 8px", borderRadius: 6, marginBottom: 2,
+        background: isActive ? "var(--warm-08)" : "transparent",
+        cursor: isRenaming ? "default" : "grab",
+        position: "relative",
+      }}
     onClick={() => !isRenaming && onSwitch(p.id)}
     onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--warm-06)"; }}
     onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
@@ -6519,12 +6531,66 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
   );
 }
 
-// Collapsible folder group in the project sidebar.
-function FolderGroup({ name, projects, renderRow, onDeleteFolder }) {
+// Drop zone wrapping the top-level (no folder) project list. Dropping
+// a project here clears its folder assignment. Renders inline so it
+// doesn't add visual chrome unless something is being dragged over it.
+function UnfiledDropZone({ children, onDropProject }) {
+  const [dragOver, setDragOver] = useState(false);
+  const acceptsDrop = e => e.dataTransfer.types.includes("application/x-ww-project-id");
+  return (
+    <div
+      onDragOver={e => { if (!acceptsDrop(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => {
+        if (!acceptsDrop(e)) return;
+        e.preventDefault();
+        const pid = e.dataTransfer.getData("application/x-ww-project-id");
+        setDragOver(false);
+        if (pid) onDropProject?.(pid);
+      }}
+      style={{
+        borderRadius: 6,
+        background: dragOver ? "rgba(124, 252, 156, 0.08)" : "transparent",
+        outline: dragOver ? "1px dashed rgba(124, 252, 156, 0.45)" : "1px dashed transparent",
+        outlineOffset: -2,
+        transition: "background 0.12s ease, outline-color 0.12s ease",
+        minHeight: dragOver ? 28 : undefined,
+      }}
+    >{children}</div>
+  );
+}
+
+// Collapsible folder group in the project sidebar. Acts as a drop
+// target for project rows — dragging a project onto the header (or
+// the body) assigns the project to this folder.
+function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject }) {
   const [collapsed, setCollapsed] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const acceptsDrop = e => e.dataTransfer.types.includes("application/x-ww-project-id");
   return (
-    <div style={{ marginTop: 6 }}>
+    <div
+      onDragOver={e => { if (!acceptsDrop(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(true); }}
+      onDragLeave={e => {
+        if (e.currentTarget.contains(e.relatedTarget)) return;
+        setDragOver(false);
+      }}
+      onDrop={e => {
+        if (!acceptsDrop(e)) return;
+        e.preventDefault();
+        const pid = e.dataTransfer.getData("application/x-ww-project-id");
+        setDragOver(false);
+        if (pid) onDropProject?.(pid);
+      }}
+      style={{
+        marginTop: 6,
+        borderRadius: 6,
+        background: dragOver ? "rgba(124, 252, 156, 0.08)" : "transparent",
+        outline: dragOver ? "1px dashed rgba(124, 252, 156, 0.55)" : "1px dashed transparent",
+        outlineOffset: -2,
+        transition: "background 0.12s ease, outline-color 0.12s ease",
+      }}
+    >
       <div
         onClick={() => setCollapsed(c => !c)}
         onMouseEnter={() => setHovered(true)}
@@ -6895,7 +6961,17 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
       </Reveal>
 
       <Reveal delay={200}>
-        <div style={{ background: "var(--warm-04)", border: "1px solid var(--warm-06)", borderRadius: 14, padding: "3% 5%", marginBottom: "2%" }}>
+        {/* Form card sits over the W backdrop, so it needs near-solid
+            opacity + a backdrop blur to keep inputs and labels readable.
+            Subtle inner highlight + soft shadow lift it off the bg. */}
+        <div style={{
+          background: "rgba(14, 14, 16, 0.88)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+          borderRadius: 14, padding: "3% 5%", marginBottom: "2%",
+        }}>
           <div style={{ marginBottom: 20 }}>
             <label style={lbl}>Project</label>
             <input value={meta.title} onChange={e => setMeta(m => ({ ...m, title: e.target.value }))} style={inp} />
