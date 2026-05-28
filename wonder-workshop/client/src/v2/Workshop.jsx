@@ -1889,7 +1889,7 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         {moodBoard.map(m => (
-          <MoodTile key={m.id} item={m} dispatch={dispatch} onUpload={onTileUpload} />
+          <MoodTile key={m.id} item={m} dispatch={dispatch} locked={sectionLocked} />
         ))}
         <button
           ref={addBtnRef}
@@ -1914,25 +1914,30 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch }) {
   );
 }
 
-function MoodTile({ item, dispatch, onUpload }) {
-  const fileRef = useRef(null);
+function MoodTile({ item, dispatch, locked }) {
+  // Mood tiles use V2ImageSlot directly so they get the same full
+  // blue hover bar (Expand / Download / Replace / Improve with AI /
+  // Regenerate / Delete) as every other image in v2. Caption sits
+  // below the tile and stays inline-editable.
+  async function regenerate(instruction) {
+    const captionText = (item.caption || "Mood reference, cinematic, evocative").trim();
+    const base = moodPrompt(captionText);
+    const prompt = instruction ? `${base} Refinement: ${instruction}. Keep the same mood; apply the refinement.` : base;
+    const url = await generateImage(prompt, { ratio: "1:1" });
+    dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: url });
+    return url;
+  }
   return (
     <div style={{ position: "relative" }}>
-      <div
-        onClick={() => fileRef.current?.click()}
-        onDragOver={e => { e.preventDefault(); }}
-        onDrop={e => { e.preventDefault(); onUpload(item.id, e.dataTransfer.files?.[0]); }}
-        style={{
-          aspectRatio: "1/1", borderRadius: 8, cursor: "pointer",
-          background: item.image ? `url(${item.image}) center/cover` : "var(--warm-04)",
-          border: "1px solid var(--warm-08)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}
-      >
-        {!item.image && <SectionIcon name="image" size={16} color="var(--warm-20)" />}
-      </div>
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
-        onChange={e => { onUpload(item.id, e.target.files?.[0]); e.target.value = ""; }} />
+      <V2ImageSlot
+        src={item.image}
+        label="Mood"
+        ratio="1:1"
+        locked={locked}
+        onRegenerate={regenerate}
+        onClear={() => dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: null })}
+        onUpload={dataUrl => dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl })}
+      />
       <input
         value={item.caption || ""}
         onChange={e => dispatch({ type: "UPDATE_MOOD", id: item.id, field: "caption", value: e.target.value })}
@@ -1941,17 +1946,16 @@ function MoodTile({ item, dispatch, onUpload }) {
       />
       <button
         onClick={() => dispatch({ type: "DELETE_MOOD", id: item.id })}
-        title="Remove"
+        title="Remove tile"
+        disabled={locked}
         style={{
-          position: "absolute", top: 3, right: 3,
-          width: 18, height: 18, borderRadius: 4,
-          background: "rgba(0,0,0,0.5)", border: "none", color: "#fff",
-          fontSize: 10, cursor: "pointer", opacity: 0,
-          transition: "opacity 0.15s ease",
+          position: "absolute", top: 4, right: 4, zIndex: 4,
+          width: 20, height: 20, borderRadius: 4,
+          background: "rgba(0,0,0,0.55)", border: "none", color: "#fff",
+          fontSize: 12, cursor: locked ? "not-allowed" : "pointer",
+          opacity: locked ? 0.4 : 1,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}
-        onMouseEnter={e => { e.currentTarget.style.opacity = 1; }}
-        onMouseLeave={e => { e.currentTarget.style.opacity = 0; }}
       >×</button>
     </div>
   );
@@ -2135,20 +2139,27 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
   // Effective lock = section lock OR per-character lock. Either blocks regen.
   const effLocked = sectionLocked || character.locked;
 
-  async function regenerateReference() {
-    const url = await generateImage(talentPrompt(character), { ratio: "1:1" });
+  // Optional `instruction` is the user's Improve-with-AI text. When
+  // present, append it as a refinement clause so the model knows
+  // what tweak to apply while keeping the subject + composition.
+  function applyInstruction(base, instruction) {
+    if (!instruction) return base;
+    return `${base} Refinement: ${instruction}. Keep the same subject and composition; apply the refinement.`;
+  }
+  async function regenerateReference(instruction) {
+    const url = await generateImage(applyInstruction(talentPrompt(character), instruction), { ratio: "1:1" });
     dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: url });
     return url;
   }
-  async function regenerateHeadshot(view) {
+  async function regenerateHeadshot(view, instruction) {
     const refs = character.headshot ? [character.headshot] : [];
-    const url = await generateImage(talentHeadshotPrompt(character, view), { ratio: "1:1", referenceImages: refs });
+    const url = await generateImage(applyInstruction(talentHeadshotPrompt(character, view), instruction), { ratio: "1:1", referenceImages: refs });
     dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url });
     return url;
   }
-  async function regenerateFullBody(view) {
+  async function regenerateFullBody(view, instruction) {
     const refs = character.headshot ? [character.headshot] : [];
-    const url = await generateImage(talentFullBodyPrompt(character, view), { ratio: "3:4", referenceImages: refs });
+    const url = await generateImage(applyInstruction(talentFullBodyPrompt(character, view), instruction), { ratio: "3:4", referenceImages: refs });
     dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url });
     return url;
   }
@@ -2307,7 +2318,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, onRegenerate,
               label={viewLabel[view]}
               ratio={ratio}
               locked={locked}
-              onRegenerate={() => onRegenerate(view)}
+              onRegenerate={instruction => onRegenerate(view, instruction)}
               onClear={() => onClear(view)}
               onUpload={dataUrl => onUpload(view, dataUrl)}
             />
@@ -2331,15 +2342,24 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
   const [hovered, setHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
+  const [improveText, setImproveText] = useState("");
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const fileRef = useRef(null);
   const aspectCSS = ratio.replace(":", "/");
 
-  async function handleRegen() {
+  async function handleRegen(instruction) {
     if (locked) return;
     setGenerating(true);
-    try { await onRegenerate(); }
+    setImproveOpen(false);
+    try { await onRegenerate?.(instruction); }
     catch (e) { console.error("[V2ImageSlot regen]", e); }
     finally { setGenerating(false); }
+  }
+  async function handleImprove() {
+    const text = improveText.trim();
+    if (!text) return;
+    setImproveText("");
+    await handleRegen(text);
   }
   function handleUploadFile(file) {
     if (!file) return;
@@ -2347,59 +2367,161 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
     reader.onload = e => onUpload?.(e.target.result);
     reader.readAsDataURL(file);
   }
+  async function handleDownload() {
+    if (!src) return;
+    try {
+      const res = await fetch(src);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(label || "image").toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("[download]", e);
+      window.open(src, "_blank", "noopener");
+    }
+  }
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setImproveOpen(false); }}
-      style={{
-        position: "relative", aspectRatio: aspectCSS, borderRadius: 8,
-        background: src ? `url(${src}) center/cover` : "var(--warm-04)",
-        border: "1px solid var(--warm-08)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        cursor: src ? "default" : "pointer", overflow: "hidden",
-      }}
-      onClick={() => !src && !generating && !locked && handleRegen()}
-    >
-      {!src && !generating && (
-        <div style={{ textAlign: "center", color: "var(--warm-25)" }}>
-          <SectionIcon name="plus" size={16} color="var(--warm-25)" />
-          <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
-        </div>
-      )}
-      {generating && (
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%)",
-          backgroundSize: "200% 100%",
-          animation: "shimmer 1.5s infinite linear",
+    <>
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => { setHovered(false); setImproveOpen(false); }}
+        style={{
+          position: "relative", aspectRatio: aspectCSS, borderRadius: 8,
+          background: src ? `url(${src}) center/cover` : "var(--warm-04)",
+          border: "1px solid var(--warm-08)",
           display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <span style={{ fontFamily: "var(--f)", fontSize: 9, color: "var(--warm-50)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Generating…</span>
-        </div>
+          cursor: src ? "zoom-in" : "pointer", overflow: "hidden",
+        }}
+        onClick={() => {
+          if (src) setLightboxOpen(true);
+          else if (!generating && !locked) handleRegen();
+        }}
+      >
+        {!src && !generating && (
+          <div style={{ textAlign: "center", color: "var(--warm-25)" }}>
+            <SectionIcon name="plus" size={16} color="var(--warm-25)" />
+            <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
+          </div>
+        )}
+        {generating && <ShimmerOverlay />}
+        {/* Blue v1-style hover bar — visible when image exists and user hovers */}
+        {hovered && src && !generating && (
+          <div style={{
+            position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
+            display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 20,
+            background: "#006dd4", border: "1px solid #43a3fd",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.32)",
+            zIndex: 5,
+          }} onClick={e => e.stopPropagation()}>
+            <HoverBarBtn title="Expand" onClick={() => setLightboxOpen(true)}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </HoverBarBtn>
+            <HoverBarBtn title="Download" onClick={handleDownload}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </HoverBarBtn>
+            <HoverBarBtn title="Upload / Replace" onClick={() => fileRef.current?.click()}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 14V6M5 9l3-3 3 3M3 3h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </HoverBarBtn>
+            <HoverBarBtn title="Improve with AI" disabled={locked} onClick={() => setImproveOpen(o => !o)} active={improveOpen}>
+              <svg width="13" height="13" viewBox="0 0 18 18" fill="none">
+                <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
+              </svg>
+            </HoverBarBtn>
+            <HoverBarBtn title="Regenerate" disabled={locked} onClick={() => handleRegen()}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </HoverBarBtn>
+            <HoverBarBtn title="Delete" disabled={locked} onClick={onClear} danger>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </HoverBarBtn>
+          </div>
+        )}
+        {/* Improve with AI popover */}
+        {improveOpen && hovered && src && !generating && (
+          <div onClick={e => e.stopPropagation()} style={{
+            position: "absolute", bottom: 56, left: "50%", transform: "translateX(-50%)",
+            zIndex: 6, width: "min(90%, 320px)",
+            background: "var(--surface-solid)", border: "1px solid var(--warm-10)",
+            borderRadius: 10, padding: 10,
+            boxShadow: "0 8px 28px rgba(0,0,0,0.34)",
+          }}>
+            <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-30)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+              Improve with AI
+            </div>
+            <input
+              autoFocus
+              value={improveText}
+              onChange={e => setImproveText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") { e.preventDefault(); handleImprove(); }
+                if (e.key === "Escape") { e.preventDefault(); setImproveOpen(false); }
+              }}
+              placeholder="e.g. more cinematic / tighter framing / warmer lighting"
+              style={{
+                width: "100%", fontFamily: "var(--f)", fontSize: 12, fontWeight: 400,
+                padding: "6px 8px", borderRadius: 6,
+                background: "var(--warm-04)", border: "1px solid var(--warm-10)",
+                color: "var(--warm)", outline: "none",
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 8 }}>
+              <button onClick={() => setImproveOpen(false)} style={{
+                fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+                padding: "5px 10px", borderRadius: 6, cursor: "pointer",
+                background: "transparent", border: "1px solid var(--warm-08)",
+                color: "var(--warm-40)", outline: "none",
+              }}>Cancel</button>
+              <button onClick={handleImprove} disabled={!improveText.trim()} style={{
+                fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
+                padding: "5px 12px", borderRadius: 6, cursor: improveText.trim() ? "pointer" : "not-allowed",
+                background: "var(--warm)", border: "none",
+                color: "var(--bg)", outline: "none",
+                opacity: improveText.trim() ? 1 : 0.4,
+              }}>Improve</button>
+            </div>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+          onChange={e => { handleUploadFile(e.target.files?.[0]); e.target.value = ""; }} />
+      </div>
+      {lightboxOpen && src && (
+        <V2Lightbox src={src} label={label} onClose={() => setLightboxOpen(false)} />
       )}
-      {/* Blue hover action bar — visible when an image exists and user hovers */}
-      {hovered && src && !generating && (
-        <div style={{
-          position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
-          display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 20,
-          background: "#006dd4", border: "1px solid #43a3fd",
-          boxShadow: "0 4px 14px rgba(0,0,0,0.32)",
-          zIndex: 2,
-        }} onClick={e => e.stopPropagation()}>
-          <HoverBarBtn title="Regenerate" disabled={locked} onClick={handleRegen}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </HoverBarBtn>
-          <HoverBarBtn title="Upload" onClick={() => fileRef.current?.click()}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 14V6M5 9l3-3 3 3M3 3h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </HoverBarBtn>
-          <HoverBarBtn title="Delete" disabled={locked} onClick={onClear} danger>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </HoverBarBtn>
-        </div>
-      )}
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
-        onChange={e => { handleUploadFile(e.target.files?.[0]); e.target.value = ""; }} />
+    </>
+  );
+}
+
+// Fullscreen lightbox modal — click backdrop or Esc to close.
+function V2Lightbox({ src, label, onClose }) {
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape") onClose(); }
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", onKey); };
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 9000,
+      background: "rgba(0,0,0,0.88)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 40,
+    }}>
+      <img src={src} alt={label || ""} onClick={e => e.stopPropagation()} style={{
+        maxWidth: "100%", maxHeight: "100%", objectFit: "contain",
+        borderRadius: 4, boxShadow: "0 12px 64px rgba(0,0,0,0.6)",
+      }} />
+      <button onClick={onClose} title="Close (Esc)" style={{
+        position: "absolute", top: 16, right: 16,
+        width: 36, height: 36, borderRadius: 999,
+        background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)",
+        color: "#fff", cursor: "pointer", outline: "none",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 18,
+      }}>×</button>
     </div>
   );
 }
@@ -2517,8 +2639,10 @@ function LocationTile({ location, onClick }) {
 
 function LocationDetailView({ location, dispatch, sectionLocked, aspect = "16:9", onBack }) {
   const effLocked = sectionLocked || location.locked;
-  async function regenerateReference() {
-    const url = await generateImage(locationPrompt(location), { ratio: aspect });
+  async function regenerateReference(instruction) {
+    const base = locationPrompt(location);
+    const prompt = instruction ? `${base} Refinement: ${instruction}. Keep the same location; apply the refinement.` : base;
+    const url = await generateImage(prompt, { ratio: aspect });
     dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: url });
     return url;
   }
@@ -2690,8 +2814,10 @@ function ElementTile({ product, onClick }) {
 
 function ElementDetailView({ product, dispatch, sectionLocked, onBack }) {
   const effLocked = sectionLocked || product.locked;
-  async function regenerateReference() {
-    const url = await generateImage(productPrompt(product), { ratio: "1:1" });
+  async function regenerateReference(instruction) {
+    const base = productPrompt(product);
+    const prompt = instruction ? `${base} Refinement: ${instruction}. Keep the same product; apply the refinement.` : base;
+    const url = await generateImage(prompt, { ratio: "1:1" });
     dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: url });
     return url;
   }
@@ -2883,8 +3009,11 @@ function AddTile({ label, iconName, onClick }) {
   );
 }
 
-function HoverBarBtn({ children, title, onClick, disabled, danger }) {
+function HoverBarBtn({ children, title, onClick, disabled, danger, active }) {
   const [h, setH] = useState(false);
+  const bg = active ? "rgba(255,255,255,0.32)"
+    : h ? (danger ? "rgba(255,86,86,0.92)" : "rgba(255,255,255,0.22)")
+    : "transparent";
   return (
     <button
       title={title}
@@ -2894,7 +3023,7 @@ function HoverBarBtn({ children, title, onClick, disabled, danger }) {
       onMouseLeave={() => setH(false)}
       style={{
         width: 26, height: 26, borderRadius: 999,
-        background: h ? (danger ? "rgba(255,86,86,0.92)" : "rgba(255,255,255,0.22)") : "transparent",
+        background: bg,
         border: "none", color: "#fff", cursor: disabled ? "not-allowed" : "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
         opacity: disabled ? 0.5 : 1,
