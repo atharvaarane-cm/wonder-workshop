@@ -6748,17 +6748,13 @@ const BRIEF_RATIOS = [
   { id: "4:3",  label: "4 : 3",  sub: "Classic" },
   { id: "2:1",  label: "2 : 1",  sub: "Anamorphic" },
 ];
-// Cinematic landing backdrops from v1. One picked per BriefForm mount
-// so each visit to the landing page shows a different image (matches
-// the "fresh canvas" feeling Ravi designed for).
-const HOME_BG_IMAGES = [
-  "/landing-bg/bg-01.jpg", "/landing-bg/bg-02.jpg",
-  "/landing-bg/bg-03.jpg", "/landing-bg/bg-04.jpg",
-  "/landing-bg/bg-05.jpg", "/landing-bg/bg-06.jpg",
-  "/landing-bg/bg-07.jpg", "/landing-bg/bg-08.jpg",
-];
+// Wonder Workshop brand backdrop — replaces the rotating cinematic
+// stills with a single signature mark. Kept as a single-element array
+// so the rest of the BriefForm code (pickHomeBackground) keeps working
+// if we ever want to rotate again.
+const HOME_BG_IMAGES = ["/landing-bg/wonder-w.png"];
 function pickHomeBackground() {
-  return HOME_BG_IMAGES[Math.floor(Math.random() * HOME_BG_IMAGES.length)];
+  return HOME_BG_IMAGES[0];
 }
 
 function BriefForm({ onGenerate, generating = false, error = null, folders = [] }) {
