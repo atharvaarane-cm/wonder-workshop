@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { generateBrief } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
+import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt } from "./imageGen.js";
 
 /*
   +======================================================+
@@ -3416,8 +3417,13 @@ export default function WorkshopV2() {
       setChatMessages([{
         id: Date.now(),
         role: "system",
-        text: "Brief generated. Click any frame to open it, or describe changes you'd like to make. Use @ to reference characters, locations, and elements.",
+        text: "Brief generated. Generating images now — characters / locations / elements first, then storyboard frames with identity preservation. This takes about a minute.",
       }]);
+
+      // Kick off auto image generation in the background. Don't await
+      // it here — we want the OneSheet to be interactive immediately
+      // and have images stream in as they complete.
+      autoGenerateAssets(v2Data, meta.aspect);
     } catch (e) {
       console.error("[handleGenerate] failed", e);
       setGenerationError(e?.message || "Generation failed. Try again.");
@@ -3425,6 +3431,112 @@ export default function WorkshopV2() {
       setGenerating(false);
     }
   };
+
+  // Auto-image-generation pipeline. Two phases:
+  //   A — talent headshots, location refs, product refs (parallel)
+  //   B — storyboard frames (parallel, but only AFTER phase A) with
+  //       reference images attached for identity preservation
+  // Phase A images get tracked in a local Map so phase B can attach
+  // them even though our React state updates are still propagating.
+  // Errors are surfaced via the reducer's "error" generationStatus on
+  // the affected asset — generation keeps moving for everything else.
+  async function autoGenerateAssets(initialData, aspect) {
+    const generated = {
+      talent: new Map(),
+      locations: new Map(),
+      products: new Map(),
+    };
+
+    // Phase A — talent / locations / products in parallel.
+    const phaseA = [];
+    for (const t of initialData.talent || []) {
+      phaseA.push((async () => {
+        dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
+        try {
+          const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
+          generated.talent.set(t.id, url);
+          dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
+          dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
+        } catch (err) {
+          console.error("[talent gen]", t.name, err);
+          dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
+        }
+      })());
+    }
+    for (const l of initialData.locations || []) {
+      phaseA.push((async () => {
+        dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
+        try {
+          const url = await generateImage(locationPrompt(l), { ratio: aspect });
+          generated.locations.set(l.id, url);
+          dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
+        } catch (err) {
+          console.error("[location gen]", l.name, err);
+          dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
+        }
+      })());
+    }
+    for (const p of initialData.products || []) {
+      phaseA.push((async () => {
+        dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
+        try {
+          const url = await generateImage(productPrompt(p), { ratio: "1:1" });
+          generated.products.set(p.id, url);
+          dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
+        } catch (err) {
+          console.error("[product gen]", p.name, err);
+          dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
+        }
+      })());
+    }
+    await Promise.allSettled(phaseA);
+
+    // Phase B — frames with reference images. Detect @-handle mentions
+    // inline (matching the reducer's AUTO_DETECT_MENTIONS logic) so we
+    // know which talent / products each frame references, then look up
+    // the just-generated images to use as Gemini reference inputs.
+    const handles = {
+      talent: initialData.talent.map(t => ({ id: t.id, handle: t.handle.toLowerCase() })),
+      products: initialData.products.map(p => ({ id: p.id, handle: p.handle.toLowerCase() })),
+    };
+    const phaseB = [];
+    for (const f of initialData.frames || []) {
+      phaseB.push((async () => {
+        dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "generating" });
+        const briefLower = (f.brief || "").toLowerCase();
+        const talentIds = handles.talent.filter(h => briefLower.includes(h.handle)).map(h => h.id);
+        const productIds = handles.products.filter(h => briefLower.includes(h.handle)).map(h => h.id);
+        const locationId = f.locationId
+          || (initialData.locations[0]?.id ?? null);
+
+        const refs = [];
+        for (const tid of talentIds) {
+          const url = generated.talent.get(tid);
+          if (url) refs.push(url);
+        }
+        if (locationId) {
+          const url = generated.locations.get(locationId);
+          if (url) refs.push(url);
+        }
+        for (const pid of productIds) {
+          const url = generated.products.get(pid);
+          if (url) refs.push(url);
+        }
+
+        try {
+          const url = await generateImage(framePrompt(f), {
+            ratio: aspect,
+            referenceImages: refs,
+          });
+          dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
+        } catch (err) {
+          console.error("[frame gen]", f.number, err);
+          dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "error" });
+        }
+      })());
+    }
+    await Promise.allSettled(phaseB);
+  }
 
   const handleSendMessage = useCallback((text, frameId, frameNumber) => {
     setChatMessages(prev => [...prev, { id: Date.now(), role: "user", text, frameId, frameNumber }]);
