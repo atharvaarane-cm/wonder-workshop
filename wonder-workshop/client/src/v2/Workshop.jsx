@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useReducer } from "react";
+import { generateBrief } from "../hooks/useBrief.js";
+import { v1BriefToV2Data } from "./migration.js";
 
 /*
   +======================================================+
@@ -183,6 +185,16 @@ function renumber(frames) {
 
 function applyAction(state, action) {
   switch (action.type) {
+    case "SET_DATA":
+      // Wholesale replacement — used when a real generateBrief() call
+      // returns and we migrate v1 brief shape → v2 data shape. Merging
+      // the incoming meta with existing meta lets the BriefForm's
+      // typed-in fields (title, client, treatment) override anything
+      // the model might guess differently.
+      return {
+        ...action.data,
+        meta: { ...action.data.meta, ...(action.metaOverrides || {}) },
+      };
     case "SET_META":
       return { ...state, meta: { ...state.meta, ...action.meta } };
     case "UPDATE_META":
@@ -3160,7 +3172,7 @@ function LiquidGlassButton({ onClick, children }) {
 
 // -- BRIEF FORM (with file upload) ----------------------------
 
-function BriefForm({ onGenerate }) {
+function BriefForm({ onGenerate, generating = false, error = null }) {
   const [meta, setMeta] = useState({
     title: INITIAL_STATE.meta.title, client: INITIAL_STATE.meta.client,
     format: INITIAL_STATE.meta.format, aspect: INITIAL_STATE.meta.aspect,
@@ -3277,12 +3289,21 @@ function BriefForm({ onGenerate }) {
       </Reveal>
 
       <Reveal delay={320}>
-        <LiquidGlassButton onClick={() => onGenerate(meta)}>
-          <SectionIcon name="sparkle" size={15} color="rgba(255,255,255,0.8)" /> Generate Storyboard
+        <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
+          <SectionIcon name="sparkle" size={15} color="rgba(255,255,255,0.8)" />
+          {generating ? " Generating brief…" : " Generate Storyboard"}
         </LiquidGlassButton>
-        <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
-          Creates talent, locations, products, and a complete shot sequence
-        </p>
+        {error ? (
+          <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
+            {error}
+          </p>
+        ) : (
+          <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
+            {generating
+              ? "Talking to Gemini — characters, locations, and a 9-frame storyboard incoming. Usually ~10–20 seconds."
+              : "Creates talent, locations, products, and a complete shot sequence"}
+          </p>
+        )}
       </Reveal>
     </div>
   );
@@ -3298,6 +3319,10 @@ export default function WorkshopV2() {
 
   const [ready, setReady] = useState(false);
   const [built, setBuilt] = useState(false);
+  // Brief-generation lifecycle for the BriefForm landing page. Lets us
+  // disable the Generate button + show progress while Gemini works.
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState(null);
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -3346,10 +3371,59 @@ export default function WorkshopV2() {
     if (!sidebarOpen) setSidebarOpen(true);
   }, [sidebarOpen]);
 
-  const handleGenerate = (meta) => {
-    dispatch({ type: "SET_META", meta });
-    setBuilt(true);
-    setChatMessages([{ id: Date.now(), role: "system", text: "Welcome! Click any frame to open it, or describe changes you'd like to make. Use @ to reference characters, locations, and elements." }]);
+  // Real brief generation, powered by v1's generateBrief() → Gemini.
+  // Builds a single prompt string from the BriefForm inputs (title,
+  // client, treatment, format, aspect), waits for Gemini to return the
+  // structured brief, then maps it onto v2's data shape via the
+  // migration utility. The user's typed inputs override anything the
+  // model might guess differently (the BriefForm IS authoritative for
+  // title/client/aspect/format).
+  const handleGenerate = async (meta) => {
+    if (generating) return;
+    setGenerating(true);
+    setGenerationError(null);
+    try {
+      const prompt = [
+        meta.title ? `${meta.title}` : null,
+        meta.client ? `for ${meta.client}` : null,
+        meta.treatment ? `\n\n${meta.treatment}` : null,
+        `\n\nFormat: ${meta.format}s, ${meta.aspect} aspect ratio.`,
+      ].filter(Boolean).join(" ").trim();
+
+      const v1Brief = await generateBrief(prompt);
+      const v2Data = v1BriefToV2Data(v1Brief);
+
+      // BriefForm inputs are authoritative for meta — don't let the
+      // model rewrite the project title or aspect ratio the user
+      // explicitly chose.
+      dispatch({
+        type: "SET_DATA",
+        data: v2Data,
+        metaOverrides: {
+          title: meta.title || v2Data.meta.title,
+          client: meta.client || v2Data.meta.client,
+          format: meta.format || v2Data.meta.format,
+          aspect: meta.aspect || v2Data.meta.aspect,
+          treatment: meta.treatment || v2Data.meta.treatment,
+        },
+      });
+      // Auto-detect @mentions in the new shot briefs so frame
+      // talent/location/product references are populated. The reducer
+      // case already exists in v1's wireframe; just kick it.
+      setTimeout(() => dispatch({ type: "AUTO_DETECT_MENTIONS" }), 0);
+
+      setBuilt(true);
+      setChatMessages([{
+        id: Date.now(),
+        role: "system",
+        text: "Brief generated. Click any frame to open it, or describe changes you'd like to make. Use @ to reference characters, locations, and elements.",
+      }]);
+    } catch (e) {
+      console.error("[handleGenerate] failed", e);
+      setGenerationError(e?.message || "Generation failed. Try again.");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleSendMessage = useCallback((text, frameId, frameNumber) => {
@@ -3542,7 +3616,7 @@ export default function WorkshopV2() {
       <div style={{ display: "flex", height: built ? "calc(100vh - 48px)" : "auto" }}>
         {/* Main */}
         <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
-          {!built && <BriefForm onGenerate={handleGenerate} />}
+          {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} />}
           {built && !productionFrameId && (
             <OneSheetWorkspace data={data} selectedFrameId={selectedFrameId}
               highlightedFrames={highlightedFrames} onSelectFrame={selectFrame}
