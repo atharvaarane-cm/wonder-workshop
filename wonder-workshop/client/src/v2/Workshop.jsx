@@ -4753,12 +4753,26 @@ function OneSheetExport({ data, dark, includes }) {
 // -- EXPORT MODAL ---------------------------------------------
 
 function ExportModal({ data, onClose }) {
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState("light"); // PDFs print better in light
   const [status, setStatus] = useState(null);
   const [includes, setIncludes] = useState({ descriptions: true, cameraNotes: true, talentTags: true, locationPalettes: true });
   const [downloadStatus, setDownloadStatus] = useState(null);
 
-  const doExport = () => { setStatus("exporting"); setTimeout(() => setStatus("done"), 1500); setTimeout(() => setStatus(null), 3500); };
+  // Real PDF export — uses the browser's print-to-PDF flow against
+  // the OneSheetExport container (#ww-print-area). The @media print
+  // rules in App's <style> hide everything else and detach the export
+  // to fill the page. User picks "Save as PDF" in the OS print dialog.
+  const doExport = () => {
+    setStatus("exporting");
+    // Defer so the loading state can render before window.print blocks.
+    setTimeout(() => {
+      try { window.print(); } catch (e) { console.error("[print]", e); }
+      setStatus("done");
+      toast("Open the browser's print dialog and choose Save as PDF", { kind: "info", ttl: 5500 });
+      setTimeout(() => setStatus(null), 3500);
+    }, 50);
+  };
+
   const doShare = () => { navigator.clipboard?.writeText("https://workshop.wonder.ai/s/abc123").catch(() => {}); setStatus("copied"); setTimeout(() => setStatus(null), 2000); };
   const doDownloadAssets = () => { setDownloadStatus("loading"); setTimeout(() => { setDownloadStatus("complete"); setTimeout(() => setDownloadStatus(null), 2000); }, 1500); };
 
@@ -4774,7 +4788,7 @@ function ExportModal({ data, onClose }) {
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }} />
       <div style={{ position: "absolute", inset: 40, display: "flex", gap: 32, animation: "sheetUp 0.4s cubic-bezier(0.22,1,0.36,1)" }}>
         <div style={{ flex: "1 1 68%", minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{
+          <div id="ww-print-area" style={{
             aspectRatio: "11/8.5", width: "100%", maxHeight: "100%",
             borderRadius: 14, overflow: "hidden",
             boxShadow: "0 24px 80px rgba(0,0,0,0.5)", border: "1px solid var(--warm-06)",
@@ -6204,6 +6218,29 @@ export default function WorkshopV2() {
         input:focus, textarea:focus, select:focus { outline: none; border-color: var(--warm-20) !important; }
         select { appearance: none; cursor: pointer; }
         select option { background: var(--select-bg); color: var(--warm); }
+        /* Print stylesheet — hides everything except the one-sheet
+           export when the user prints to PDF from the Export modal.
+           ww-print-area is set on the OneSheetExport container; we
+           detach it visually from its modal scaffolding for print. */
+        @media print {
+          body * { visibility: hidden !important; }
+          #ww-print-area, #ww-print-area * { visibility: visible !important; }
+          #ww-print-area {
+            position: fixed !important;
+            inset: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: #fff !important;
+            border-radius: 0 !important;
+            color: #000 !important;
+            box-shadow: none !important;
+            transform: none !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-height: none !important;
+          }
+          @page { size: landscape; margin: 0.4in; }
+        }
         .grain {
           position: fixed; inset: 0; pointer-events: none; z-index: 9998; opacity: 0.02;
           background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence baseFrequency='0.75' numOctaves='4' type='fractalNoise'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
