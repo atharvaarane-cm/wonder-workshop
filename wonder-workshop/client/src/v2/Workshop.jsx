@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useReducer } from "react";
+import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext } from "react";
 import { generateBrief, chatWithTools } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
@@ -442,6 +442,127 @@ function storyboardReducer(state, action) {
   const next = applyAction(state.present, action);
   if (next === state.present) return state;
   return { past: [...state.past.slice(-30), state.present], present: next, future: [] };
+}
+
+// -- UI CONTEXT (toasts + confirm modal) ----------------------
+// Provider sits inside the App body so every nested component can
+// call useToast() / useConfirm() to surface user-facing feedback or
+// gate destructive actions through a centered confirm modal.
+
+const UIContext = createContext({ toast: () => {}, confirm: () => Promise.resolve(false) });
+export function useToast() { return useContext(UIContext).toast; }
+export function useConfirm() { return useContext(UIContext).confirm; }
+
+function UIProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const [confirmState, setConfirmState] = useState(null);
+  const idRef = useRef(0);
+
+  const toast = useCallback((message, opts = {}) => {
+    const id = ++idRef.current;
+    const kind = opts.kind || "success"; // success | error | info
+    const ttl = opts.ttl || (kind === "error" ? 6000 : 3500);
+    setToasts(prev => [...prev, { id, message, kind }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl);
+  }, []);
+
+  const confirm = useCallback((opts) => {
+    return new Promise((resolve) => {
+      setConfirmState({
+        title: opts.title || "Are you sure?",
+        message: opts.message || "",
+        confirmLabel: opts.confirmLabel || "Confirm",
+        cancelLabel: opts.cancelLabel || "Cancel",
+        danger: opts.danger !== false,
+        resolve,
+      });
+    });
+  }, []);
+
+  const handleConfirmResolve = (v) => {
+    if (confirmState?.resolve) confirmState.resolve(v);
+    setConfirmState(null);
+  };
+
+  return (
+    <UIContext.Provider value={{ toast, confirm }}>
+      {children}
+      {/* Toast stack — top-right, fade in/out, stacks newest at top */}
+      {toasts.length > 0 && (
+        <div style={{
+          position: "fixed", top: 56, right: 16, zIndex: 10000,
+          display: "flex", flexDirection: "column", gap: 8,
+          pointerEvents: "none",
+        }}>
+          {toasts.slice().reverse().map(t => {
+            const colors = {
+              success: { border: "rgba(124,252,156,0.4)", dot: "#7CFC9C" },
+              error:   { border: "rgba(255,138,128,0.4)", dot: "#FF8A80" },
+              info:    { border: "rgba(91,178,255,0.4)",  dot: "#7EB9FF" },
+            }[t.kind] || { border: "var(--warm-12)", dot: "var(--warm-40)" };
+            return (
+              <div key={t.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 14px", borderRadius: 8,
+                background: "var(--surface-solid)",
+                border: `1px solid ${colors.border}`,
+                boxShadow: "0 8px 28px rgba(0,0,0,0.32)",
+                fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+                color: "var(--warm)",
+                maxWidth: 360, animation: "fadeIn 0.18s ease",
+                pointerEvents: "auto",
+              }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: colors.dot, flexShrink: 0 }} />
+                <span>{t.message}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {/* Confirm modal — centered overlay, click backdrop to cancel */}
+      {confirmState && (
+        <div onClick={() => handleConfirmResolve(false)} style={{
+          position: "fixed", inset: 0, zIndex: 11000,
+          background: "rgba(0,0,0,0.6)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "var(--surface-solid)",
+            border: "1px solid var(--warm-12)", borderRadius: 12,
+            padding: 22, width: "min(100%, 440px)",
+            boxShadow: "0 16px 64px rgba(0,0,0,0.5)",
+            animation: "fadeIn 0.18s ease",
+          }}>
+            <div style={{ fontFamily: "var(--f)", fontSize: 15, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em", marginBottom: 8 }}>
+              {confirmState.title}
+            </div>
+            {confirmState.message && (
+              <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, color: "var(--warm-40)", lineHeight: 1.6, marginBottom: 18 }}>
+                {confirmState.message}
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => handleConfirmResolve(false)} style={{
+                fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+                padding: "7px 14px", borderRadius: 7, cursor: "pointer",
+                background: "transparent", border: "1px solid var(--warm-12)",
+                color: "var(--warm-40)", outline: "none",
+              }}>{confirmState.cancelLabel}</button>
+              <button onClick={() => handleConfirmResolve(true)} style={{
+                fontFamily: "var(--f)", fontSize: 12, fontWeight: 600,
+                padding: "7px 16px", borderRadius: 7, cursor: "pointer",
+                background: confirmState.danger ? "#E04141" : "var(--warm)",
+                border: "none",
+                color: confirmState.danger ? "#fff" : "var(--bg)",
+                outline: "none",
+              }}>{confirmState.confirmLabel}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </UIContext.Provider>
+  );
 }
 
 // -- CHAT TOOL SCHEMA (real Gemini chat-with-tools) -----------
@@ -5084,13 +5205,33 @@ export default function WorkshopV2() {
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
 
-  // Auto-save the active project on every data change. Debounced 500ms.
-  // Updates the save-status indicator so the OneSheet header can show
-  // "Saving…" → "Saved just now" → tick into "Saved 2 min ago".
+  // Auto-save the active project on every data change.
+  //
+  // Earlier version used a 500ms debounce — that broke during the
+  // initial auto-generation pipeline, which dispatches ~50 actions
+  // over 60 seconds. Each dispatch reset the debounce timer, so the
+  // save NEVER actually fired before the user could reload. Result:
+  // entire briefs disappeared.
+  //
+  // Fix: short 150ms debounce (still avoids hammering localStorage on
+  // every keystroke) + a hard ceiling that forces a save every 2s if
+  // changes keep coming + beforeunload flushes any pending save when
+  // the user closes/reloads the page.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const activeRef = useRef(activeProjectId);
+  activeRef.current = activeProjectId;
+  const builtRef = useRef(built);
+  builtRef.current = built;
+  const pendingSaveRef = useRef({ debounce: null, ceiling: null });
+
   useEffect(() => {
     if (!built || !activeProjectId) return;
     setSaveStatus("saving");
-    const t = setTimeout(() => {
+    // Short debounce — let a couple rapid dispatches batch, but never
+    // hold the save off for more than a fraction of a second.
+    if (pendingSaveRef.current.debounce) clearTimeout(pendingSaveRef.current.debounce);
+    pendingSaveRef.current.debounce = setTimeout(() => {
       const ok = saveProject(activeProjectId, data);
       if (ok) {
         setSaveStatus("saved");
@@ -5099,9 +5240,47 @@ export default function WorkshopV2() {
       } else {
         setSaveStatus("error");
       }
-    }, 500);
-    return () => clearTimeout(t);
+      pendingSaveRef.current.debounce = null;
+    }, 150);
+    // Ceiling — if changes keep coming faster than the debounce can
+    // settle, force a save every 2s anyway so the user is never more
+    // than 2s of work away from a durable write.
+    if (!pendingSaveRef.current.ceiling) {
+      pendingSaveRef.current.ceiling = setTimeout(() => {
+        if (activeRef.current && builtRef.current) {
+          const ok = saveProject(activeRef.current, dataRef.current);
+          if (ok) {
+            setSaveStatus("saved");
+            setLastSavedAt(Date.now());
+            setProjects(listProjects());
+          }
+        }
+        pendingSaveRef.current.ceiling = null;
+      }, 2000);
+    }
+    return () => {
+      // Note: we don't clear ceiling on every render — it's intentional
+      // that it fires every 2s during bursts. Only the debounce is
+      // cleared on each render so the latest data wins.
+    };
   }, [data, built, activeProjectId]);
+
+  // Flush any pending save when the page unloads (refresh, close,
+  // navigate away). Synchronous localStorage write — the only reliable
+  // way to guarantee data is persisted before the JS context dies.
+  useEffect(() => {
+    function flushOnUnload() {
+      if (activeRef.current && builtRef.current) {
+        saveProject(activeRef.current, dataRef.current);
+      }
+    }
+    window.addEventListener("beforeunload", flushOnUnload);
+    window.addEventListener("pagehide", flushOnUnload);
+    return () => {
+      window.removeEventListener("beforeunload", flushOnUnload);
+      window.removeEventListener("pagehide", flushOnUnload);
+    };
+  }, []);
 
   // Project switcher — load a different project into the workspace.
   // Saves the current one first so no work is lost in the transition.
@@ -5586,6 +5765,7 @@ export default function WorkshopV2() {
   const prodIdx = prodFrame ? data.frames.indexOf(prodFrame) : -1;
 
   return (
+    <UIProvider>
     <div style={{
       ...getThemeVars(isDark),
       background: isDark
@@ -5775,6 +5955,7 @@ export default function WorkshopV2() {
         {built && <AIChatTab sidebarOpen={sidebarOpen} onClick={() => setSidebarOpen(true)} />}
       </div>
     </div>
+    </UIProvider>
   );
 }
 
