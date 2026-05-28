@@ -107,6 +107,7 @@ function assembleLocations(brief) {
     referenceImage: null,
     generationStatus: "idle",
     generatedImage: null,
+    locked: false,
   }));
 }
 
@@ -120,6 +121,7 @@ function assembleProducts(brief) {
     note: p.description || "",
     referenceImage: null,
     generationStatus: "idle",
+    locked: false,
   }));
 }
 

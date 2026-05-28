@@ -158,14 +158,14 @@ const INITIAL_STATE = {
     { id: "t2", name: "Coach Rivera", handle: "@coach", role: "Supporting", initials: "CR", note: "50s, silver temples, warm eyes. Worn track jacket.", headshot: null, headshots: { front: null, side: null, threeQuarter: null, back: null }, fullBody: { front: null, side: null, threeQuarter: null, back: null }, generatedAngles: null, generationStatus: "idle", locked: false },
   ],
   products: [
-    { id: "p1", name: "Ultra Boost X9", handle: "@ultra", category: "Footwear", hue: "#D4E157", referenceImage: null, generationStatus: "idle" },
-    { id: "p2", name: "DryFit Singlet", handle: "@dryfit", category: "Apparel", hue: "#78909C", referenceImage: null, generationStatus: "idle" },
-    { id: "p3", name: "Running Cap", handle: "@running", category: "Accessories", hue: "#BCAAA4", referenceImage: null, generationStatus: "idle" },
+    { id: "p1", name: "Ultra Boost X9", handle: "@ultra", category: "Footwear", hue: "#D4E157", note: "", referenceImage: null, generationStatus: "idle", locked: false },
+    { id: "p2", name: "DryFit Singlet", handle: "@dryfit", category: "Apparel", hue: "#78909C", note: "", referenceImage: null, generationStatus: "idle", locked: false },
+    { id: "p3", name: "Running Cap", handle: "@running", category: "Accessories", hue: "#BCAAA4", note: "", referenceImage: null, generationStatus: "idle", locked: false },
   ],
   locations: [
-    { id: "l1", name: "Desert Highway", handle: "@desert", type: "ai", colors: ["#E8C47C", "#8B6F47", "#2C1810", "#FF6B35"], referenceImage: null, generationStatus: "idle", generatedImage: null },
-    { id: "l2", name: "Track Stadium", handle: "@track", type: "ref", colors: ["#1A1A2E", "#4A6FA5", "#D4D4D4", "#FF4444"], referenceImage: null, generationStatus: "idle", generatedImage: null },
-    { id: "l3", name: "Motel Room", handle: "@motel", type: "ai", colors: ["#3D2B1F", "#D4A574", "#8B7355", "#FFE4B5"], referenceImage: null, generationStatus: "idle", generatedImage: null },
+    { id: "l1", name: "Desert Highway", handle: "@desert", type: "ai", colors: ["#E8C47C", "#8B6F47", "#2C1810", "#FF6B35"], note: "", referenceImage: null, generationStatus: "idle", generatedImage: null, locked: false },
+    { id: "l2", name: "Track Stadium", handle: "@track", type: "ref", colors: ["#1A1A2E", "#4A6FA5", "#D4D4D4", "#FF4444"], note: "", referenceImage: null, generationStatus: "idle", generatedImage: null, locked: false },
+    { id: "l3", name: "Motel Room", handle: "@motel", type: "ai", colors: ["#3D2B1F", "#D4A574", "#8B7355", "#FFE4B5"], note: "", referenceImage: null, generationStatus: "idle", generatedImage: null, locked: false },
   ],
   // Brand Info — preserved from v1 per Logan's "err on side of features"
   // rule. Singular (one brand per project), unlike the asset arrays.
@@ -378,6 +378,26 @@ function applyAction(state, action) {
       return { ...state, moodBoard: (state.moodBoard || []).filter(m => m.id !== action.id) };
     case "UPLOAD_MOOD_IMAGE":
       return { ...state, moodBoard: (state.moodBoard || []).map(m => m.id === action.id ? { ...m, image: action.dataUrl } : m) };
+    case "TOGGLE_LOCATION_LOCK":
+      return {
+        ...state,
+        locations: state.locations.map(l => l.id === action.id ? { ...l, locked: !l.locked } : l),
+      };
+    case "TOGGLE_PRODUCT_LOCK":
+      return {
+        ...state,
+        products: state.products.map(p => p.id === action.id ? { ...p, locked: !p.locked } : p),
+      };
+    case "CLEAR_LOCATION_IMAGE":
+      return {
+        ...state,
+        locations: state.locations.map(l => l.id === action.id ? { ...l, generatedImage: null, referenceImage: null } : l),
+      };
+    case "CLEAR_PRODUCT_IMAGE":
+      return {
+        ...state,
+        products: state.products.map(p => p.id === action.id ? { ...p, referenceImage: null } : p),
+      };
     case "AUTO_DETECT_MENTIONS": {
       return { ...state, frames: state.frames.map(f => {
         const briefLower = f.brief.toLowerCase();
@@ -2109,6 +2129,391 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
   );
 }
 
+// -- LOCATION TAB (tile grid + drill-down) ----------------------
+// Same shape as CharacterTab. Single reference image per location
+// (no FRONT/SIDE/BACK grid — locations aren't multi-angle assets).
+
+function LocationTab({ data, dispatch }) {
+  const [viewingId, setViewingId] = useState(null);
+
+  if (viewingId) {
+    const loc = data.locations.find(l => l.id === viewingId);
+    if (!loc) {
+      setTimeout(() => setViewingId(null), 0);
+      return null;
+    }
+    return <LocationDetailView location={loc} dispatch={dispatch} onBack={() => setViewingId(null)} />;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
+          Locations · {data.locations.length}
+        </div>
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+        gap: 12,
+      }}>
+        {data.locations.map(l => (
+          <LocationTile key={l.id} location={l} onClick={() => setViewingId(l.id)} />
+        ))}
+        <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} />
+      </div>
+    </div>
+  );
+}
+
+function LocationTile({ location, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  const img = location.generatedImage || location.referenceImage;
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", flexDirection: "column", gap: 6,
+        padding: 6, borderRadius: 10, cursor: "pointer",
+        background: hovered ? "var(--warm-06)" : "var(--warm-04)",
+        border: hovered ? "1px solid var(--warm-12)" : "1px solid var(--warm-06)",
+        transition: "all 0.15s ease",
+        outline: "none",
+      }}
+    >
+      <div style={{
+        fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+        color: "var(--warm-50)", textAlign: "center",
+        letterSpacing: "0.02em",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{location.name || "Unnamed"}</div>
+      <div style={{
+        aspectRatio: "16/9", borderRadius: 8,
+        background: img ? `url(${img}) center/cover` : "var(--warm-04)",
+        border: "1px solid var(--warm-08)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        position: "relative",
+      }}>
+        {!img && (
+          <SectionIcon name="map" size={20} color="var(--warm-25)" />
+        )}
+        {location.locked && (
+          <div title="Locked" style={{
+            position: "absolute", top: 4, right: 4,
+            width: 18, height: 18, borderRadius: 4,
+            background: "rgba(0,0,0,0.6)", color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10,
+          }}>🔒</div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function LocationDetailView({ location, dispatch, onBack }) {
+  async function regenerateReference() {
+    const url = await generateImage(locationPrompt(location), { ratio: "16:9" });
+    dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: url });
+    return url;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <DetailHeader
+        onBack={onBack}
+        name={location.name}
+        subtitle={`${location.type === "ai" ? "AI generated" : "Reference"} · ${location.handle}`}
+        locked={location.locked}
+        onToggleLock={() => dispatch({ type: "TOGGLE_LOCATION_LOCK", id: location.id })}
+        onRename={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "name", value: v })}
+        lockLabel="Lock location"
+      />
+      <DescriptionField
+        label="Description"
+        value={location.note || ""}
+        onChange={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "note", value: v })}
+        placeholder="Describe this location — time of day, weather, architecture, atmosphere…"
+      />
+      <div>
+        <SectionLabel>Reference</SectionLabel>
+        <div style={{ width: 360 }}>
+          <V2ImageSlot
+            src={location.generatedImage || location.referenceImage}
+            label="Reference"
+            ratio="16:9"
+            locked={location.locked}
+            onRegenerate={regenerateReference}
+            onClear={() => dispatch({ type: "CLEAR_LOCATION_IMAGE", id: location.id })}
+            onUpload={dataUrl => dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: dataUrl })}
+          />
+        </div>
+      </div>
+      {Array.isArray(location.colors) && location.colors.length > 0 && (
+        <div>
+          <SectionLabel>Palette</SectionLabel>
+          <div style={{ display: "flex", gap: 6 }}>
+            {location.colors.map((c, i) => (
+              <div key={i} title={c} style={{
+                width: 36, height: 36, borderRadius: 6,
+                background: c, border: "1px solid var(--warm-08)",
+              }} />
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--warm-06)" }}>
+        <ConfirmAction label="Delete location" onConfirm={() => {
+          dispatch({ type: "DELETE_LOCATION", id: location.id });
+          onBack();
+        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+      </div>
+    </div>
+  );
+}
+
+// -- ELEMENT TAB (products tile grid + drill-down) --------------
+
+function ElementTab({ data, dispatch }) {
+  const [viewingId, setViewingId] = useState(null);
+
+  if (viewingId) {
+    const prod = data.products.find(p => p.id === viewingId);
+    if (!prod) {
+      setTimeout(() => setViewingId(null), 0);
+      return null;
+    }
+    return <ElementDetailView product={prod} dispatch={dispatch} onBack={() => setViewingId(null)} />;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
+          Elements · {data.products.length}
+        </div>
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+        gap: 12,
+      }}>
+        {data.products.map(p => (
+          <ElementTile key={p.id} product={p} onClick={() => setViewingId(p.id)} />
+        ))}
+        <AddTile label="Add Element" iconName="box" onClick={() => dispatch({ type: "ADD_PRODUCT", data: {} })} />
+      </div>
+    </div>
+  );
+}
+
+function ElementTile({ product, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  const img = product.referenceImage;
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", flexDirection: "column", gap: 6,
+        padding: 6, borderRadius: 10, cursor: "pointer",
+        background: hovered ? "var(--warm-06)" : "var(--warm-04)",
+        border: hovered ? "1px solid var(--warm-12)" : "1px solid var(--warm-06)",
+        transition: "all 0.15s ease",
+        outline: "none",
+      }}
+    >
+      <div style={{
+        fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+        color: "var(--warm-50)", textAlign: "center",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{product.name || "Unnamed"}</div>
+      <div style={{
+        aspectRatio: "1/1", borderRadius: 8,
+        background: img ? `url(${img}) center/cover` : `linear-gradient(135deg, ${product.hue || "#444"}33, var(--warm-04))`,
+        border: "1px solid var(--warm-08)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        position: "relative",
+      }}>
+        {!img && (
+          <SectionIcon name="box" size={20} color="var(--warm-25)" />
+        )}
+        {product.locked && (
+          <div title="Locked" style={{
+            position: "absolute", top: 4, right: 4,
+            width: 18, height: 18, borderRadius: 4,
+            background: "rgba(0,0,0,0.6)", color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10,
+          }}>🔒</div>
+        )}
+      </div>
+      <div style={{
+        fontFamily: "var(--f)", fontSize: 9, fontWeight: 400,
+        color: "var(--warm-25)", textAlign: "center",
+        letterSpacing: "0.06em", textTransform: "uppercase",
+      }}>{product.category || ""}</div>
+    </button>
+  );
+}
+
+function ElementDetailView({ product, dispatch, onBack }) {
+  async function regenerateReference() {
+    const url = await generateImage(productPrompt(product), { ratio: "1:1" });
+    dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: url });
+    return url;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <DetailHeader
+        onBack={onBack}
+        name={product.name}
+        subtitle={`${product.category || "Element"} · ${product.handle}`}
+        locked={product.locked}
+        onToggleLock={() => dispatch({ type: "TOGGLE_PRODUCT_LOCK", id: product.id })}
+        onRename={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "name", value: v })}
+        lockLabel="Lock element"
+      />
+      <div>
+        <SectionLabel>Category</SectionLabel>
+        <EditableText
+          value={product.category || ""}
+          onChange={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "category", value: v })}
+          placeholder="e.g. Footwear, Apparel, Beverage…"
+          style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, color: "var(--warm-50)", display: "block" }}
+        />
+      </div>
+      <DescriptionField
+        label="Description"
+        value={product.note || ""}
+        onChange={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "note", value: v })}
+        placeholder="Describe this element — color, material, shape, key details for product photography…"
+      />
+      <div>
+        <SectionLabel>Reference</SectionLabel>
+        <div style={{ width: 240 }}>
+          <V2ImageSlot
+            src={product.referenceImage}
+            label="Reference"
+            ratio="1:1"
+            locked={product.locked}
+            onRegenerate={regenerateReference}
+            onClear={() => dispatch({ type: "CLEAR_PRODUCT_IMAGE", id: product.id })}
+            onUpload={dataUrl => dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: dataUrl })}
+          />
+        </div>
+      </div>
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--warm-06)" }}>
+        <ConfirmAction label="Delete element" onConfirm={() => {
+          dispatch({ type: "DELETE_PRODUCT", id: product.id });
+          onBack();
+        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+      </div>
+    </div>
+  );
+}
+
+// -- SHARED DETAIL VIEW PRIMITIVES ------------------------------
+// Header (back button, editable name, subtitle, lock pill) and small
+// reusable bits used by Location/Element/Character detail views.
+
+function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, lockLabel = "Lock" }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <button onClick={onBack} style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "5px 9px", borderRadius: 6, cursor: "pointer",
+        background: "transparent", border: "1px solid var(--warm-08)",
+        color: "var(--warm-40)", outline: "none",
+        fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+      }}>‹ Back</button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <EditableText
+          value={name}
+          onChange={onRename}
+          style={{ fontFamily: "var(--f)", fontSize: 20, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em", display: "block" }}
+        />
+        {subtitle && (
+          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>
+            {subtitle}
+          </div>
+        )}
+      </div>
+      <button
+        onClick={onToggleLock}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "6px 10px", borderRadius: 7, cursor: "pointer",
+          background: locked ? "var(--warm-12)" : "transparent",
+          border: "1px solid var(--warm-12)",
+          color: locked ? "var(--warm)" : "var(--warm-40)",
+          outline: "none",
+          fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
+          letterSpacing: "0.06em", textTransform: "uppercase",
+        }}
+      >
+        {locked ? "🔒 Locked" : lockLabel}
+      </button>
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>
+      {children}
+    </div>
+  );
+}
+
+function DescriptionField({ label, value, onChange, placeholder }) {
+  return (
+    <div>
+      <SectionLabel>{label}</SectionLabel>
+      <EditableText
+        value={value}
+        onChange={onChange}
+        multiline
+        style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, lineHeight: 1.7, color: "var(--warm-40)", display: "block" }}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+function AddTile({ label, iconName, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", flexDirection: "column", gap: 6,
+        padding: 6, borderRadius: 10, cursor: "pointer",
+        background: "transparent",
+        border: hovered ? "1px dashed var(--warm-25)" : "1px dashed var(--warm-10)",
+        transition: "all 0.15s ease",
+        outline: "none",
+      }}
+    >
+      <div style={{ fontSize: 11, height: 13, opacity: 0 }}>·</div>
+      <div style={{
+        aspectRatio: "1/1", borderRadius: 8,
+        background: "transparent",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+        color: hovered ? "var(--warm-50)" : "var(--warm-25)",
+      }}>
+        <SectionIcon name="plus" size={20} color={hovered ? "var(--warm-50)" : "var(--warm-25)"} />
+        <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, letterSpacing: "0.04em" }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 9, height: 11, opacity: 0 }}>·</div>
+    </button>
+  );
+}
+
 function HoverBarBtn({ children, title, onClick, disabled, danger }) {
   const [h, setH] = useState(false);
   return (
@@ -2182,10 +2587,26 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
       </div>
     );
   }
+  if (activeTab === "locations") {
+    return (
+      <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
+        <LocationTab data={data} dispatch={dispatch} />
+      </div>
+    );
+  }
+  if (activeTab === "products") {
+    return (
+      <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
+        <ElementTab data={data} dispatch={dispatch} />
+      </div>
+    );
+  }
 
-  // "talent" handled by CharacterTab above; this fallback covers
-  // products + locations until they get their own dedicated panels.
-  const items = activeTab === "products" ? data.products : data.locations;
+  // All known tabs (brand / talent / locations / products / mood) are
+  // branched above. This fallback should never fire in practice — keep
+  // a safe empty list so the render doesn't crash if a new tab is
+  // added without a panel handler.
+  const items = [];
 
   return (
     <div style={{
