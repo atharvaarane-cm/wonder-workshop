@@ -5135,6 +5135,60 @@ function timeAgo(ts) {
   return `${Math.floor(diff / 86_400_000)} days ago`;
 }
 
+// Aspect ratio dropdown shown in the topbar when a project is open.
+// Click pops a menu of standard ratios. Picking one fires the
+// supplied onChange, which the App routes through handleAspectChange
+// (saves new ratio + asks whether to regenerate all images).
+function AspectRatioControl({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const RATIOS = ["16:9", "9:16", "1:1", "4:5", "2.39", "4:3"];
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e) { if (!e.target.closest?.(".ww-aspect-control")) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  return (
+    <div className="ww-aspect-control" style={{ position: "relative" }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: "flex", alignItems: "center", gap: 4,
+        padding: "4px 9px", borderRadius: 6,
+        background: "var(--warm-04)", border: "1px solid var(--warm-08)",
+        color: "var(--warm-40)", cursor: "pointer", outline: "none",
+        fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
+        letterSpacing: "0.04em",
+      }} title="Change aspect ratio (regenerates images)">
+        {value || "16:9"}
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 8,
+          display: "flex", flexDirection: "column", gap: 2, padding: 4,
+          minWidth: 100, borderRadius: 6,
+          background: "var(--surface-solid)",
+          border: "1px solid var(--warm-12)",
+          boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
+        }}>
+          {RATIOS.map(r => (
+            <button key={r} onClick={() => { setOpen(false); onChange?.(r); }}
+              style={{
+                padding: "5px 10px", textAlign: "left",
+                background: r === value ? "var(--warm-08)" : "transparent",
+                border: "none", borderRadius: 4, cursor: "pointer", outline: "none",
+                fontFamily: "var(--f)", fontSize: 11, fontWeight: r === value ? 700 : 500,
+                color: r === value ? "var(--warm)" : "var(--warm-40)",
+              }}
+            >{r}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // -- SAVE INDICATOR (top of OneSheet) ---------------------------
 // Subtle status pill — "Saving…" while the debounced write is pending,
 // "Saved · just now" right after, then ticks up to "2 min ago".
@@ -5603,6 +5657,67 @@ export default function WorkshopV2() {
   function handleRenameProject(projectId, newName) {
     renameProject(projectId, newName);
     setProjects(listProjects());
+  }
+
+  // Change project aspect ratio. The new ratio is saved immediately
+  // (so future generations use it), then we prompt whether to also
+  // regenerate every existing image at the new ratio. Cancel = keep
+  // current images cropped/letterboxed into the new shape. Confirm =
+  // re-fire generation across every section.
+  async function handleAspectChange(newRatio) {
+    if (!newRatio || newRatio === data.meta?.aspect) return;
+    dispatch({ type: "UPDATE_META", field: "aspect", value: newRatio });
+    const wantsRegen = await uiConfirm({
+      title: `Change aspect ratio to ${newRatio}?`,
+      message: "Existing images keep their original ratio and will look cropped/letterboxed. Regenerate updates everything to the new ratio (talent / locations / products / frames). Mood and brand stay 1:1.",
+      confirmLabel: "Regenerate all",
+      cancelLabel: "Keep current images",
+      danger: false,
+    });
+    if (!wantsRegen) return;
+    toast(`Regenerating images at ${newRatio}…`, { kind: "info", ttl: 4000 });
+    // Re-fire generation for every non-locked image in every section.
+    // Sequenced through Promise.allSettled so a single failure doesn't
+    // tank the whole sweep.
+    const tasks = [];
+    for (const t of (data.talent || [])) {
+      if (t.locked || data.locks?.talent) continue;
+      tasks.push((async () => {
+        try {
+          const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
+          dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
+          dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
+        } catch (e) { console.error("[aspect-regen talent]", e); }
+      })());
+    }
+    for (const l of (data.locations || [])) {
+      if (l.locked || data.locks?.locations) continue;
+      tasks.push((async () => {
+        try {
+          const url = await generateImage(locationPrompt(l), { ratio: newRatio });
+          dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
+        } catch (e) { console.error("[aspect-regen location]", e); }
+      })());
+    }
+    for (const p of (data.products || [])) {
+      if (p.locked || data.locks?.products) continue;
+      tasks.push((async () => {
+        try {
+          const url = await generateImage(productPrompt(p), { ratio: "1:1" });
+          dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
+        } catch (e) { console.error("[aspect-regen product]", e); }
+      })());
+    }
+    for (const f of (data.frames || [])) {
+      tasks.push((async () => {
+        try {
+          const url = await generateImage(framePrompt(f), { ratio: newRatio });
+          dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
+        } catch (e) { console.error("[aspect-regen frame]", e); }
+      })());
+    }
+    await Promise.allSettled(tasks);
+    toast("Aspect-ratio regeneration complete", { kind: "success" });
   }
 
   // Auto-detect mentions in briefs
@@ -6118,6 +6233,10 @@ export default function WorkshopV2() {
           {built && <>
             <div style={{ width: 1, height: 16, background: "var(--warm-08)" }} />
             <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 500, color: "var(--warm)" }}>{data.meta.title}</span>
+            <AspectRatioControl
+              value={data.meta.aspect}
+              onChange={(newRatio) => handleAspectChange(newRatio)}
+            />
             <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)" }}>
               {data.meta.client}
               {data.meta.format ? ` · target :${data.meta.format}` : ""}
