@@ -186,6 +186,12 @@ const INITIAL_STATE = {
   // Section-level locks. Either this OR a per-item lock blocks
   // regeneration on that asset. Toggled from each tab's header.
   locks: { talent: false, locations: false, products: false, mood: false, brand: false },
+  // Version history per slot. Keys are slot identifiers like
+  // "talent.t1.headshot", "talent.t1.headshots.front", "location.l1",
+  // "product.p1", "frame.f1", "mood.m1". Each value is an array of
+  // { src, createdAt } records, oldest first, capped at MAX_VERSIONS.
+  // Reducer cases that write images auto-append.
+  versionHistory: {},
   frames: [
     { id: "f1", number: "01", shotType: "WIDE", camera: "Static", brief: "Dawn. Empty road to vanishing point. Heat shimmer. @maya runs toward camera, impossibly small against the landscape.", talentIds: ["t1"], locationId: "l1", productIds: [], cameraAngle: "front", cameraHeight: "eye", lens: "wide", movement: "static", imageStatus: "placeholder", uploadedImage: null, duration: "5s" },
     { id: "f2", number: "02", shotType: "ECU", camera: "Tracking \xB7 Worm's Eye", brief: "@maya's feet in @ultra. Each strike kicks dust. Breath before music. Rhythm as score.", talentIds: ["t1"], locationId: "l1", productIds: ["p1"], cameraAngle: "front", cameraHeight: "worm", lens: "normal", movement: "track", imageStatus: "placeholder", uploadedImage: null, duration: "5s" },
@@ -200,6 +206,22 @@ const INITIAL_STATE = {
 
 function renumber(frames) {
   return frames.map((f, i) => ({ ...f, number: String(i + 1).padStart(2, "0") }));
+}
+
+// Append a new image URL to versionHistory under the given slotKey.
+// Dedupes consecutive duplicate URLs (so flipping versions via
+// onSelectVersion → UPDATE_X doesn't pile copies) and trims to the
+// last MAX_VERSIONS to bound localStorage memory. Called from every
+// reducer case that writes a new image URL into the model.
+const MAX_VERSIONS_PER_SLOT = 12;
+function appendVersion(history, slotKey, src) {
+  if (!slotKey || !src) return history || {};
+  const prev = (history || {})[slotKey] || [];
+  const last = prev[prev.length - 1];
+  if (last && last.src === src) return history || {}; // dedupe
+  const next = [...prev, { src, createdAt: Date.now() }];
+  const trimmed = next.length > MAX_VERSIONS_PER_SLOT ? next.slice(-MAX_VERSIONS_PER_SLOT) : next;
+  return { ...(history || {}), [slotKey]: trimmed };
 }
 
 function applyAction(state, action) {
@@ -234,7 +256,11 @@ function applyAction(state, action) {
     case "SET_FRAME_IMAGE_STATUS":
       return { ...state, frames: state.frames.map(f => f.id === action.frameId ? { ...f, imageStatus: action.status } : f) };
     case "UPLOAD_FRAME_IMAGE":
-      return { ...state, frames: state.frames.map(f => f.id === action.frameId ? { ...f, uploadedImage: action.dataUrl, imageStatus: "uploaded" } : f) };
+      return {
+        ...state,
+        frames: state.frames.map(f => f.id === action.frameId ? { ...f, uploadedImage: action.dataUrl, imageStatus: "uploaded" } : f),
+        versionHistory: appendVersion(state.versionHistory, `frame.${action.frameId}`, action.dataUrl),
+      };
     case "ADD_FRAME": {
       const maxId = Math.max(0, ...state.frames.map(f => parseInt(f.id.slice(1))));
       const nf = {
@@ -259,12 +285,18 @@ function applyAction(state, action) {
       return { ...state, frames: renumber(ordered) };
     }
     case "UPDATE_TALENT": {
-      return { ...state, talent: state.talent.map(t => {
+      const nextTalent = state.talent.map(t => {
         if (t.id !== action.id) return t;
         const updated = { ...t, [action.field]: action.value };
         if (action.field === "name") updated.handle = autoHandle(action.value);
         return updated;
-      })};
+      });
+      // Track version when the visible headshot URL changes.
+      let nextHistory = state.versionHistory;
+      if (action.field === "headshot" && action.value) {
+        nextHistory = appendVersion(nextHistory, `talent.${action.id}.headshot`, action.value);
+      }
+      return { ...state, talent: nextTalent, versionHistory: nextHistory };
     }
     case "UPDATE_TALENT_HEADSHOT_SLOT":
       // slot ∈ "front" | "side" | "threeQuarter" | "back"
@@ -273,6 +305,7 @@ function applyAction(state, action) {
         talent: state.talent.map(t => t.id === action.id
           ? { ...t, headshots: { ...(t.headshots || {}), [action.slot]: action.url } }
           : t),
+        versionHistory: appendVersion(state.versionHistory, `talent.${action.id}.headshots.${action.slot}`, action.url),
       };
     case "UPDATE_TALENT_FULLBODY_SLOT":
       return {
@@ -280,6 +313,7 @@ function applyAction(state, action) {
         talent: state.talent.map(t => t.id === action.id
           ? { ...t, fullBody: { ...(t.fullBody || {}), [action.slot]: action.url } }
           : t),
+        versionHistory: appendVersion(state.versionHistory, `talent.${action.id}.fullBody.${action.slot}`, action.url),
       };
     case "TOGGLE_SECTION_LOCK":
       // section ∈ "talent" | "locations" | "products" | "mood" | "brand"
@@ -334,13 +368,18 @@ function applyAction(state, action) {
         return updated;
       })};
     }
-    case "UPDATE_PRODUCT_GENERATION":
-      return { ...state, products: state.products.map(p => {
+    case "UPDATE_PRODUCT_GENERATION": {
+      const nextProducts = state.products.map(p => {
         if (p.id !== action.id) return p;
         const u = { ...p, generationStatus: action.status };
         if (action.image) u.referenceImage = action.image;
         return u;
-      })};
+      });
+      const nextHistory = action.image
+        ? appendVersion(state.versionHistory, `product.${action.id}`, action.image)
+        : state.versionHistory;
+      return { ...state, products: nextProducts, versionHistory: nextHistory };
+    }
     case "ADD_PRODUCT": {
       const mx = Math.max(0, ...state.products.map(p => parseInt(p.id.slice(1))));
       const merged = { id: "p" + (mx + 1), name: "New Product", category: "Other", hue: "#888888", referenceImage: null, generationStatus: "idle", ...action.data };
@@ -359,13 +398,18 @@ function applyAction(state, action) {
         return updated;
       })};
     }
-    case "UPDATE_LOCATION_GENERATION":
-      return { ...state, locations: state.locations.map(l => {
+    case "UPDATE_LOCATION_GENERATION": {
+      const nextLocations = state.locations.map(l => {
         if (l.id !== action.id) return l;
         const u = { ...l, generationStatus: action.status };
         if (action.image) u.generatedImage = action.image;
         return u;
-      })};
+      });
+      const nextHistory = action.image
+        ? appendVersion(state.versionHistory, `location.${action.id}`, action.image)
+        : state.versionHistory;
+      return { ...state, locations: nextLocations, versionHistory: nextHistory };
+    }
     case "ADD_LOCATION": {
       const mx = Math.max(0, ...state.locations.map(l => parseInt(l.id.slice(1))));
       const merged = { id: "l" + (mx + 1), name: "New Location", handle: "", type: "ai", colors: ["#444", "#555", "#666", "#777"], referenceImage: null, generationStatus: "idle", generatedImage: null, ...action.data };
@@ -390,7 +434,13 @@ function applyAction(state, action) {
     case "DELETE_MOOD":
       return { ...state, moodBoard: (state.moodBoard || []).filter(m => m.id !== action.id) };
     case "UPLOAD_MOOD_IMAGE":
-      return { ...state, moodBoard: (state.moodBoard || []).map(m => m.id === action.id ? { ...m, image: action.dataUrl } : m) };
+      return {
+        ...state,
+        moodBoard: (state.moodBoard || []).map(m => m.id === action.id ? { ...m, image: action.dataUrl } : m),
+        versionHistory: action.dataUrl
+          ? appendVersion(state.versionHistory, `mood.${action.id}`, action.dataUrl)
+          : state.versionHistory,
+      };
     case "TOGGLE_LOCATION_LOCK":
       return {
         ...state,
@@ -2114,7 +2164,7 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
 // upload an image; type a caption to describe what the reference is
 // pointing at.
 
-function MoodPanel({ moodBoard, sectionLocked, dispatch }) {
+function MoodPanel({ moodBoard, sectionLocked, dispatch, data }) {
   const addBtnRef = useRef(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
 
@@ -2156,7 +2206,13 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         {moodBoard.map(m => (
-          <MoodTile key={m.id} item={m} dispatch={dispatch} locked={sectionLocked} />
+          <MoodTile
+            key={m.id}
+            item={m}
+            dispatch={dispatch}
+            locked={sectionLocked}
+            versions={data?.versionHistory?.[`mood.${m.id}`] || []}
+          />
         ))}
         <button
           ref={addBtnRef}
@@ -2181,7 +2237,7 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch }) {
   );
 }
 
-function MoodTile({ item, dispatch, locked }) {
+function MoodTile({ item, dispatch, locked, versions = [] }) {
   // Mood tiles use V2ImageSlot directly so they get the same full
   // blue hover bar (Expand / Download / Replace / Improve with AI /
   // Regenerate / Delete) as every other image in v2. Caption sits
@@ -2201,6 +2257,8 @@ function MoodTile({ item, dispatch, locked }) {
         label="Mood"
         ratio="1:1"
         locked={locked}
+        versions={versions}
+        onSelectVersion={src => dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: src })}
         onRegenerate={regenerate}
         onClear={() => dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: null })}
         onUpload={dataUrl => dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl })}
@@ -2497,6 +2555,8 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
             label="Reference"
             ratio="1:1"
             locked={effLocked}
+            versions={data.versionHistory?.[`talent.${character.id}.headshot`] || []}
+            onSelectVersion={src => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: src })}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: "headshot" })}
             onUpload={dataUrl => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: dataUrl })}
@@ -2512,6 +2572,8 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         slots={character.headshots || {}}
         ratio="1:1"
         locked={effLocked}
+        versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.headshots.${v}`] || []]))}
+        onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: src })}
         onRegenerate={regenerateHeadshot}
         onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `headshots:${view}` })}
         onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: dataUrl })}
@@ -2528,6 +2590,8 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         slots={character.fullBody || {}}
         ratio="3:4"
         locked={effLocked}
+        versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.fullBody.${v}`] || []]))}
+        onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: src })}
         onRegenerate={regenerateFullBody}
         onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `fullBody:${view}` })}
         onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: dataUrl })}
@@ -2551,7 +2615,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
 // view. Each cell is a V2ImageSlot; clicking the slot triggers
 // per-view regeneration. "Populate All" fires all four in sequence
 // (matches v1's button label).
-function SlotGrid({ label, views, viewLabel, slots, ratio, locked, onRegenerate, onClear, onUpload, onPopulateAll }) {
+function SlotGrid({ label, views, viewLabel, slots, ratio, locked, versionsBySlot = {}, onSelectVersion, onRegenerate, onClear, onUpload, onPopulateAll }) {
   const [populating, setPopulating] = useState(false);
   const hasAny = views.some(v => slots[v]);
 
@@ -2585,6 +2649,8 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, onRegenerate,
               label={viewLabel[view]}
               ratio={ratio}
               locked={locked}
+              versions={versionsBySlot[view] || []}
+              onSelectVersion={src => onSelectVersion?.(view, src)}
               onRegenerate={instruction => onRegenerate(view, instruction)}
               onClear={() => onClear(view)}
               onUpload={dataUrl => onUpload(view, dataUrl)}
@@ -2605,7 +2671,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, onRegenerate,
 // the placeholder to fire onRegenerate. Real shimmer + lightbox + the
 // full v1 hover toolbar (8 actions) land in a follow-up — this is the
 // minimum surface for the redesign to feel right.
-function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUpload }) {
+function V2ImageSlot({ src, label, ratio, locked, versions = [], onSelectVersion, onRegenerate, onClear, onUpload }) {
   const [hovered, setHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
@@ -2703,6 +2769,35 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
           </div>
         )}
         {generating && <ShimmerOverlay />}
+        {/* Version navigator — surfaces when 2+ versions exist for
+            this slot. Prev/next arrows + "N of M" badge in the
+            bottom-left, doesn't block the hover bar centered below. */}
+        {(() => {
+          const count = versions.length;
+          if (count < 2 || !src) return null;
+          const activeIdx = versions.findIndex(v => v.src === src);
+          const selectIdx = (idx) => {
+            if (idx < 0 || idx >= count) return;
+            onSelectVersion?.(versions[idx].src);
+          };
+          return (
+            <div onClick={e => e.stopPropagation()} style={{
+              position: "absolute", bottom: 6, left: 6, zIndex: 5,
+              display: "flex", alignItems: "center", gap: 2,
+              padding: "3px 6px", borderRadius: 14,
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(4px)",
+              fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
+              color: "#fff", letterSpacing: "0.04em",
+            }}>
+              <button onClick={() => selectIdx(activeIdx - 1)} disabled={activeIdx <= 0} title="Previous version"
+                style={{ background: "transparent", border: "none", color: "#fff", cursor: activeIdx > 0 ? "pointer" : "not-allowed", opacity: activeIdx > 0 ? 1 : 0.35, padding: "0 3px", fontSize: 12, lineHeight: 1, outline: "none" }}>‹</button>
+              <span>{activeIdx >= 0 ? activeIdx + 1 : "?"} / {count}</span>
+              <button onClick={() => selectIdx(activeIdx + 1)} disabled={activeIdx >= count - 1} title="Next version"
+                style={{ background: "transparent", border: "none", color: "#fff", cursor: activeIdx < count - 1 ? "pointer" : "not-allowed", opacity: activeIdx < count - 1 ? 1 : 0.35, padding: "0 3px", fontSize: 12, lineHeight: 1, outline: "none" }}>›</button>
+            </div>
+          );
+        })()}
         {/* Blue v1-style hover bar — visible when image exists and user hovers */}
         {hovered && src && !generating && (
           <div style={{
@@ -2862,7 +2957,7 @@ function LocationTab({ data, dispatch }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
-    return <LocationDetailView location={loc} dispatch={dispatch} sectionLocked={locked} aspect={aspect} onBack={() => setViewingId(null)} />;
+    return <LocationDetailView location={loc} data={data} dispatch={dispatch} sectionLocked={locked} aspect={aspect} onBack={() => setViewingId(null)} />;
   }
 
   async function bulkRegenerate() {
@@ -2957,8 +3052,9 @@ function LocationTile({ location, onClick }) {
   );
 }
 
-function LocationDetailView({ location, dispatch, sectionLocked, aspect = "16:9", onBack }) {
+function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = "16:9", onBack }) {
   const effLocked = sectionLocked || location.locked;
+  const versions = data?.versionHistory?.[`location.${location.id}`] || [];
   async function regenerateReference(instruction) {
     const base = locationPrompt(location);
     const prompt = instruction ? `${base} Refinement: ${instruction}. Keep the same location; apply the refinement.` : base;
@@ -2991,6 +3087,8 @@ function LocationDetailView({ location, dispatch, sectionLocked, aspect = "16:9"
             label="Reference"
             ratio="16:9"
             locked={effLocked}
+            versions={versions}
+            onSelectVersion={src => dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: src })}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_LOCATION_IMAGE", id: location.id })}
             onUpload={dataUrl => dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: dataUrl })}
@@ -3033,7 +3131,7 @@ function ElementTab({ data, dispatch }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
-    return <ElementDetailView product={prod} dispatch={dispatch} sectionLocked={locked} onBack={() => setViewingId(null)} />;
+    return <ElementDetailView product={prod} data={data} dispatch={dispatch} sectionLocked={locked} onBack={() => setViewingId(null)} />;
   }
 
   async function bulkRegenerate() {
@@ -3132,8 +3230,9 @@ function ElementTile({ product, onClick }) {
   );
 }
 
-function ElementDetailView({ product, dispatch, sectionLocked, onBack }) {
+function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
   const effLocked = sectionLocked || product.locked;
+  const versions = data?.versionHistory?.[`product.${product.id}`] || [];
   async function regenerateReference(instruction) {
     const base = productPrompt(product);
     const prompt = instruction ? `${base} Refinement: ${instruction}. Keep the same product; apply the refinement.` : base;
@@ -3175,6 +3274,8 @@ function ElementDetailView({ product, dispatch, sectionLocked, onBack }) {
             label="Reference"
             ratio="1:1"
             locked={effLocked}
+            versions={versions}
+            onSelectVersion={src => dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: src })}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_PRODUCT_IMAGE", id: product.id })}
             onUpload={dataUrl => dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: dataUrl })}
@@ -3397,7 +3498,7 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   if (activeTab === "mood") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <MoodPanel moodBoard={data.moodBoard || []} sectionLocked={!!data.locks?.mood} dispatch={dispatch} />
+        <MoodPanel moodBoard={data.moodBoard || []} sectionLocked={!!data.locks?.mood} dispatch={dispatch} data={data} />
       </div>
     );
   }
