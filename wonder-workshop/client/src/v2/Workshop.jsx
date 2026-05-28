@@ -510,6 +510,12 @@ function applyAction(state, action) {
   }
 }
 
+// Actions that wholesale-replace state (load a project, finish brief
+// generation). These are checkpoints — undo MUST NOT cross them, since
+// the "before" state is usually an empty / blank canvas and one careless
+// undo press would wipe out everything the user just generated.
+const CHECKPOINT_ACTIONS = new Set(["SET_DATA"]);
+
 function storyboardReducer(state, action) {
   if (action.type === "UNDO") {
     if (state.past.length === 0) return state;
@@ -521,6 +527,11 @@ function storyboardReducer(state, action) {
   }
   const next = applyAction(state.present, action);
   if (next === state.present) return state;
+  // Checkpoint actions reset undo history so the user can't accidentally
+  // undo back past a generation / project load into the empty state.
+  if (CHECKPOINT_ACTIONS.has(action.type)) {
+    return { past: [], present: next, future: [] };
+  }
   return { past: [...state.past.slice(-30), state.present], present: next, future: [] };
 }
 
