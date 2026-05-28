@@ -1344,6 +1344,7 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "7%", background: "rgba(0,0,0,0.45)" }} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "7%", background: "rgba(0,0,0,0.45)" }} />
+        {frame.imageStatus === "generating" && <ShimmerOverlay />}
       </div>
 
       {/* Footer bar -- location name only */}
@@ -2066,18 +2067,20 @@ function CharacterTile({ character, onClick }) {
         border: "1px solid var(--warm-08)",
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative",
+        overflow: "hidden",
       }}>
-        {!img && (
+        {!img && status !== "generating" && (
           <div style={{ textAlign: "center", color: "var(--warm-25)" }}>
             <SectionIcon name="users" size={20} color="var(--warm-25)" />
             <div style={{ fontFamily: "var(--f)", fontSize: 9, marginTop: 4, letterSpacing: "0.04em" }}>
-              {status === "generating" ? "Generating…" : character.initials || "??"}
+              {character.initials || "??"}
             </div>
           </div>
         )}
+        {status === "generating" && <ShimmerOverlay />}
         {character.locked && (
           <div title="Locked" style={{
-            position: "absolute", top: 4, right: 4,
+            position: "absolute", top: 4, right: 4, zIndex: 4,
             width: 18, height: 18, borderRadius: 4,
             background: "rgba(0,0,0,0.6)", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -2465,6 +2468,7 @@ function LocationTab({ data, dispatch }) {
 function LocationTile({ location, onClick }) {
   const [hovered, setHovered] = useState(false);
   const img = location.generatedImage || location.referenceImage;
+  const status = location.generationStatus;
   return (
     <button
       onClick={onClick}
@@ -2491,13 +2495,15 @@ function LocationTile({ location, onClick }) {
         border: "1px solid var(--warm-08)",
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative",
+        overflow: "hidden",
       }}>
-        {!img && (
+        {!img && status !== "generating" && (
           <SectionIcon name="map" size={20} color="var(--warm-25)" />
         )}
+        {status === "generating" && <ShimmerOverlay />}
         {location.locked && (
           <div title="Locked" style={{
-            position: "absolute", top: 4, right: 4,
+            position: "absolute", top: 4, right: 4, zIndex: 4,
             width: 18, height: 18, borderRadius: 4,
             background: "rgba(0,0,0,0.6)", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -2631,6 +2637,7 @@ function ElementTab({ data, dispatch }) {
 function ElementTile({ product, onClick }) {
   const [hovered, setHovered] = useState(false);
   const img = product.referenceImage;
+  const status = product.generationStatus;
   return (
     <button
       onClick={onClick}
@@ -2656,13 +2663,15 @@ function ElementTile({ product, onClick }) {
         border: "1px solid var(--warm-08)",
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative",
+        overflow: "hidden",
       }}>
-        {!img && (
+        {!img && status !== "generating" && (
           <SectionIcon name="box" size={20} color="var(--warm-25)" />
         )}
+        {status === "generating" && <ShimmerOverlay />}
         {product.locked && (
           <div title="Locked" style={{
-            position: "absolute", top: 4, right: 4,
+            position: "absolute", top: 4, right: 4, zIndex: 4,
             width: 18, height: 18, borderRadius: 4,
             background: "rgba(0,0,0,0.6)", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -3341,6 +3350,31 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 
 // Color palette for @-mention chips by entity type. Used in SheetFrame
 // brief rendering + anywhere we want to highlight cross-references.
+// Reusable shimmer overlay — drop into any tile/frame container that
+// has position:relative + overflow:hidden + an aspect ratio. Pulses
+// while a generation is in flight to make progress obvious across
+// every grid (matches v1's slot-generating affordance).
+function ShimmerOverlay({ label = "Generating…" }) {
+  return (
+    <div style={{
+      position: "absolute", inset: 0, zIndex: 3,
+      background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%)",
+      backgroundSize: "200% 100%",
+      animation: "shimmer 1.5s infinite linear",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      pointerEvents: "none",
+    }}>
+      <span style={{
+        fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
+        color: "var(--warm-50)", letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        background: "rgba(0,0,0,0.4)", padding: "3px 8px", borderRadius: 999,
+        backdropFilter: "blur(6px)",
+      }}>{label}</span>
+    </div>
+  );
+}
+
 const MENTION_COLORS = {
   talent:   { bg: "rgba(91,178,255,0.18)",  text: "#7EB9FF", border: "rgba(91,178,255,0.34)" },
   location: { bg: "rgba(124,252,156,0.16)", text: "#9CECB1", border: "rgba(124,252,156,0.34)" },
@@ -5055,6 +5089,40 @@ export default function WorkshopV2() {
       // imagePrompts comes back as 4 cinematic visual descriptions —
       // perfect mood-board fodder. Capture before the v2Data discards them.
       const imagePrompts = Array.isArray(v1Brief?.imagePrompts) ? v1Brief.imagePrompts.slice(0, 4) : [];
+
+      // Brand enrichment — generateBrief calls /api/brand internally,
+      // but the results sometimes don't make it through the merge
+      // (parsed brief has empty brandInfo, or the brand key wasn't
+      // recognized on first pass). Explicitly call /api/brand again
+      // here with the cleanest brand key we can derive, so logo +
+      // guidelines + URL are populated as reliably as v1 had them.
+      const brandKey = (v2Data.brand?.name || meta.client || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]/g, "")
+        .split(/\s+/)
+        .filter(Boolean)[0];
+      if (brandKey) {
+        try {
+          const r = await fetch("/api/brand", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ brand: brandKey }),
+          });
+          if (r.ok) {
+            const payload = await r.json();
+            if (!payload?.error) {
+              if (payload.logoUrl && !v2Data.brand.logo) v2Data.brand.logo = payload.logoUrl;
+              if (payload.sourceUrl && !v2Data.brand.url) v2Data.brand.url = payload.sourceUrl;
+              if (payload.rules && !v2Data.brand.guidelines) v2Data.brand.guidelines = payload.rules;
+              if (payload.brand && (!v2Data.brand.name || v2Data.brand.name.includes("."))) {
+                v2Data.brand.name = payload.brand;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[brand enrich] failed", e);
+        }
+      }
 
       // Each new brief gets its own project record — that way the
       // sidebar list shows every brief the user has ever generated,
