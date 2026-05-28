@@ -4676,7 +4676,12 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
         display: "grid",
         gridTemplateColumns: "200px 1fr",
         gap: 20,
-        minHeight: 520,
+        // Dynamic height: never below 220 (so a near-empty Brand tab
+        // still looks intentional) and never above 800 (so a packed
+        // Characters tab doesn't push the storyboard off-screen).
+        // The right pane scrolls when content exceeds the cap.
+        minHeight: 220,
+        maxHeight: 800,
         borderRadius: 12,
         background: "var(--warm-04)",
         border: "1px solid var(--warm-06)",
@@ -4694,11 +4699,16 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
           ))}
         </div>
 
-        {/* RIGHT PANE — selected tab content */}
+        {/* RIGHT PANE — selected tab content. Own overflow so the left
+            rail stays put when the right side scrolls. minHeight:0 lets
+            the flex/grid child actually constrain its own height
+            instead of growing past the cap. */}
         <div style={{
           borderLeft: "1px solid var(--warm-06)",
           paddingLeft: 20,
           minWidth: 0,
+          minHeight: 0,
+          overflowY: "auto",
         }}>
           <AssetExpandedPanel
             activeTab={activeTab}
