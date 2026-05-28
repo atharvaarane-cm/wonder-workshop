@@ -183,12 +183,12 @@ const INITIAL_STATE = {
   // regeneration on that asset. Toggled from each tab's header.
   locks: { talent: false, locations: false, products: false, mood: false, brand: false },
   frames: [
-    { id: "f1", number: "01", shotType: "WIDE", camera: "Static", brief: "Dawn. Empty road to vanishing point. Heat shimmer. @maya runs toward camera, impossibly small against the landscape.", talentIds: ["t1"], locationId: "l1", productIds: [], cameraAngle: "front", cameraHeight: "eye", lens: "wide", movement: "static", imageStatus: "placeholder", uploadedImage: null },
-    { id: "f2", number: "02", shotType: "ECU", camera: "Tracking \xB7 Worm's Eye", brief: "@maya's feet in @ultra. Each strike kicks dust. Breath before music. Rhythm as score.", talentIds: ["t1"], locationId: "l1", productIds: ["p1"], cameraAngle: "front", cameraHeight: "worm", lens: "normal", movement: "track", imageStatus: "placeholder", uploadedImage: null },
-    { id: "f3", number: "03", shotType: "MED", camera: "Tracking", brief: "@coach at the track edge, stopwatch in hand. Watching something off-screen. Pride, worry, memory.", talentIds: ["t2"], locationId: "l2", productIds: [], cameraAngle: "3qR", cameraHeight: "eye", lens: "telephoto", movement: "track", imageStatus: "placeholder", uploadedImage: null },
-    { id: "f4", number: "04", shotType: "WIDE", camera: "Crane \xB7 High Angle", brief: "@maya rounds the final curve. Stadium lights flicker on. Alone on the track, running like the stands are full.", talentIds: ["t1"], locationId: "l2", productIds: ["p2"], cameraAngle: "front", cameraHeight: "high", lens: "wide", movement: "crane", imageStatus: "placeholder", uploadedImage: null },
-    { id: "f5", number: "05", shotType: "ECU", camera: "Handheld", brief: "Extreme close-up. @maya's eyes. Sweat on her brow. She sees the finish. We see every mile.", talentIds: ["t1"], locationId: "l2", productIds: [], cameraAngle: "front", cameraHeight: "eye", lens: "telephoto", movement: "handheld", imageStatus: "placeholder", uploadedImage: null },
-    { id: "f6", number: "06", shotType: "WIDE", camera: "Static", brief: "@maya breaks the plane. Doesn't celebrate. Stops. Breathes. @coach enters frame. No words. A nod.", talentIds: ["t1", "t2"], locationId: "l2", productIds: ["p1"], cameraAngle: "front", cameraHeight: "eye", lens: "normal", movement: "static", imageStatus: "placeholder", uploadedImage: null },
+    { id: "f1", number: "01", shotType: "WIDE", camera: "Static", brief: "Dawn. Empty road to vanishing point. Heat shimmer. @maya runs toward camera, impossibly small against the landscape.", talentIds: ["t1"], locationId: "l1", productIds: [], cameraAngle: "front", cameraHeight: "eye", lens: "wide", movement: "static", imageStatus: "placeholder", uploadedImage: null, duration: "5s" },
+    { id: "f2", number: "02", shotType: "ECU", camera: "Tracking \xB7 Worm's Eye", brief: "@maya's feet in @ultra. Each strike kicks dust. Breath before music. Rhythm as score.", talentIds: ["t1"], locationId: "l1", productIds: ["p1"], cameraAngle: "front", cameraHeight: "worm", lens: "normal", movement: "track", imageStatus: "placeholder", uploadedImage: null, duration: "5s" },
+    { id: "f3", number: "03", shotType: "MED", camera: "Tracking", brief: "@coach at the track edge, stopwatch in hand. Watching something off-screen. Pride, worry, memory.", talentIds: ["t2"], locationId: "l2", productIds: [], cameraAngle: "3qR", cameraHeight: "eye", lens: "telephoto", movement: "track", imageStatus: "placeholder", uploadedImage: null, duration: "5s" },
+    { id: "f4", number: "04", shotType: "WIDE", camera: "Crane \xB7 High Angle", brief: "@maya rounds the final curve. Stadium lights flicker on. Alone on the track, running like the stands are full.", talentIds: ["t1"], locationId: "l2", productIds: ["p2"], cameraAngle: "front", cameraHeight: "high", lens: "wide", movement: "crane", imageStatus: "placeholder", uploadedImage: null, duration: "5s" },
+    { id: "f5", number: "05", shotType: "ECU", camera: "Handheld", brief: "Extreme close-up. @maya's eyes. Sweat on her brow. She sees the finish. We see every mile.", talentIds: ["t1"], locationId: "l2", productIds: [], cameraAngle: "front", cameraHeight: "eye", lens: "telephoto", movement: "handheld", imageStatus: "placeholder", uploadedImage: null, duration: "5s" },
+    { id: "f6", number: "06", shotType: "WIDE", camera: "Static", brief: "@maya breaks the plane. Doesn't celebrate. Stops. Breathes. @coach enters frame. No words. A nod.", talentIds: ["t1", "t2"], locationId: "l2", productIds: ["p1"], cameraAngle: "front", cameraHeight: "eye", lens: "normal", movement: "static", imageStatus: "placeholder", uploadedImage: null, duration: "5s" },
   ],
 };
 
@@ -238,7 +238,7 @@ function applyAction(state, action) {
         brief: "New frame — describe the shot.", talentIds: [],
         locationId: state.locations[0]?.id || null, productIds: [],
         cameraAngle: "front", cameraHeight: "eye", lens: "normal", movement: "static",
-        imageStatus: "placeholder", uploadedImage: null,
+        imageStatus: "placeholder", uploadedImage: null, duration: "3s",
       };
       const idx = action.afterFrameId
         ? state.frames.findIndex(f => f.id === action.afterFrameId) + 1
@@ -444,39 +444,57 @@ function storyboardReducer(state, action) {
   return { past: [...state.past.slice(-30), state.present], present: next, future: [] };
 }
 
-// -- UI CONTEXT (toasts + confirm modal) ----------------------
-// Provider sits inside the App body so every nested component can
-// call useToast() / useConfirm() to surface user-facing feedback or
-// gate destructive actions through a centered confirm modal.
+// -- UI EVENT BUS (toasts + confirm modal) --------------------
+// Module-level pub/sub so any code path — components, async
+// handlers, event listeners — can call toast(...) or confirm(...)
+// without threading context through every prop. UIProvider mounts a
+// single subscriber that renders the toast stack + confirm modal.
 
-const UIContext = createContext({ toast: () => {}, confirm: () => Promise.resolve(false) });
-export function useToast() { return useContext(UIContext).toast; }
-export function useConfirm() { return useContext(UIContext).confirm; }
+const uiBus = {
+  listeners: { toast: [], confirm: [] },
+  emit(event, payload) {
+    for (const l of (this.listeners[event] || [])) l(payload);
+  },
+  on(event, cb) {
+    if (!this.listeners[event]) this.listeners[event] = [];
+    this.listeners[event].push(cb);
+    return () => { this.listeners[event] = this.listeners[event].filter(l => l !== cb); };
+  },
+};
+
+export function toast(message, opts = {}) {
+  uiBus.emit("toast", { message, ...opts });
+}
+export function uiConfirm(opts = {}) {
+  return new Promise(resolve => {
+    uiBus.emit("confirm", { ...opts, resolve });
+  });
+}
 
 function UIProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
   const idRef = useRef(0);
 
-  const toast = useCallback((message, opts = {}) => {
-    const id = ++idRef.current;
-    const kind = opts.kind || "success"; // success | error | info
-    const ttl = opts.ttl || (kind === "error" ? 6000 : 3500);
-    setToasts(prev => [...prev, { id, message, kind }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl);
-  }, []);
-
-  const confirm = useCallback((opts) => {
-    return new Promise((resolve) => {
+  useEffect(() => {
+    const offToast = uiBus.on("toast", (payload) => {
+      const id = ++idRef.current;
+      const kind = payload.kind || "success";
+      const ttl = payload.ttl || (kind === "error" ? 6000 : 3500);
+      setToasts(prev => [...prev, { id, message: payload.message, kind }]);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl);
+    });
+    const offConfirm = uiBus.on("confirm", (payload) => {
       setConfirmState({
-        title: opts.title || "Are you sure?",
-        message: opts.message || "",
-        confirmLabel: opts.confirmLabel || "Confirm",
-        cancelLabel: opts.cancelLabel || "Cancel",
-        danger: opts.danger !== false,
-        resolve,
+        title: payload.title || "Are you sure?",
+        message: payload.message || "",
+        confirmLabel: payload.confirmLabel || "Confirm",
+        cancelLabel: payload.cancelLabel || "Cancel",
+        danger: payload.danger !== false,
+        resolve: payload.resolve,
       });
     });
+    return () => { offToast(); offConfirm(); };
   }, []);
 
   const handleConfirmResolve = (v) => {
@@ -485,7 +503,7 @@ function UIProvider({ children }) {
   };
 
   return (
-    <UIContext.Provider value={{ toast, confirm }}>
+    <>{/* fragment wrapper, no context */}
       {children}
       {/* Toast stack — top-right, fade in/out, stacks newest at top */}
       {toasts.length > 0 && (
@@ -561,7 +579,7 @@ function UIProvider({ children }) {
           </div>
         </div>
       )}
-    </UIContext.Provider>
+    </>
   );
 }
 
@@ -2547,7 +2565,7 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
             <HoverBarBtn title="Upload / Replace" onClick={() => fileRef.current?.click()}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 14V6M5 9l3-3 3 3M3 3h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </HoverBarBtn>
-            <HoverBarBtn title="Improve with AI" disabled={locked} onClick={() => setImproveOpen(o => !o)} active={improveOpen}>
+            <HoverBarBtn title="Improve with AI" disabled={locked} onClick={() => setImproveOpen(o => !o)} active={improveOpen} accent="#FFC857">
               <svg width="13" height="13" viewBox="0 0 18 18" fill="none">
                 <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
                 <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
@@ -2597,11 +2615,15 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
                 color: "var(--warm-40)", outline: "none",
               }}>Cancel</button>
               <button onClick={handleImprove} disabled={!improveText.trim()} style={{
-                fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-                padding: "5px 12px", borderRadius: 6, cursor: improveText.trim() ? "pointer" : "not-allowed",
-                background: "var(--warm)", border: "none",
-                color: "var(--bg)", outline: "none",
+                fontFamily: "var(--f)", fontSize: 11, fontWeight: 700,
+                padding: "5px 14px", borderRadius: 18,
+                cursor: improveText.trim() ? "pointer" : "not-allowed",
+                background: "rgba(255,200,87,0.10)",
+                border: "1px solid rgba(255,200,87,0.6)",
+                color: "#FFC857", outline: "none",
+                letterSpacing: "0.02em",
                 opacity: improveText.trim() ? 1 : 0.4,
+                transition: "background 0.14s, border-color 0.14s",
               }}>Improve</button>
             </div>
           </div>
@@ -3130,11 +3152,14 @@ function AddTile({ label, iconName, onClick }) {
   );
 }
 
-function HoverBarBtn({ children, title, onClick, disabled, danger, active }) {
+function HoverBarBtn({ children, title, onClick, disabled, danger, active, accent }) {
   const [h, setH] = useState(false);
   const bg = active ? "rgba(255,255,255,0.32)"
     : h ? (danger ? "rgba(255,86,86,0.92)" : "rgba(255,255,255,0.22)")
     : "transparent";
+  // accent overrides the default white icon — used for "Improve with AI"
+  // (orange/yellow #FFC857 per v1) so it reads as a different action.
+  const color = accent || "#fff";
   return (
     <button
       title={title}
@@ -3145,7 +3170,7 @@ function HoverBarBtn({ children, title, onClick, disabled, danger, active }) {
       style={{
         width: 26, height: 26, borderRadius: 999,
         background: bg,
-        border: "none", color: "#fff", cursor: disabled ? "not-allowed" : "pointer",
+        border: "none", color, cursor: disabled ? "not-allowed" : "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
         opacity: disabled ? 0.5 : 1,
         transition: "background 0.12s",
@@ -5128,12 +5153,25 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
                 title="Use Gemini to expand a rough idea into a 100-180 word grounded brief"
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
-                  padding: "5px 10px", borderRadius: 6,
-                  background: "var(--warm-06)", border: "1px solid var(--warm-10)",
-                  color: "var(--warm-50)", cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
+                  padding: "6px 12px", borderRadius: 18,
+                  background: "rgba(255,200,87,0.10)",
+                  border: "1px solid rgba(255,200,87,0.5)",
+                  color: "#FFC857",
+                  cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
                   outline: "none",
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
+                  letterSpacing: "0.02em",
                   opacity: meta.treatment?.trim() && !improving ? 1 : 0.5,
+                  transition: "background 0.14s, border-color 0.14s",
+                }}
+                onMouseEnter={e => {
+                  if (e.currentTarget.disabled) return;
+                  e.currentTarget.style.background = "rgba(255,200,87,0.18)";
+                  e.currentTarget.style.borderColor = "rgba(255,200,87,0.7)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = "rgba(255,200,87,0.10)";
+                  e.currentTarget.style.borderColor = "rgba(255,200,87,0.5)";
                 }}
               >
                 <svg width="11" height="11" viewBox="0 0 18 18" fill="none">

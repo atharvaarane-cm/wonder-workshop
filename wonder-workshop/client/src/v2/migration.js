@@ -125,6 +125,14 @@ function assembleProducts(brief) {
   }));
 }
 
+// "3s" or "3" or "3 sec" → "3s". Normalizes the v1 brief's duration
+// string so v2 always displays consistently.
+function normalizeDuration(v) {
+  if (!v) return "3s";
+  const match = String(v).match(/(\d+(?:\.\d+)?)/);
+  return match ? `${match[1]}s` : "3s";
+}
+
 // Shotlist → frames. Auto-detection of @handles into talentIds /
 // locationId / productIds happens via the AUTO_DETECT_MENTIONS reducer
 // action after the data lands (already wired in Workshop.jsx).
@@ -142,6 +150,8 @@ function assembleFrames(brief) {
       // any edit.
       camera: s.camera || "Static",
       brief: s.description || "",
+      // Per-shot duration. Sum of these = project total duration.
+      duration: normalizeDuration(s.duration),
       talentIds: [],
       locationId: null,
       productIds: [],
