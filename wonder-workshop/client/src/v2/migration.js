@@ -70,9 +70,19 @@ function assembleTalent(brief) {
     role: t.role,
     initials: initialsFrom(t.v1.name),
     note: [t.v1.description, t.v1.wardrobe].filter(Boolean).join(" — "),
+    // Reference slot — the "hero" image users see in the character tile.
+    // Carries forward as the primary tile thumbnail.
     headshot: null,
+    // Per-view image slots, matching v1's Character Design section
+    // (FRONT / SIDE / 3-4 ANGLE / BACK for both headshots and full body).
+    // Drill-down detail view renders one V2ImageSlot per view.
+    headshots: { front: null, side: null, threeQuarter: null, back: null },
+    fullBody: { front: null, side: null, threeQuarter: null, back: null },
     generatedAngles: null,
     generationStatus: "idle",
+    // Per-character lock (third tier in v1's slot/character/section
+    // model). Toggled from the LOCK CHARACTER button in detail view.
+    locked: false,
   }));
 }
 

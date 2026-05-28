@@ -50,6 +50,36 @@ export function talentPrompt(t) {
   return `Cinematic character portrait headshot of ${t.name}${note}. Photorealistic, neutral seamless studio background, soft natural lighting, professional photography, sharp focus on subject.`;
 }
 
+// View-specific prompts for the 4-up Headshots and Full Body grids in
+// the character detail view. Matches v1's FRONT / SIDE / 3-4 ANGLE /
+// BACK taxonomy. Reference image (the character's primary headshot)
+// should be passed via opts.referenceImages so all four views look
+// like the same person.
+const HEADSHOT_VIEW_PHRASES = {
+  front: "front-facing headshot, looking directly at camera",
+  side: "left side profile headshot, 90 degree side view",
+  threeQuarter: "three-quarter angle headshot, 45 degree turn",
+  back: "back-of-head view, subject facing away from camera",
+};
+const FULLBODY_VIEW_PHRASES = {
+  front: "front-facing full body shot, standing pose, head to toe",
+  side: "left side profile full body shot, standing pose",
+  threeQuarter: "three-quarter angle full body shot, 45 degree turn",
+  back: "back-facing full body shot, subject facing away from camera",
+};
+
+export function talentHeadshotPrompt(t, view) {
+  const note = t.note ? `, ${t.note}` : "";
+  const phrase = HEADSHOT_VIEW_PHRASES[view] || HEADSHOT_VIEW_PHRASES.front;
+  return `Character reference headshot of ${t.name}${note}, ${phrase}. Photorealistic, neutral seamless studio background, soft even lighting, sharp focus, professional reference photography.`;
+}
+
+export function talentFullBodyPrompt(t, view) {
+  const note = t.note ? `, ${t.note}` : "";
+  const phrase = FULLBODY_VIEW_PHRASES[view] || FULLBODY_VIEW_PHRASES.front;
+  return `Character reference full body shot of ${t.name}${note}, ${phrase}. Photorealistic, neutral seamless studio background, even lighting, full body in frame head to toe, professional reference photography.`;
+}
+
 export function locationPrompt(l) {
   const note = l.note ? `, ${l.note}` : "";
   return `Cinematic establishing shot of ${l.name}${note}. Photorealistic location reference, no people in frame, atmospheric lighting, wide composition.`;

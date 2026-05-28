@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { generateBrief } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
-import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt } from "./imageGen.js";
+import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt } from "./imageGen.js";
 import { saveState, loadState, clearState } from "./persistence.js";
 
 /*
@@ -144,8 +144,8 @@ const INITIAL_STATE = {
     treatment: "A sixty-second brand film about a runner who never stopped. Dawn on a desert highway. A woman runs alone. We intercut with her coach watching from an empty stadium. The product lives in the run — never forced, always earned. The finish line isn't a race. It's a promise she made to herself.",
   },
   talent: [
-    { id: "t1", name: "Maya Chen", handle: "@maya", role: "Lead", initials: "MC", note: "Late 20s, athletic, short black hair. Quiet intensity.", headshot: null, generatedAngles: null, generationStatus: "idle" },
-    { id: "t2", name: "Coach Rivera", handle: "@coach", role: "Supporting", initials: "CR", note: "50s, silver temples, warm eyes. Worn track jacket.", headshot: null, generatedAngles: null, generationStatus: "idle" },
+    { id: "t1", name: "Maya Chen", handle: "@maya", role: "Lead", initials: "MC", note: "Late 20s, athletic, short black hair. Quiet intensity.", headshot: null, headshots: { front: null, side: null, threeQuarter: null, back: null }, fullBody: { front: null, side: null, threeQuarter: null, back: null }, generatedAngles: null, generationStatus: "idle", locked: false },
+    { id: "t2", name: "Coach Rivera", handle: "@coach", role: "Supporting", initials: "CR", note: "50s, silver temples, warm eyes. Worn track jacket.", headshot: null, headshots: { front: null, side: null, threeQuarter: null, back: null }, fullBody: { front: null, side: null, threeQuarter: null, back: null }, generatedAngles: null, generationStatus: "idle", locked: false },
   ],
   products: [
     { id: "p1", name: "Ultra Boost X9", handle: "@ultra", category: "Footwear", hue: "#D4E157", referenceImage: null, generationStatus: "idle" },
@@ -248,6 +248,40 @@ function applyAction(state, action) {
         if (action.field === "name") updated.handle = autoHandle(action.value);
         return updated;
       })};
+    }
+    case "UPDATE_TALENT_HEADSHOT_SLOT":
+      // slot ∈ "front" | "side" | "threeQuarter" | "back"
+      return {
+        ...state,
+        talent: state.talent.map(t => t.id === action.id
+          ? { ...t, headshots: { ...(t.headshots || {}), [action.slot]: action.url } }
+          : t),
+      };
+    case "UPDATE_TALENT_FULLBODY_SLOT":
+      return {
+        ...state,
+        talent: state.talent.map(t => t.id === action.id
+          ? { ...t, fullBody: { ...(t.fullBody || {}), [action.slot]: action.url } }
+          : t),
+      };
+    case "TOGGLE_TALENT_LOCK":
+      return {
+        ...state,
+        talent: state.talent.map(t => t.id === action.id ? { ...t, locked: !t.locked } : t),
+      };
+    case "CLEAR_TALENT_IMAGE_SLOT": {
+      // slot ∈ "headshot" | "headshots:front" | "fullBody:back" | ...
+      const [kind, view] = String(action.slot || "").split(":");
+      return {
+        ...state,
+        talent: state.talent.map(t => {
+          if (t.id !== action.id) return t;
+          if (kind === "headshot") return { ...t, headshot: null };
+          if (kind === "headshots") return { ...t, headshots: { ...(t.headshots || {}), [view]: null } };
+          if (kind === "fullBody") return { ...t, fullBody: { ...(t.fullBody || {}), [view]: null } };
+          return t;
+        }),
+      };
     }
     case "UPDATE_TALENT_GENERATION":
       return {
@@ -1636,6 +1670,456 @@ function MoodTile({ item, dispatch, onUpload }) {
   );
 }
 
+// -- CHARACTER TAB (tile grid + drill-down detail view) ----------
+// Per Logan's 2026-05-28 redesign: Characters tab shows a tile grid
+// (face + name above each tile, "Add Character" tile at end). Click
+// any tile → drill into detail view with name, description, REFERENCE
+// slot, 4 HEADSHOT slots (FRONT/SIDE/3-4/BACK), 4 FULL BODY slots —
+// mirroring v1's Character Design section layout while keeping the
+// v2 IA (left-rail asset nav + persistent right pane).
+
+function CharacterTab({ data, dispatch }) {
+  const [viewingId, setViewingId] = useState(null);
+
+  if (viewingId) {
+    const character = data.talent.find(t => t.id === viewingId);
+    if (!character) {
+      // Talent was deleted while we were viewing it — bail back to grid.
+      setTimeout(() => setViewingId(null), 0);
+      return null;
+    }
+    return (
+      <CharacterDetailView
+        character={character}
+        data={data}
+        dispatch={dispatch}
+        onBack={() => setViewingId(null)}
+      />
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Section header — AUTO-GENERATE + LOCK SECTION mirroring v1.
+          Buttons are visible but mock for now; real lock + section
+          regenerate plumbing lands in a follow-up. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
+          Characters · {data.talent.length}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <PremiumButton variant="secondary" style={{ fontSize: 10, padding: "5px 10px" }} title="Coming soon: regenerate every character at once">
+            <SectionIcon name="sparkle" size={11} color="var(--warm-40)" /> Auto-generate
+          </PremiumButton>
+          <PremiumButton variant="secondary" style={{ fontSize: 10, padding: "5px 10px" }} title="Coming soon: lock section">
+            <SectionIcon name="prompt" size={11} color="var(--warm-40)" /> Lock section
+          </PremiumButton>
+        </div>
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+        gap: 12,
+      }}>
+        {data.talent.map(t => (
+          <CharacterTile key={t.id} character={t} onClick={() => setViewingId(t.id)} />
+        ))}
+        <AddCharacterTile onClick={() => dispatch({ type: "ADD_TALENT", data: {} })} />
+      </div>
+    </div>
+  );
+}
+
+function CharacterTile({ character, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  // Priority: explicit headshot → first generated headshot view → none.
+  const img = character.headshot
+    || character.headshots?.front
+    || character.headshots?.threeQuarter
+    || character.headshots?.side
+    || character.headshots?.back
+    || null;
+  const status = character.generationStatus;
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", flexDirection: "column", gap: 6,
+        padding: 6, borderRadius: 10, cursor: "pointer",
+        background: hovered ? "var(--warm-06)" : "var(--warm-04)",
+        border: hovered ? "1px solid var(--warm-12)" : "1px solid var(--warm-06)",
+        transition: "all 0.15s ease",
+        outline: "none",
+      }}
+    >
+      <div style={{
+        fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+        color: "var(--warm-50)", textAlign: "center",
+        letterSpacing: "0.02em",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{character.name || "Unnamed"}</div>
+      <div style={{
+        aspectRatio: "1/1", borderRadius: 8,
+        background: img ? `url(${img}) center/cover` : "var(--warm-04)",
+        border: "1px solid var(--warm-08)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        position: "relative",
+      }}>
+        {!img && (
+          <div style={{ textAlign: "center", color: "var(--warm-25)" }}>
+            <SectionIcon name="users" size={20} color="var(--warm-25)" />
+            <div style={{ fontFamily: "var(--f)", fontSize: 9, marginTop: 4, letterSpacing: "0.04em" }}>
+              {status === "generating" ? "Generating…" : character.initials || "??"}
+            </div>
+          </div>
+        )}
+        {character.locked && (
+          <div title="Locked" style={{
+            position: "absolute", top: 4, right: 4,
+            width: 18, height: 18, borderRadius: 4,
+            background: "rgba(0,0,0,0.6)", color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10,
+          }}>🔒</div>
+        )}
+      </div>
+      <div style={{
+        fontFamily: "var(--f)", fontSize: 9, fontWeight: 400,
+        color: "var(--warm-25)", textAlign: "center",
+        letterSpacing: "0.06em", textTransform: "uppercase",
+      }}>{character.role || ""}</div>
+    </button>
+  );
+}
+
+function AddCharacterTile({ onClick }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", flexDirection: "column", gap: 6,
+        padding: 6, borderRadius: 10, cursor: "pointer",
+        background: "transparent",
+        border: hovered ? "1px dashed var(--warm-25)" : "1px dashed var(--warm-10)",
+        transition: "all 0.15s ease",
+        outline: "none",
+      }}
+    >
+      {/* Spacer to match the height of a tile's name row */}
+      <div style={{ fontSize: 11, height: 13, opacity: 0 }}>·</div>
+      <div style={{
+        aspectRatio: "1/1", borderRadius: 8,
+        background: "transparent",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+        color: hovered ? "var(--warm-50)" : "var(--warm-25)",
+      }}>
+        <SectionIcon name="plus" size={20} color={hovered ? "var(--warm-50)" : "var(--warm-25)"} />
+        <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, letterSpacing: "0.04em" }}>Add Character</span>
+      </div>
+      <div style={{ fontSize: 9, height: 11, opacity: 0 }}>·</div>
+    </button>
+  );
+}
+
+function CharacterDetailView({ character, data, dispatch, onBack }) {
+  const VIEWS = ["front", "side", "threeQuarter", "back"];
+  const VIEW_LABEL = { front: "FRONT", side: "SIDE", threeQuarter: "3/4 ANGLE", back: "BACK" };
+
+  async function regenerateReference() {
+    const url = await generateImage(talentPrompt(character), { ratio: "1:1" });
+    dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: url });
+    return url;
+  }
+  async function regenerateHeadshot(view) {
+    const refs = character.headshot ? [character.headshot] : [];
+    const url = await generateImage(talentHeadshotPrompt(character, view), { ratio: "1:1", referenceImages: refs });
+    dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url });
+    return url;
+  }
+  async function regenerateFullBody(view) {
+    const refs = character.headshot ? [character.headshot] : [];
+    const url = await generateImage(talentFullBodyPrompt(character, view), { ratio: "3:4", referenceImages: refs });
+    dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url });
+    return url;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {/* Detail header — back button, name, role, LOCK CHARACTER pill */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <button onClick={onBack} style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 9px", borderRadius: 6, cursor: "pointer",
+          background: "transparent", border: "1px solid var(--warm-08)",
+          color: "var(--warm-40)", outline: "none",
+          fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+        }}>
+          <SectionIcon name="chevron-right" size={11} color="var(--warm-40)" />
+          <span style={{ transform: "rotate(180deg)", display: "inline-block" }}>‹</span> Back
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <EditableText
+            value={character.name}
+            onChange={v => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "name", value: v })}
+            style={{ fontFamily: "var(--f)", fontSize: 20, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em", display: "block" }}
+          />
+          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>
+            {character.role || "Supporting"} · {character.handle}
+          </div>
+        </div>
+        <button
+          onClick={() => dispatch({ type: "TOGGLE_TALENT_LOCK", id: character.id })}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "6px 10px", borderRadius: 7, cursor: "pointer",
+            background: character.locked ? "var(--warm-12)" : "transparent",
+            border: "1px solid var(--warm-12)",
+            color: character.locked ? "var(--warm)" : "var(--warm-40)",
+            outline: "none",
+            fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
+            letterSpacing: "0.06em", textTransform: "uppercase",
+          }}
+        >
+          {character.locked ? "🔒 Locked" : "Lock character"}
+        </button>
+      </div>
+
+      {/* Description */}
+      <div>
+        <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
+          Description
+        </div>
+        <EditableText
+          value={character.note || ""}
+          onChange={v => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "note", value: v })}
+          multiline
+          style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, lineHeight: 1.7, color: "var(--warm-40)", display: "block" }}
+          placeholder="Describe this character — age, look, energy, wardrobe…"
+        />
+      </div>
+
+      {/* Reference (primary headshot — also serves as the tile thumbnail) */}
+      <div>
+        <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>
+          Reference
+        </div>
+        <div style={{ width: 200 }}>
+          <V2ImageSlot
+            src={character.headshot}
+            label="Reference"
+            ratio="1:1"
+            locked={character.locked}
+            onRegenerate={regenerateReference}
+            onClear={() => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: "headshot" })}
+            onUpload={dataUrl => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: dataUrl })}
+          />
+        </div>
+      </div>
+
+      {/* Headshots grid (4 views) */}
+      <SlotGrid
+        label="Headshots"
+        views={VIEWS}
+        viewLabel={VIEW_LABEL}
+        slots={character.headshots || {}}
+        ratio="1:1"
+        locked={character.locked}
+        onRegenerate={regenerateHeadshot}
+        onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `headshots:${view}` })}
+        onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: dataUrl })}
+        onPopulateAll={async () => {
+          for (const v of VIEWS) { try { await regenerateHeadshot(v); } catch (e) { console.error(e); } }
+        }}
+      />
+
+      {/* Full Body grid (4 views) */}
+      <SlotGrid
+        label="Full Body"
+        views={VIEWS}
+        viewLabel={VIEW_LABEL}
+        slots={character.fullBody || {}}
+        ratio="3:4"
+        locked={character.locked}
+        onRegenerate={regenerateFullBody}
+        onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `fullBody:${view}` })}
+        onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: dataUrl })}
+        onPopulateAll={async () => {
+          for (const v of VIEWS) { try { await regenerateFullBody(v); } catch (e) { console.error(e); } }
+        }}
+      />
+
+      {/* Delete character (bottom danger zone) */}
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--warm-06)" }}>
+        <ConfirmAction label="Delete character" onConfirm={() => {
+          dispatch({ type: "DELETE_TALENT", id: character.id });
+          onBack();
+        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+      </div>
+    </div>
+  );
+}
+
+// 4-up grid used for both Headshots and Full Body inside the detail
+// view. Each cell is a V2ImageSlot; clicking the slot triggers
+// per-view regeneration. "Populate All" fires all four in sequence
+// (matches v1's button label).
+function SlotGrid({ label, views, viewLabel, slots, ratio, locked, onRegenerate, onClear, onUpload, onPopulateAll }) {
+  const [populating, setPopulating] = useState(false);
+  const hasAny = views.some(v => slots[v]);
+
+  async function handlePopulateAll() {
+    setPopulating(true);
+    try { await onPopulateAll(); } catch (e) { console.error(e); }
+    finally { setPopulating(false); }
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em" }}>
+          {label}
+        </div>
+        <PremiumButton
+          variant="secondary"
+          onClick={handlePopulateAll}
+          disabled={locked || populating}
+          style={{ fontSize: 10, padding: "5px 10px" }}
+        >
+          <SectionIcon name="sparkle" size={11} color="var(--warm-40)" />
+          {populating ? "Populating…" : (hasAny ? "Repopulate all" : "Populate all")}
+        </PremiumButton>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+        {views.map(view => (
+          <div key={view} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <V2ImageSlot
+              src={slots[view]}
+              label={viewLabel[view]}
+              ratio={ratio}
+              locked={locked}
+              onRegenerate={() => onRegenerate(view)}
+              onClear={() => onClear(view)}
+              onUpload={dataUrl => onUpload(view, dataUrl)}
+            />
+            <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, color: "var(--warm-30)", textAlign: "center", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              {viewLabel[view]}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// V2 image slot — simplified port of v1's ImageSlot. Renders an image
+// or a placeholder; on hover (or always when not empty) shows a small
+// blue action bar with Regenerate / Improve / Upload / Delete. Click
+// the placeholder to fire onRegenerate. Real shimmer + lightbox + the
+// full v1 hover toolbar (8 actions) land in a follow-up — this is the
+// minimum surface for the redesign to feel right.
+function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUpload }) {
+  const [hovered, setHovered] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [improveOpen, setImproveOpen] = useState(false);
+  const fileRef = useRef(null);
+  const aspectCSS = ratio.replace(":", "/");
+
+  async function handleRegen() {
+    if (locked) return;
+    setGenerating(true);
+    try { await onRegenerate(); }
+    catch (e) { console.error("[V2ImageSlot regen]", e); }
+    finally { setGenerating(false); }
+  }
+  function handleUploadFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => onUpload?.(e.target.result);
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setImproveOpen(false); }}
+      style={{
+        position: "relative", aspectRatio: aspectCSS, borderRadius: 8,
+        background: src ? `url(${src}) center/cover` : "var(--warm-04)",
+        border: "1px solid var(--warm-08)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: src ? "default" : "pointer", overflow: "hidden",
+      }}
+      onClick={() => !src && !generating && !locked && handleRegen()}
+    >
+      {!src && !generating && (
+        <div style={{ textAlign: "center", color: "var(--warm-25)" }}>
+          <SectionIcon name="plus" size={16} color="var(--warm-25)" />
+          <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
+        </div>
+      )}
+      {generating && (
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%)",
+          backgroundSize: "200% 100%",
+          animation: "shimmer 1.5s infinite linear",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ fontFamily: "var(--f)", fontSize: 9, color: "var(--warm-50)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Generating…</span>
+        </div>
+      )}
+      {/* Blue hover action bar — visible when an image exists and user hovers */}
+      {hovered && src && !generating && (
+        <div style={{
+          position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
+          display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 20,
+          background: "#006dd4", border: "1px solid #43a3fd",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.32)",
+          zIndex: 2,
+        }} onClick={e => e.stopPropagation()}>
+          <HoverBarBtn title="Regenerate" disabled={locked} onClick={handleRegen}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </HoverBarBtn>
+          <HoverBarBtn title="Upload" onClick={() => fileRef.current?.click()}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 14V6M5 9l3-3 3 3M3 3h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </HoverBarBtn>
+          <HoverBarBtn title="Delete" disabled={locked} onClick={onClear} danger>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </HoverBarBtn>
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={e => { handleUploadFile(e.target.files?.[0]); e.target.value = ""; }} />
+    </div>
+  );
+}
+
+function HoverBarBtn({ children, title, onClick, disabled, danger }) {
+  const [h, setH] = useState(false);
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setH(true)}
+      onMouseLeave={() => setH(false)}
+      style={{
+        width: 26, height: 26, borderRadius: 999,
+        background: h ? (danger ? "rgba(255,86,86,0.92)" : "rgba(255,255,255,0.22)") : "transparent",
+        border: "none", color: "#fff", cursor: disabled ? "not-allowed" : "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        opacity: disabled ? 0.5 : 1,
+        transition: "background 0.12s",
+      }}
+    >{children}</button>
+  );
+}
+
 // -- ASSET EXPANDED PANEL (scrollable with fade hints) ----------
 
 function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist }) {
@@ -1663,9 +2147,10 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
     return () => clearTimeout(t);
   }, [data.talent, data.products, data.locations, expanded, checkScroll]);
 
-  // Brand and Mood don't fit the array-of-cards pattern — they get
-  // their own panels. Branch before the items map so the existing
-  // Talent / Products / Locations rendering stays untouched.
+  // Brand / Mood / Characters have their own panels (don't fit the
+  // generic array-of-cards layout used by Products / Locations).
+  // Branch before the items map so the legacy rendering stays
+  // untouched for the unbranched tabs.
   if (activeTab === "brand") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
@@ -1680,8 +2165,17 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
       </div>
     );
   }
+  if (activeTab === "talent") {
+    return (
+      <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
+        <CharacterTab data={data} dispatch={dispatch} />
+      </div>
+    );
+  }
 
-  const items = activeTab === "talent" ? data.talent : activeTab === "products" ? data.products : data.locations;
+  // "talent" handled by CharacterTab above; this fallback covers
+  // products + locations until they get their own dedicated panels.
+  const items = activeTab === "products" ? data.products : data.locations;
 
   return (
     <div style={{
