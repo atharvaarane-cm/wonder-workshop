@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Discover from './screens/Discover.jsx'
 import Board from './screens/Board.jsx'
+import WorkshopV2 from './v2/Workshop.jsx'
 import {
   ProjectContext,
   listProjects,
@@ -33,7 +34,31 @@ function parseShareHash() {
   }
 }
 
+// V2 redesign gate. The new IA per Ravi's wireframe lives at /?v=2.
+// Current production stays the default until the v2 backend (real AI,
+// persistence, locks, exports) is wired up and signed off. Once that
+// happens, this gate flips and the legacy screens move behind ?v=1.
+function useIsV2() {
+  const [isV2, setIsV2] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return new URLSearchParams(window.location.search).get('v') === '2'
+  })
+  useEffect(() => {
+    function onPop() {
+      setIsV2(new URLSearchParams(window.location.search).get('v') === '2')
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+  return isV2
+}
+
 export default function App() {
+  const isV2 = useIsV2()
+  return isV2 ? <WorkshopV2 /> : <LegacyApp />
+}
+
+function LegacyApp() {
   const [shareData] = useState(() => parseShareHash())
   const [imagesHydrated, setImagesHydrated] = useState(() => imagesReady())
   const [project, setProject] = useState(() => shareData ? null : getActiveProject())
