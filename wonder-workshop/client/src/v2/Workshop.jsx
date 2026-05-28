@@ -5017,6 +5017,7 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
   });
   const [files, setFiles] = useState([]);
   const [fileDragOver, setFileDragOver] = useState(false);
+  const [improving, setImproving] = useState(false);
   const fileRef = useRef(null);
 
   const addFiles = (fl) => {
@@ -5024,6 +5025,56 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
     setFiles(prev => [...prev, ...nf]);
   };
   const removeFile = (i) => setFiles(prev => prev.filter((_, idx) => idx !== i));
+
+  // Improve with AI — expands the user's rough brief into a richer
+  // creative brief with concrete location / mood / element / character
+  // / camera detail. Direct port of v1's improvePrompt() pattern;
+  // same system prompt, same /api/chat path, same intent: turn a
+  // 1-sentence idea into a 100-180 word grounded paragraph.
+  async function improveBrief() {
+    const text = (meta.treatment || "").trim();
+    if (!text || improving || generating) return;
+    setImproving(true);
+    try {
+      const messages = [
+        { role: "system", content: [
+          "You are a senior creative director EXPANDING a rough idea into a detailed campaign brief.",
+          "Your output MUST be LONGER and MORE SPECIFIC than the input — never a summary, never a paraphrase.",
+          "",
+          "PRESERVE EVERYTHING from the input — every character, every prop, every action, every brand name must appear in the output. Then ADD concrete sensory detail on each of:",
+          "",
+          "- LOCATION: exact setting, time of day, weather, era. Name the kind of architecture, street furniture, vegetation, signage.",
+          "- MOOD: lighting setup (key, fill, rim, ambient, practical), color palette (specific hues, not 'warm'), atmosphere, music feel, pacing.",
+          "- ELEMENTS: specific props by name, set pieces, textures, focal objects, wardrobe pieces with color/fabric.",
+          "- CHARACTERS: keep the exact COUNT and identity. For each, add age range, ethnicity option, hair, wardrobe details, demeanor, body language, and role in the scene.",
+          "- CAMERA / RENDER: shot type (wide / medium / close), lens feel (35mm, 50mm, 85mm), depth of field, film stock or digital look.",
+          "",
+          "BANNED WORDS: 'vibrant', 'lively', 'carefree', 'bustling', 'beautiful', 'great' — replace these with specific concrete imagery.",
+          "",
+          "FORMAT:",
+          "- ONE flowing paragraph, 100-180 words",
+          "- No headings, no bullets, no labels, no quotes, no preamble",
+          "- Return ONLY the expanded brief paragraph, ready to drop into a generation tool",
+        ].join("\n") },
+        { role: "user", content: text },
+      ];
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, stream: false }),
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const payload = await res.json();
+      const expanded = (payload?.message?.content || "").trim().replace(/^["'`]+|["'`]+$/g, "");
+      if (expanded) {
+        setMeta(m => ({ ...m, treatment: expanded }));
+      }
+    } catch (e) {
+      console.error("[improve brief]", e);
+    } finally {
+      setImproving(false);
+    }
+  }
   const fmtSize = (b) => b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(0) + " KB" : (b / 1048576).toFixed(1) + " MB";
   const fmtType = (t) => t.startsWith("image/") ? "IMG" : t === "application/pdf" ? "PDF" : t.includes("word") ? "DOC" : t.startsWith("text/") ? "TXT" : "FILE";
 
@@ -5068,9 +5119,33 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
             />
           </div>
           <div style={{ marginBottom: 20 }}>
-            <label style={lbl}>Brief</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+              <label style={{ ...lbl, marginBottom: 0 }}>Brief</label>
+              <button
+                onClick={improveBrief}
+                disabled={!meta.treatment?.trim() || improving || generating}
+                type="button"
+                title="Use Gemini to expand a rough idea into a 100-180 word grounded brief"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "5px 10px", borderRadius: 6,
+                  background: "var(--warm-06)", border: "1px solid var(--warm-10)",
+                  color: "var(--warm-50)", cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
+                  outline: "none",
+                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+                  opacity: meta.treatment?.trim() && !improving ? 1 : 0.5,
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 18 18" fill="none">
+                  <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                  <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
+                </svg>
+                {improving ? "Improving…" : "Improve with AI"}
+              </button>
+            </div>
             <textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
-              style={{ ...inp, minHeight: 120, resize: "vertical", lineHeight: 1.85 }} />
+              disabled={improving}
+              style={{ ...inp, minHeight: 120, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
           </div>
 
           {/* File upload zone */}
