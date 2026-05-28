@@ -448,6 +448,62 @@ function storyboardReducer(state, action) {
   return { past: [...state.past.slice(-30), state.present], present: next, future: [] };
 }
 
+// -- SHARE / EXPORT HELPERS -----------------------------------
+// Strips data: URLs from a project's image fields so the JSON fits
+// reasonably in a URL hash. Gemini-hosted URLs are short strings and
+// survive the trip; only user-uploaded blobs are dropped.
+function stripDataUrls(data) {
+  const isData = (s) => typeof s === "string" && s.startsWith("data:");
+  return {
+    ...data,
+    talent: (data.talent || []).map(t => ({
+      ...t,
+      headshot: isData(t.headshot) ? null : t.headshot,
+      headshots: t.headshots ? Object.fromEntries(
+        Object.entries(t.headshots).map(([k, v]) => [k, isData(v) ? null : v]),
+      ) : t.headshots,
+      fullBody: t.fullBody ? Object.fromEntries(
+        Object.entries(t.fullBody).map(([k, v]) => [k, isData(v) ? null : v]),
+      ) : t.fullBody,
+    })),
+    products: (data.products || []).map(p => ({
+      ...p,
+      referenceImage: isData(p.referenceImage) ? null : p.referenceImage,
+    })),
+    locations: (data.locations || []).map(l => ({
+      ...l,
+      generatedImage: isData(l.generatedImage) ? null : l.generatedImage,
+      referenceImage: isData(l.referenceImage) ? null : l.referenceImage,
+    })),
+    frames: (data.frames || []).map(f => ({
+      ...f,
+      uploadedImage: isData(f.uploadedImage) ? null : f.uploadedImage,
+    })),
+    moodBoard: (data.moodBoard || []).map(m => ({
+      ...m,
+      image: isData(m.image) ? null : m.image,
+    })),
+    brand: data.brand ? { ...data.brand, logo: isData(data.brand.logo) ? null : data.brand.logo } : data.brand,
+  };
+}
+
+// Parse #share=<base64> on initial load. Returns the decoded data or
+// null. Read-only-mode signal for the App's bootstrap.
+function parseShareHash() {
+  try {
+    if (typeof window === "undefined") return null;
+    const hash = window.location.hash || "";
+    if (!hash.startsWith("#share=")) return null;
+    const encoded = hash.slice("#share=".length);
+    const json = decodeURIComponent(escape(atob(encoded)));
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (e) {
+    console.warn("[share] parse failed", e);
+    return null;
+  }
+}
+
 // -- UI EVENT BUS (toasts + confirm modal) --------------------
 // Module-level pub/sub so any code path — components, async
 // handlers, event listeners — can call toast(...) or confirm(...)
@@ -4777,7 +4833,26 @@ function ExportModal({ data, onClose }) {
     }, 50);
   };
 
-  const doShare = () => { navigator.clipboard?.writeText("https://workshop.wonder.ai/s/abc123").catch(() => {}); setStatus("copied"); setTimeout(() => setStatus(null), 2000); };
+  // Real share — encodes the current project data into a URL hash so
+  // anyone with the link can open the project in read-only mode.
+  // Large data: URLs are stripped before encoding so the hash doesn't
+  // blow past the URL length limit; Gemini-hosted URLs are short.
+  const doShare = async () => {
+    try {
+      const stripped = stripDataUrls(data);
+      const json = JSON.stringify(stripped);
+      // utf-8 safe base64 (btoa doesn't handle non-ASCII directly).
+      const encoded = btoa(unescape(encodeURIComponent(json)));
+      const url = `${window.location.origin}${window.location.pathname}?v=2#share=${encoded}`;
+      await navigator.clipboard?.writeText(url);
+      setStatus("copied");
+      toast("Share link copied to clipboard", { kind: "success", ttl: 3500 });
+      setTimeout(() => setStatus(null), 2500);
+    } catch (e) {
+      console.error("[share]", e);
+      toast(`Share failed: ${e?.message?.slice(0, 120) || "unknown"}`, { kind: "error" });
+    }
+  };
   const doDownloadAssets = () => { setDownloadStatus("loading"); setTimeout(() => { setDownloadStatus("complete"); setTimeout(() => setDownloadStatus(null), 2000); }, 1500); };
 
   const includeLabels = [
@@ -5637,25 +5712,32 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
 // -- MAIN APP -------------------------------------------------
 
 export default function WorkshopV2() {
-  // First mount: migrate any legacy single-project state, then resolve
-  // the active project id. If a project's already active, restore its
-  // data and jump straight to the OneSheet workspace. If the active ID
-  // points at a project whose data blob is missing (corruption, manual
-  // localStorage edit, mid-save crash) we clear the stale pointer so
-  // we don't end up stuck — active in the sidebar but never able to
-  // load the workspace.
+  // First mount: check for a #share=<base64> URL hash first (read-only
+  // shared brief), then migrate any legacy single-project state, then
+  // resolve the active project id. If a project's already active,
+  // restore its data and jump straight to the OneSheet workspace. If
+  // the active ID points at a project whose data blob is missing
+  // (corruption, manual localStorage edit, mid-save crash) we clear
+  // the stale pointer so we don't end up stuck — active in sidebar
+  // but never able to load the workspace.
   const bootstrap = useRef(null);
   if (!bootstrap.current) {
-    migrateLegacyState();
-    let activeId = getActiveProjectId();
-    let initialData = activeId ? loadProject(activeId) : null;
-    if (activeId && !initialData) {
-      console.warn("[v2] active project pointer is stale (no data blob); clearing");
-      setActiveProjectId(null);
-      activeId = null;
+    const shared = parseShareHash();
+    if (shared) {
+      bootstrap.current = { activeId: null, data: shared, shared: true };
+    } else {
+      migrateLegacyState();
+      let activeId = getActiveProjectId();
+      let initialData = activeId ? loadProject(activeId) : null;
+      if (activeId && !initialData) {
+        console.warn("[v2] active project pointer is stale (no data blob); clearing");
+        setActiveProjectId(null);
+        activeId = null;
+      }
+      bootstrap.current = { activeId, data: initialData, shared: false };
     }
-    bootstrap.current = { activeId, data: initialData };
   }
+  const isSharedView = bootstrap.current.shared;
   const [activeProjectId, setActiveProjectIdState] = useState(bootstrap.current.activeId);
   const [projects, setProjects] = useState(() => listProjects());
   const [folders, setFolders] = useState(() => listFolders());
@@ -6515,6 +6597,39 @@ export default function WorkshopV2() {
 
       <div className="grain" />
       {exportOpen && <ExportModal data={data} onClose={() => setExportOpen(false)} />}
+
+      {/* Read-only banner — surfaces when the project was loaded from
+          a #share=<base64> URL hash. Save-as-copy clones the data into
+          a fresh local project, switches to it, and strips the hash. */}
+      {isSharedView && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+          padding: "8px 16px",
+          background: "rgba(91,178,255,0.08)",
+          borderBottom: "1px solid rgba(91,178,255,0.2)",
+          fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+          color: "#7EB9FF",
+        }}>
+          <span>Viewing a shared brief — read only.</span>
+          <button onClick={() => {
+            const id = newProjectId();
+            saveProject(id, data);
+            setActiveProjectId(id);
+            setActiveProjectIdState(id);
+            setProjects(listProjects());
+            window.history.replaceState({}, "", window.location.pathname + window.location.search);
+            // Reset the shared flag in the bootstrap ref so future
+            // re-renders treat this as a normal active project.
+            bootstrap.current = { ...bootstrap.current, shared: false };
+            toast("Saved as your own copy", { kind: "success" });
+          }} style={{
+            padding: "4px 12px", borderRadius: 6, cursor: "pointer",
+            background: "rgba(91,178,255,0.18)", border: "1px solid rgba(91,178,255,0.35)",
+            color: "#9DD3FF", outline: "none",
+            fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
+          }}>Save as my copy</button>
+        </div>
+      )}
 
       {/* Nav */}
       <nav style={{
