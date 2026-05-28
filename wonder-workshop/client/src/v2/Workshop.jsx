@@ -6196,12 +6196,11 @@ export default function WorkshopV2() {
     } else {
       migrateLegacyState();
       let activeId = getActiveProjectId();
+      // Sync read of localStorage fallback for instant paint. If
+      // empty, the post-mount async effect (further below) hydrates
+      // from IndexedDB. DON'T clear the active pointer here — the
+      // data might be IDB-only after the persistence refactor.
       let initialData = activeId ? loadProject(activeId) : null;
-      if (activeId && !initialData) {
-        console.warn("[v2] active project pointer is stale (no data blob); clearing");
-        setActiveProjectId(null);
-        activeId = null;
-      }
       bootstrap.current = { activeId, data: initialData, shared: false };
     }
   }
@@ -6262,6 +6261,12 @@ export default function WorkshopV2() {
       const memCount = countImageUrls(dataNow);
       if (idbCount > memCount) {
         dispatch({ type: "SET_DATA", data: full });
+        // If we were stuck on the BriefForm because bootstrap's sync
+        // localStorage read came back empty (data lives in IDB only),
+        // flip into the workspace now that the IDB data is loaded.
+        if (!builtRef.current) {
+          setBuilt(true);
+        }
       }
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -6346,24 +6351,30 @@ export default function WorkshopV2() {
   }, []);
 
   // Project switcher — load a different project into the workspace.
-  // Saves the current one first so no work is lost in the transition.
-  // Only no-op when we're already inside the same project's workspace
-  // (id matches AND built); otherwise we want to load the data even
-  // if the active ID happens to already match (e.g. after a stale-
-  // pointer recovery on first mount).
-  function switchToProject(projectId) {
+  // Saves the current one first so no work is lost. Async because
+  // after the IndexedDB persistence refactor, full project data may
+  // live ONLY in IDB (no localStorage fallback) for projects with
+  // big image payloads. We try sync (LS) first for instant-paint;
+  // if that returns null we await IDB before giving up.
+  //
+  // CRITICAL: never auto-delete on load failure — the previous
+  // version did that and any project saved IDB-only would disappear
+  // on first click. Just warn + open the BriefForm landing if we
+  // really can't recover it.
+  async function switchToProject(projectId) {
     if (!projectId) return;
     if (projectId === activeProjectId && built) return;
     if (activeProjectId && built && activeProjectId !== projectId) {
       saveProject(activeProjectId, data);
     }
-    const next = loadProject(projectId);
+    let next = loadProject(projectId);
     if (!next) {
-      console.warn("[v2] couldn't load project", projectId, "— stale metadata?");
-      // Remove the orphaned entry so the sidebar doesn't keep
-      // showing a project the user can't open.
-      deleteProject(projectId);
-      setProjects(listProjects());
+      // localStorage didn't have it — pull the full blob from IDB.
+      try { next = await loadProjectAsync(projectId); } catch {}
+    }
+    if (!next) {
+      console.warn("[v2] couldn't load project", projectId, "— no data in localStorage OR IndexedDB");
+      toast("Couldn't open that project — data appears missing. The entry has been left in the sidebar so you can try again.", { kind: "error", ttl: 8000 });
       return;
     }
     setActiveProjectId(projectId);
