@@ -6,7 +6,9 @@ import {
   newProjectId,
   listProjects,
   loadProject,
+  loadProjectAsync,
   saveProject,
+  saveProjectSync,
   deleteProject,
   renameProject,
   setProjectFolder,
@@ -509,6 +511,34 @@ function storyboardReducer(state, action) {
   const next = applyAction(state.present, action);
   if (next === state.present) return state;
   return { past: [...state.past.slice(-30), state.present], present: next, future: [] };
+}
+
+// Count how many image-bearing fields a data blob has populated.
+// Used by the IndexedDB hydration effect to decide whether the IDB
+// copy is richer than the localStorage-stripped copy already in
+// memory (so we don't clobber edits in flight with stale data).
+function countImageUrls(data) {
+  if (!data) return 0;
+  let n = 0;
+  for (const t of (data.talent || [])) {
+    if (t.headshot) n++;
+    for (const v of Object.values(t.headshots || {})) if (v) n++;
+    for (const v of Object.values(t.fullBody || {})) if (v) n++;
+  }
+  for (const l of (data.locations || [])) {
+    if (l.generatedImage || l.referenceImage) n++;
+  }
+  for (const p of (data.products || [])) {
+    if (p.referenceImage) n++;
+  }
+  for (const f of (data.frames || [])) {
+    if (f.uploadedImage) n++;
+  }
+  for (const m of (data.moodBoard || [])) {
+    if (m.image) n++;
+  }
+  if (data.brand?.logo) n++;
+  return n;
 }
 
 // -- SHARE / EXPORT HELPERS -----------------------------------
@@ -6182,6 +6212,30 @@ export default function WorkshopV2() {
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
 
+  // Hydrate the active project's full data from IndexedDB on mount.
+  // localStorage's bootstrap gave us a lightweight (data-URL-stripped)
+  // copy so the OneSheet renders immediately; this fills in the
+  // actual image data after first paint.
+  useEffect(() => {
+    if (!activeProjectId) return;
+    let cancelled = false;
+    loadProjectAsync(activeProjectId).then(full => {
+      if (cancelled || !full) return;
+      // Only swap in if IDB has richer data — avoid clobbering any
+      // edits the user already made on the lightweight version.
+      // Heuristic: if any image-bearing field in IDB has a value the
+      // current state doesn't, replace.
+      const dataNow = dataRef.current;
+      const idbCount = countImageUrls(full);
+      const memCount = countImageUrls(dataNow);
+      if (idbCount > memCount) {
+        dispatch({ type: "SET_DATA", data: full });
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-save the active project on every data change.
   //
   // Earlier version used a 500ms debounce — that broke during the
@@ -6248,7 +6302,7 @@ export default function WorkshopV2() {
   useEffect(() => {
     function flushOnUnload() {
       if (activeRef.current && builtRef.current) {
-        saveProject(activeRef.current, dataRef.current);
+        saveProjectSync(activeRef.current, dataRef.current);
       }
     }
     window.addEventListener("beforeunload", flushOnUnload);

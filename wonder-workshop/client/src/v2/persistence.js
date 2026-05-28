@@ -1,4 +1,11 @@
-// Multi-project localStorage-backed persistence for v2.
+import { blobGet, blobSet, blobSetSync, blobDelete } from "./blobStore.js";
+
+// Multi-project persistence for v2.
+// Metadata (projects list, active id, folder extras) lives in
+// localStorage so the sidebar can render synchronously on first
+// paint. Heavy data (full project state with image blobs) lives in
+// IndexedDB via blobStore — Gemini returns ~500KB data URLs and a
+// typical brief has 25-30 of them, way past localStorage's 5MB cap.
 //
 // Storage layout:
 //   ww_v2_projects        — array of { id, name, updatedAt, folder }
@@ -91,27 +98,35 @@ function writeProjectsList(list) {
   try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(list)); } catch {}
 }
 
+// Save project — full data goes to IndexedDB (no quota worry), only
+// the lightweight metadata list goes to localStorage. We also kick a
+// best-effort localStorage fallback write with the stripped (no
+// data:URL) version so a project at least has SOMETHING durable on
+// browsers that block IndexedDB.
 export function saveProject(id, data, opts = {}) {
   if (!storageAvailable() || !id || !data) return false;
-  const payload = { data, savedAt: Date.now(), version: 1 };
+
+  // Primary write — IndexedDB. Async but fire-and-forget here; the
+  // caller's "Saved" toast comes from this returning true (which it
+  // does optimistically — actual write is monitored via the next
+  // saveProjectAsync entrypoint when caller wants confirmation).
+  blobSet(id, data).catch(e => console.warn("[persistence] IndexedDB write failed", e));
+
+  // Lightweight fallback — strip data:URLs so a project at least
+  // round-trips on browsers where IndexedDB is blocked. If even the
+  // stripped version doesn't fit we silently skip; IndexedDB is
+  // the source of truth.
   try {
-    localStorage.setItem(projectKey(id), JSON.stringify(payload));
+    const stripped = stripBigImages(data);
+    localStorage.setItem(projectKey(id), JSON.stringify({
+      data: stripped, savedAt: Date.now(), stripped: true, version: 2,
+    }));
   } catch (e) {
-    if (e?.name === "QuotaExceededError" || /quota/i.test(String(e?.message))) {
-      try {
-        const stripped = stripBigImages(data);
-        localStorage.setItem(projectKey(id), JSON.stringify({
-          data: stripped, savedAt: Date.now(), stripped: true, version: 1,
-        }));
-      } catch (e2) {
-        console.error("[persistence] save failed even after stripping", e2);
-        return false;
-      }
-    } else {
-      console.error("[persistence] save failed", e);
-      return false;
-    }
+    // Quota even on stripped data is rare but possible — drop the
+    // localStorage fallback for this project. IndexedDB is still good.
+    try { localStorage.removeItem(projectKey(id)); } catch {}
   }
+
   // Update metadata. Preserve existing folder + name if not overridden.
   const list = listProjects();
   const idx = list.findIndex(p => p.id === id);
@@ -131,6 +146,43 @@ export function saveProject(id, data, opts = {}) {
   return true;
 }
 
+// beforeunload flush — synchronous best-effort. IndexedDB writes
+// kicked off here may not complete before the page dies, but the
+// localStorage fallback (stripped of data: URLs) will. Better than
+// nothing for the "user closed the tab mid-edit" case.
+export function saveProjectSync(id, data, opts = {}) {
+  if (!storageAvailable() || !id || !data) return false;
+  blobSetSync(id, data);
+  try {
+    const stripped = stripBigImages(data);
+    localStorage.setItem(projectKey(id), JSON.stringify({
+      data: stripped, savedAt: Date.now(), stripped: true, version: 2,
+    }));
+  } catch {}
+  const list = listProjects();
+  const idx = list.findIndex(p => p.id === id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], updatedAt: Date.now() };
+    writeProjectsList(list);
+  }
+  return true;
+}
+
+// Read project — IndexedDB first (full fidelity), localStorage
+// fallback for browsers where IDB is blocked or projects saved
+// before this multi-store split.
+export async function loadProjectAsync(id) {
+  if (!id) return null;
+  const fromIdb = await blobGet(id);
+  if (fromIdb) return fromIdb;
+  // Legacy fallback — read the lightweight localStorage copy.
+  return loadProject(id);
+}
+
+// Synchronous read — used by the App's bootstrap on first paint.
+// Returns localStorage-only data (stripped of data:URL images). The
+// async loadProjectAsync() should fire right after to hydrate the
+// full image data from IndexedDB.
 export function loadProject(id) {
   if (!storageAvailable() || !id) return null;
   try {
@@ -145,6 +197,7 @@ export function deleteProject(id) {
   if (!storageAvailable() || !id) return;
   try {
     localStorage.removeItem(projectKey(id));
+    blobDelete(id).catch(() => {}); // fire-and-forget IDB cleanup
     const list = listProjects().filter(p => p.id !== id);
     writeProjectsList(list);
     if (getActiveProjectId() === id) setActiveProjectId(null);
