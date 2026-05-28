@@ -2,7 +2,17 @@ import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { generateBrief } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt } from "./imageGen.js";
-import { saveState, loadState, clearState } from "./persistence.js";
+import {
+  newProjectId,
+  listProjects,
+  loadProject,
+  saveProject,
+  deleteProject,
+  renameProject,
+  getActiveProjectId,
+  setActiveProjectId,
+  migrateLegacyState,
+} from "./persistence.js";
 
 /*
   +======================================================+
@@ -3668,6 +3678,229 @@ function LiquidGlassButton({ onClick, children }) {
 
 // -- BRIEF FORM (with file upload) ----------------------------
 
+// -- PROJECT SIDEBAR (left rail, multi-project nav) -------------
+// Persistent navigation between projects. Shown whether the user is
+// on BriefForm (landing) or inside OneSheet. Click any project name
+// to switch; the current project saves automatically before the
+// switch so no work is lost.
+
+function ProjectSidebar({ projects, activeProjectId, onSwitch, onNew, onDelete, onRename }) {
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [menuOpenId, setMenuOpenId] = useState(null);
+  const renameInputRef = useRef(null);
+
+  useEffect(() => {
+    if (renamingId) {
+      setTimeout(() => renameInputRef.current?.select(), 0);
+    }
+  }, [renamingId]);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    function onDoc(e) {
+      if (!e.target.closest?.(".ww-proj-menu") && !e.target.closest?.(".ww-proj-more")) {
+        setMenuOpenId(null);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuOpenId]);
+
+  function commitRename() {
+    if (renamingId && renameValue.trim()) {
+      onRename(renamingId, renameValue.trim());
+    }
+    setRenamingId(null);
+    setRenameValue("");
+  }
+
+  return (
+    <div style={{
+      width: 220, flexShrink: 0,
+      borderRight: "1px solid var(--warm-06)",
+      background: "var(--warm-04)",
+      display: "flex", flexDirection: "column",
+      height: "100%", overflow: "hidden",
+    }}>
+      <div style={{ padding: "16px 14px 10px" }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6, marginBottom: 14,
+        }}>
+          <WLogo color="var(--warm-50)" size={16} />
+          <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, color: "var(--warm-50)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Workshop</span>
+        </div>
+        <button onClick={onNew} style={{
+          width: "100%",
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 10px", borderRadius: 7, cursor: "pointer",
+          background: "var(--warm-06)", border: "1px solid var(--warm-10)",
+          color: "var(--warm)", outline: "none",
+          fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+        }}>
+          <SectionIcon name="plus" size={12} color="var(--warm)" />
+          New project
+        </button>
+      </div>
+
+      <div style={{ padding: "0 14px 6px" }}>
+        <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Projects · {projects.length}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px 16px" }}>
+        {projects.length === 0 ? (
+          <div style={{ padding: "10px 6px", fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-25)", lineHeight: 1.6 }}>
+            No projects yet. Generate a brief to create one.
+          </div>
+        ) : (
+          projects.map(p => {
+            const isActive = p.id === activeProjectId;
+            const isRenaming = renamingId === p.id;
+            return (
+              <div key={p.id} style={{
+                display: "flex", alignItems: "center",
+                padding: "6px 8px", borderRadius: 6, marginBottom: 2,
+                background: isActive ? "var(--warm-08)" : "transparent",
+                cursor: isRenaming ? "default" : "pointer",
+                position: "relative",
+              }}
+              onClick={() => !isRenaming && onSwitch(p.id)}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--warm-06)"; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+              >
+                <div style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: isActive ? "#7CFC9C" : "var(--warm-12)",
+                  marginRight: 8, flexShrink: 0,
+                }} />
+                {isRenaming ? (
+                  <input
+                    ref={renameInputRef}
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") commitRename();
+                      if (e.key === "Escape") { setRenamingId(null); setRenameValue(""); }
+                    }}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      flex: 1, minWidth: 0,
+                      fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+                      background: "var(--warm-04)", border: "1px solid var(--warm-12)",
+                      borderRadius: 4, padding: "3px 6px",
+                      color: "var(--warm)", outline: "none",
+                    }}
+                  />
+                ) : (
+                  <span
+                    onDoubleClick={e => { e.stopPropagation(); setRenamingId(p.id); setRenameValue(p.name); }}
+                    title={`Double-click to rename · Updated ${timeAgo(p.updatedAt)}`}
+                    style={{
+                      flex: 1, fontFamily: "var(--f)", fontSize: 12,
+                      fontWeight: isActive ? 600 : 500,
+                      color: isActive ? "var(--warm)" : "var(--warm-50)",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                  >{p.name || "Untitled"}</span>
+                )}
+                {!isRenaming && (
+                  <button
+                    className="ww-proj-more"
+                    onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === p.id ? null : p.id); }}
+                    style={{
+                      width: 20, height: 20, borderRadius: 4,
+                      background: "transparent", border: "none", color: "var(--warm-30)",
+                      cursor: "pointer", outline: "none",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 16, lineHeight: 1, flexShrink: 0,
+                    }}
+                  >⋯</button>
+                )}
+                {menuOpenId === p.id && (
+                  <div className="ww-proj-menu" onClick={e => e.stopPropagation()} style={{
+                    position: "absolute", right: 4, top: "100%", zIndex: 20,
+                    background: "var(--surface-solid)",
+                    border: "1px solid var(--warm-10)", borderRadius: 8,
+                    boxShadow: "0 8px 28px rgba(0,0,0,0.32)",
+                    padding: 4, minWidth: 130, marginTop: 2,
+                  }}>
+                    <button onClick={() => { setMenuOpenId(null); setRenamingId(p.id); setRenameValue(p.name); }} style={projMenuItemStyle()}>Rename</button>
+                    <button
+                      onClick={() => {
+                        setMenuOpenId(null);
+                        if (window.confirm(`Delete "${p.name}"?`)) onDelete(p.id);
+                      }}
+                      style={{ ...projMenuItemStyle(), color: "#FF8A80" }}
+                    >Delete</button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function projMenuItemStyle() {
+  return {
+    width: "100%", textAlign: "left",
+    padding: "6px 8px", borderRadius: 5,
+    background: "transparent", border: "none",
+    fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
+    color: "var(--warm-50)", cursor: "pointer", outline: "none",
+  };
+}
+
+function timeAgo(ts) {
+  if (!ts) return "";
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} hr ago`;
+  return `${Math.floor(diff / 86_400_000)} days ago`;
+}
+
+// -- SAVE INDICATOR (top of OneSheet) ---------------------------
+// Subtle status pill — "Saving…" while the debounced write is pending,
+// "Saved · just now" right after, then ticks up to "2 min ago".
+
+function SaveIndicator({ status, lastSavedAt }) {
+  // Re-render every 30s so the "X min ago" label stays current.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  let label = "";
+  let dotColor = "var(--warm-25)";
+  if (status === "saving") { label = "Saving…"; dotColor = "#F2C94C"; }
+  else if (status === "error") { label = "Couldn't save"; dotColor = "#FF8A80"; }
+  else if (status === "saved" && lastSavedAt) {
+    label = `Saved · ${timeAgo(lastSavedAt)}`;
+    dotColor = "#7CFC9C";
+  } else { return null; }
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+      color: "var(--warm-40)",
+      padding: "4px 10px", borderRadius: 999,
+      background: "var(--warm-04)", border: "1px solid var(--warm-06)",
+      letterSpacing: "0.01em",
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor }} />
+      {label}
+    </span>
+  );
+}
+
 function BriefForm({ onGenerate, generating = false, error = null }) {
   const [meta, setMeta] = useState({
     title: INITIAL_STATE.meta.title, client: INITIAL_STATE.meta.client,
@@ -3808,23 +4041,36 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
 // -- MAIN APP -------------------------------------------------
 
 export default function WorkshopV2() {
-  // Restore persisted state on mount so refresh doesn't kill the demo.
-  // If there's no saved state, fall back to INITIAL_STATE (Nike runner
-  // sample) which is what the BriefForm anchors to.
-  const persisted = loadState();
+  // First mount: migrate any legacy single-project state, then resolve
+  // the active project id. If a project's already active, restore its
+  // data and jump straight to the OneSheet workspace.
+  const bootstrap = useRef(null);
+  if (!bootstrap.current) {
+    migrateLegacyState();
+    const activeId = getActiveProjectId();
+    const data = activeId ? loadProject(activeId) : null;
+    bootstrap.current = { activeId, data };
+  }
+  const [activeProjectId, setActiveProjectIdState] = useState(bootstrap.current.activeId);
+  const [projects, setProjects] = useState(() => listProjects());
   const [{ past, present, future }, dispatch] = useReducer(storyboardReducer, {
-    past: [], present: persisted || INITIAL_STATE, future: [],
+    past: [], present: bootstrap.current.data || INITIAL_STATE, future: [],
   });
   const data = present;
 
   const [ready, setReady] = useState(false);
-  // If we restored persisted state, skip the BriefForm landing and
-  // go straight to the OneSheet — the user already has a project.
-  const [built, setBuilt] = useState(() => !!persisted);
+  // If we restored a project, skip the BriefForm landing and go straight
+  // to the OneSheet — the user already has a project to work in.
+  const [built, setBuilt] = useState(() => !!bootstrap.current.data);
   // Brief-generation lifecycle for the BriefForm landing page. Lets us
   // disable the Generate button + show progress while Gemini works.
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
+  // Auto-save status surfaced at the top of the OneSheet so the user
+  // can trust it's safe to close the tab. States: "idle" → "saving"
+  // → "saved-just-now" → ticks to "saved 2 min ago" etc.
+  const [saveStatus, setSaveStatus] = useState("idle");
+  const [lastSavedAt, setLastSavedAt] = useState(null);
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -3842,15 +4088,65 @@ export default function WorkshopV2() {
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
 
-  // Auto-save to localStorage on every data change (debounced 500ms).
-  // Only kick in once the user has built a project — saving the
-  // INITIAL_STATE (Nike sample) on mount would persist sample data and
-  // make "New Project" surprising.
+  // Auto-save the active project on every data change. Debounced 500ms.
+  // Updates the save-status indicator so the OneSheet header can show
+  // "Saving…" → "Saved just now" → tick into "Saved 2 min ago".
   useEffect(() => {
-    if (!built) return;
-    const t = setTimeout(() => saveState(data), 500);
+    if (!built || !activeProjectId) return;
+    setSaveStatus("saving");
+    const t = setTimeout(() => {
+      const ok = saveProject(activeProjectId, data);
+      if (ok) {
+        setSaveStatus("saved");
+        setLastSavedAt(Date.now());
+        setProjects(listProjects());
+      } else {
+        setSaveStatus("error");
+      }
+    }, 500);
     return () => clearTimeout(t);
-  }, [data, built]);
+  }, [data, built, activeProjectId]);
+
+  // Project switcher — load a different project into the workspace.
+  // Saves the current one first so no work is lost in the transition.
+  function switchToProject(projectId) {
+    if (!projectId || projectId === activeProjectId) return;
+    if (activeProjectId && built) {
+      saveProject(activeProjectId, data);
+    }
+    const next = loadProject(projectId);
+    if (!next) return;
+    setActiveProjectId(projectId);
+    setActiveProjectIdState(projectId);
+    dispatch({ type: "SET_DATA", data: next });
+    setBuilt(true);
+    setProjects(listProjects());
+    setSaveStatus("idle");
+  }
+
+  // Start fresh — save current, clear active, show BriefForm.
+  function startNewProject() {
+    if (activeProjectId && built) {
+      saveProject(activeProjectId, data);
+    }
+    setActiveProjectId(null);
+    setActiveProjectIdState(null);
+    dispatch({ type: "SET_DATA", data: INITIAL_STATE });
+    setBuilt(false);
+    setProjects(listProjects());
+  }
+
+  function handleDeleteProject(projectId) {
+    deleteProject(projectId);
+    setProjects(listProjects());
+    if (projectId === activeProjectId) {
+      startNewProject();
+    }
+  }
+  function handleRenameProject(projectId, newName) {
+    renameProject(projectId, newName);
+    setProjects(listProjects());
+  }
 
   // Auto-detect mentions in briefs
   useEffect(() => {
@@ -3864,14 +4160,12 @@ export default function WorkshopV2() {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSidebarOpen(o => !o); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); dispatch({ type: "UNDO" }); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); dispatch({ type: "REDO" }); }
-      // Cmd+Shift+N — start a fresh project. Confirms before wiping
-      // since this is destructive (clears localStorage + reload).
+      // Cmd+Shift+N — start a fresh project. Non-destructive now —
+      // the current project stays saved in the sidebar, we just return
+      // to the BriefForm landing for a new one.
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
         e.preventDefault();
-        if (window.confirm("Start a new project? Your current project will be cleared.")) {
-          clearState();
-          window.location.reload();
-        }
+        startNewProject();
       }
       if (e.key === "Escape") { if (productionFrameId) { setProductionFrameId(null); setSelectedFrameId(null); } else { setSelectedFrameId(null); } }
     };
@@ -3913,6 +4207,13 @@ export default function WorkshopV2() {
 
       const v1Brief = await generateBrief(prompt);
       const v2Data = v1BriefToV2Data(v1Brief);
+
+      // Each new brief gets its own project record — that way the
+      // sidebar list shows every brief the user has ever generated,
+      // and switching between them is just a project-switch.
+      const newId = newProjectId();
+      setActiveProjectId(newId);
+      setActiveProjectIdState(newId);
 
       // BriefForm inputs are authoritative for meta — don't let the
       // model rewrite the project title or aspect ratio the user
@@ -4203,6 +4504,7 @@ export default function WorkshopV2() {
             <div style={{ width: 1, height: 16, background: "var(--warm-08)" }} />
             <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 500, color: "var(--warm)" }}>{data.meta.title}</span>
             <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)" }}>{data.meta.client} &middot; :{data.meta.format}</span>
+            <SaveIndicator status={saveStatus} lastSavedAt={lastSavedAt} />
           </>}
         </div>
 
@@ -4245,7 +4547,16 @@ export default function WorkshopV2() {
       </nav>
 
       {/* Content area */}
-      <div style={{ display: "flex", height: built ? "calc(100vh - 48px)" : "auto" }}>
+      <div style={{ display: "flex", height: "calc(100vh - 48px)" }}>
+        {/* Left: project sidebar (always visible — multi-project nav) */}
+        <ProjectSidebar
+          projects={projects}
+          activeProjectId={activeProjectId}
+          onSwitch={switchToProject}
+          onNew={startNewProject}
+          onDelete={handleDeleteProject}
+          onRename={handleRenameProject}
+        />
         {/* Main */}
         <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
           {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} />}
