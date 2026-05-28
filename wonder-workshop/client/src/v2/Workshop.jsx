@@ -1722,12 +1722,15 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
         </span>
       </div>
 
-      {/* Clean thumbnail */}
-      <div style={{ aspectRatio: aspectCSS, background: FILM[index % FILM.length], position: "relative", overflow: "hidden" }}>
+      {/* Clean thumbnail. Vignette darkens the empty-state gradient
+          for empty frames so the placeholder doesn't look flat. When
+          an image IS loaded, only the image shows — no overlay, no
+          film-strip bars (Logan asked to remove them). */}
+      <div style={{ aspectRatio: aspectCSS, background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length], position: "relative", overflow: "hidden" }}>
         {frame.uploadedImage && <img src={frame.uploadedImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
-        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "7%", background: "rgba(0,0,0,0.45)" }} />
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "7%", background: "rgba(0,0,0,0.45)" }} />
+        {!frame.uploadedImage && (
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
+        )}
         {frame.imageStatus === "generating" && <ShimmerOverlay />}
       </div>
 
@@ -1928,11 +1931,11 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
             boxShadow: heroHovered ? "0 2px 24px rgba(0,0,0,0.08)" : "none",
           }}
         >
-          <div style={{ aspectRatio: aspCSS, background: FILM[fIdx >= 0 ? fIdx % FILM.length : 0], position: "relative", overflow: "hidden" }}>
+          <div style={{ aspectRatio: aspCSS, background: frame.uploadedImage ? "transparent" : FILM[fIdx >= 0 ? fIdx % FILM.length : 0], position: "relative", overflow: "hidden" }}>
             {frame.uploadedImage && <img src={frame.uploadedImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
-            <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "6%", background: "rgba(0,0,0,0.5)" }} />
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "6%", background: "rgba(0,0,0,0.5)" }} />
+            {!frame.uploadedImage && (
+              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
+            )}
             {frame.imageStatus === "generating" && (
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ fontFamily: "var(--f)", fontSize: 14, color: "var(--warm-25)", animation: "pulse 1.5s ease infinite" }}>Generating...</span>
@@ -6639,11 +6642,20 @@ export default function WorkshopV2() {
       // recognized on first pass). Explicitly call /api/brand again
       // here with the cleanest brand key we can derive, so logo +
       // guidelines + URL are populated as reliably as v1 had them.
-      const brandKey = (v2Data.brand?.name || meta.client || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9 ]/g, "")
-        .split(/\s+/)
-        .filter(Boolean)[0];
+      //
+      // Robust extraction: if the input looks like a URL or domain
+      // (pepsi.com, https://pepsi.com), pull just the hostname's
+      // first label ("pepsi"). Otherwise strip non-alphanumerics.
+      // Previous version turned "pepsi.com" into "pepsicom" which
+      // didn't match any known-brand entry.
+      let brandKey = (v2Data.brand?.name || meta.client || "").toLowerCase().trim();
+      try {
+        const probe = /^https?:\/\//i.test(brandKey) ? brandKey : `https://${brandKey}`;
+        const u = new URL(probe);
+        const host = u.hostname.replace(/^www\./, "");
+        if (host.includes(".")) brandKey = host.split(".")[0];
+      } catch {}
+      brandKey = brandKey.replace(/[^a-z0-9]/g, "");
       if (brandKey) {
         try {
           const r = await fetch("/api/brand", {
@@ -6854,48 +6866,69 @@ export default function WorkshopV2() {
     // inline (matching the reducer's AUTO_DETECT_MENTIONS logic) so we
     // know which talent / products each frame references, then look up
     // the just-generated images to use as Gemini reference inputs.
+    //
+    // Throttled: Gemini rate-limits an account that fires 9 image
+    // requests in parallel. We run with concurrency=3 + a single retry
+    // on 429 with a short delay, which empirically keeps every frame
+    // successful instead of seeing 7+ silent 429 failures.
     const handles = {
       talent: initialData.talent.map(t => ({ id: t.id, handle: t.handle.toLowerCase() })),
       products: initialData.products.map(p => ({ id: p.id, handle: p.handle.toLowerCase() })),
     };
-    const phaseB = [];
-    for (const f of initialData.frames || []) {
-      phaseB.push((async () => {
-        dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "generating" });
-        const briefLower = (f.brief || "").toLowerCase();
-        const talentIds = handles.talent.filter(h => briefLower.includes(h.handle)).map(h => h.id);
-        const productIds = handles.products.filter(h => briefLower.includes(h.handle)).map(h => h.id);
-        const locationId = f.locationId
-          || (initialData.locations[0]?.id ?? null);
+    let frameSuccess = 0;
+    let frameFail = 0;
+    const FRAME_CONCURRENCY = 3;
+    const frameQueue = [...(initialData.frames || [])];
+    async function runOneFrame(f) {
+      dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "generating" });
+      const briefLower = (f.brief || "").toLowerCase();
+      const talentIds = handles.talent.filter(h => briefLower.includes(h.handle)).map(h => h.id);
+      const productIds = handles.products.filter(h => briefLower.includes(h.handle)).map(h => h.id);
+      const locationId = f.locationId || (initialData.locations[0]?.id ?? null);
 
-        const refs = [];
-        for (const tid of talentIds) {
-          const url = generated.talent.get(tid);
-          if (url) refs.push(url);
-        }
-        if (locationId) {
-          const url = generated.locations.get(locationId);
-          if (url) refs.push(url);
-        }
-        for (const pid of productIds) {
-          const url = generated.products.get(pid);
-          if (url) refs.push(url);
-        }
+      const refs = [];
+      for (const tid of talentIds) { const u = generated.talent.get(tid); if (u) refs.push(u); }
+      if (locationId) { const u = generated.locations.get(locationId); if (u) refs.push(u); }
+      for (const pid of productIds) { const u = generated.products.get(pid); if (u) refs.push(u); }
 
-        try {
-          const url = await generateImage(framePrompt(f), {
-            ratio: aspect,
-            referenceImages: refs,
-          });
-          dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
-        } catch (err) {
-          console.error("[frame gen]", f.number, err);
-          dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "error" });
+      async function attemptOnce() {
+        return generateImage(framePrompt(f), { ratio: aspect, referenceImages: refs });
+      }
+      try {
+        let url;
+        try { url = await attemptOnce(); }
+        catch (firstErr) {
+          // Retry once on transient errors (429 rate limit, 5xx)
+          if (firstErr?.status === 429 || (firstErr?.status >= 500 && firstErr?.status < 600) || !firstErr?.status) {
+            await new Promise(r => setTimeout(r, 1500));
+            url = await attemptOnce();
+          } else {
+            throw firstErr;
+          }
         }
-      })());
+        dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
+        frameSuccess++;
+      } catch (err) {
+        console.error("[frame gen]", f.number, err);
+        dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "error" });
+        frameFail++;
+      }
     }
-    await Promise.allSettled(phaseB);
-    toast("All images generated. Refine anything that needs a tweak.", { kind: "success", ttl: 4500 });
+    // Concurrency-3 worker pool — each worker pulls the next frame
+    // off the shared queue until it's empty, capping parallelism at
+    // 3 in-flight Gemini requests at once.
+    const workers = Array.from({ length: FRAME_CONCURRENCY }, async () => {
+      while (frameQueue.length > 0) {
+        const next = frameQueue.shift();
+        if (next) await runOneFrame(next);
+      }
+    });
+    await Promise.allSettled(workers);
+    if (frameFail === 0) {
+      toast("All images generated. Refine anything that needs a tweak.", { kind: "success", ttl: 4500 });
+    } else {
+      toast(`Generated ${frameSuccess} of ${frameSuccess + frameFail} frames. Click any unfilled frame to regenerate.`, { kind: "error", ttl: 8000 });
+    }
   }
 
   // Real chat via Gemini + tool calls. Replaces the keyword-pattern

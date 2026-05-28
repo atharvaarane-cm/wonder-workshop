@@ -33,6 +33,49 @@ const KNOWN_BRANDS = {
     ],
     rules: 'Use generous whitespace, crisp product focus, neutral surfaces, and minimal copy.',
   },
+  pepsi: {
+    brand: 'Pepsi',
+    domain: 'pepsi.com',
+    sourceUrl: 'https://www.pepsi.com/',
+    colors: [
+      { hex: '#004B93', name: 'Pepsi Blue' },
+      { hex: '#E32934', name: 'Pepsi Red' },
+      { hex: '#FFFFFF', name: 'White' },
+    ],
+    rules: 'Use the Pepsi globe (blue/red/white) prominently, vibrant photography, energetic compositions, bold cropped typography. Maintain the classic Pepsi visual identity emphasizing refreshment, social moments, and contemporary culture.',
+  },
+  cocacola: {
+    brand: 'Coca-Cola',
+    domain: 'coca-cola.com',
+    sourceUrl: 'https://www.coca-cola.com/',
+    colors: [
+      { hex: '#F40009', name: 'Coca-Cola Red' },
+      { hex: '#FFFFFF', name: 'White' },
+      { hex: '#000000', name: 'Black' },
+    ],
+    rules: 'Use the classic Coca-Cola red dominantly, Spencerian script logo, joyful social compositions, warm cinematic lighting.',
+  },
+  adidas: {
+    brand: 'Adidas',
+    domain: 'adidas.com',
+    sourceUrl: 'https://www.adidas.com/',
+    colors: [
+      { hex: '#000000', name: 'Adidas Black' },
+      { hex: '#FFFFFF', name: 'White' },
+    ],
+    rules: 'High-contrast black-and-white athletic compositions with bold typography and graphic three-stripe motifs.',
+  },
+  spotify: {
+    brand: 'Spotify',
+    domain: 'spotify.com',
+    sourceUrl: 'https://www.spotify.com/',
+    colors: [
+      { hex: '#1DB954', name: 'Spotify Green' },
+      { hex: '#000000', name: 'Black' },
+      { hex: '#FFFFFF', name: 'White' },
+    ],
+    rules: 'Use Spotify green on black or white backgrounds, bold cropped portraiture, music-led energy, and minimal type.',
+  },
 };
 
 function normalizeBrandName(value = '') {
@@ -128,7 +171,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const resolved = await findBrandDomain(brand);
+    let resolved = await findBrandDomain(brand);
+    let lookup = resolved?.domain ? 'web-search' : null;
+    // Heuristic fallback — if DuckDuckGo didn't return a domain,
+    // guess `{key}.com`. Clearbit's logo API serves a real logo for
+    // most major brands at that URL; a 404 is harmless (the <img>
+    // just fails to load and the panel shows the upload placeholder).
+    if (!resolved?.domain) {
+      const guessKey = key.replace(/\s+/g, '');
+      if (guessKey) {
+        resolved = { domain: `${guessKey}.com`, sourceUrl: `https://${guessKey}.com/` };
+        lookup = 'guess';
+      }
+    }
     const colors = await extractSiteColors(resolved?.sourceUrl);
     res.json({
       brand,
@@ -139,7 +194,7 @@ export default async function handler(req, res) {
       rules: resolved?.domain
         ? `Use colors and logo references from ${resolved.domain}. Keep the generated layout aligned to the brand's existing visual system.`
         : '',
-      lookup: resolved?.domain ? 'web-search' : 'none',
+      lookup: lookup || 'none',
     });
   } catch (err) {
     res.status(503).json({ error: err.message });
