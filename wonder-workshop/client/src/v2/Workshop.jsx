@@ -65,6 +65,19 @@ const FILM = [
 ];
 
 const SHOT_TYPES = ["WIDE", "MED", "MCU", "CU", "ECU", "OTS", "POV", "INSERT"];
+// Spelled-out labels for the shot-type dropdown. Stored value stays
+// the short token (used by reducer + image-gen prompts); only the
+// dropdown UI shows the long form so non-production users can pick.
+const SHOT_TYPE_LABELS = {
+  WIDE: "Wide",
+  MED: "Medium",
+  MCU: "Medium close-up",
+  CU: "Close-up",
+  ECU: "Extreme close-up",
+  OTS: "Over the shoulder",
+  POV: "Point of view",
+  INSERT: "Insert",
+};
 
 const CAMERA_ANGLES = [
   { value: "front", label: "F", full: "Front" },
@@ -1231,7 +1244,21 @@ function ChevronDropdown({ label, value, options, onChange, style: extraStyle = 
 // -- ASPECT RATIO DROPDOWN (visual icons) -----------------------
 
 function AspectIcon({ ratio, size = 18, color = "var(--warm-30)" }) {
-  const dims = { "16:9": [16, 9], "9:16": [9, 16], "2.39": [21, 9], "1:1": [12, 12] };
+  // Each entry = the actual width/height of the rectangle drawn for
+  // that ratio. Missing entries (the previous bug) fell back to 16:9
+  // so 4:5, 4:3, 2:1 all looked identical. Fixed: every supported
+  // ratio has its own dims.
+  const dims = {
+    "16:9": [16, 9],
+    "9:16": [9, 16],
+    "1:1":  [12, 12],
+    "4:5":  [12, 15],
+    "5:4":  [15, 12],
+    "4:3":  [16, 12],
+    "3:4":  [12, 16],
+    "2:1":  [18, 9],
+    "2.39": [21, 9],
+  };
   const [w, h] = dims[ratio] || [16, 9];
   const scale = size / Math.max(w, h);
   const rw = Math.round(w * scale);
@@ -1969,7 +1996,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
             <ChevronDropdown
               label="Shot Type"
               value={frame.shotType}
-              options={SHOT_TYPES.map(s => ({ value: s, label: s }))}
+              options={SHOT_TYPES.map(s => ({ value: s, label: SHOT_TYPE_LABELS[s] || s }))}
               onChange={v => update("shotType", v)}
             />
             <ChevronDropdown
@@ -2318,6 +2345,12 @@ function CharacterTab({ data, dispatch }) {
   const [viewingId, setViewingId] = useState(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const locked = !!data.locks?.talent;
+  // Listen for "user clicked the active tab" — pop back to grid view.
+  useEffect(() => {
+    function onReset(e) { if (e.detail?.tab === "talent") setViewingId(null); }
+    window.addEventListener("ww-asset-tab-reset", onReset);
+    return () => window.removeEventListener("ww-asset-tab-reset", onReset);
+  }, []);
 
   if (viewingId) {
     const character = data.talent.find(t => t.id === viewingId);
@@ -3133,6 +3166,11 @@ function LocationTab({ data, dispatch }) {
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const aspect = data.meta?.aspect || "16:9";
   const locked = !!data.locks?.locations;
+  useEffect(() => {
+    function onReset(e) { if (e.detail?.tab === "locations") setViewingId(null); }
+    window.addEventListener("ww-asset-tab-reset", onReset);
+    return () => window.removeEventListener("ww-asset-tab-reset", onReset);
+  }, []);
 
   if (viewingId) {
     const loc = data.locations.find(l => l.id === viewingId);
@@ -3281,19 +3319,10 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
           />
         </div>
       </div>
-      {Array.isArray(location.colors) && location.colors.length > 0 && (
-        <div>
-          <SectionLabel>Palette</SectionLabel>
-          <div style={{ display: "flex", gap: 6 }}>
-            {location.colors.map((c, i) => (
-              <div key={i} title={c} style={{
-                width: 36, height: 36, borderRadius: 6,
-                background: c, border: "1px solid var(--warm-08)",
-              }} />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Palette section removed — the location.colors swatches were
+          decorative grays unrelated to the actual image. Logan asked
+          to drop them. (location.colors data field stays in storage
+          for back-compat.) */}
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--warm-06)" }}>
         <ConfirmAction label="Delete location" onConfirm={() => {
           dispatch({ type: "DELETE_LOCATION", id: location.id });
@@ -3310,6 +3339,11 @@ function ElementTab({ data, dispatch }) {
   const [viewingId, setViewingId] = useState(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const locked = !!data.locks?.products;
+  useEffect(() => {
+    function onReset(e) { if (e.detail?.tab === "products") setViewingId(null); }
+    window.addEventListener("ww-asset-tab-reset", onReset);
+    return () => window.removeEventListener("ww-asset-tab-reset", onReset);
+  }, []);
 
   if (viewingId) {
     const prod = data.products.find(p => p.id === viewingId);
@@ -5393,7 +5427,7 @@ function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onN
           </button>
           <button
             onClick={onNewFolder}
-            title="New folder"
+            title="New client folder"
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "8px 10px", borderRadius: 7, cursor: "pointer",
@@ -5401,14 +5435,16 @@ function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onN
               color: "var(--warm-40)", outline: "none",
             }}
           >
-            <SectionIcon name="map" size={12} color="var(--warm-40)" />
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6a1.5 1.5 0 0 1 1.06.44L8.5 4.5h4A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+            </svg>
           </button>
         </div>
       </div>
 
       <div style={{ padding: "0 14px 6px" }}>
         <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-          Projects · {projects.length}{folders.length ? ` · ${folders.length} folder${folders.length === 1 ? "" : "s"}` : ""}
+          Projects · {projects.length}{folders.length ? ` · ${folders.length} client${folders.length === 1 ? "" : "s"}` : ""}
         </div>
       </div>
 
@@ -5542,9 +5578,9 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
         }}>
           <button onClick={() => { setMenuOpenId(null); setRenamingId(p.id); setRenameValue(p.name); }} style={projMenuItemStyle()}>Rename</button>
           {/* Move to folder — inline submenu. Folders array + No folder. */}
-          <div style={{ padding: "4px 8px 2px", fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Move to</div>
+          <div style={{ padding: "4px 8px 2px", fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Move to client</div>
           <button onClick={() => { setMenuOpenId(null); onMoveToFolder?.(p.id, null); }} style={{ ...projMenuItemStyle(), fontWeight: !p.folder ? 700 : 500 }}>
-            {!p.folder ? "✓ " : ""}No folder
+            {!p.folder ? "✓ " : ""}Unfiled
           </button>
           {folders.map(f => (
             <button key={f} onClick={() => { setMenuOpenId(null); onMoveToFolder?.(p.id, f); }} style={{ ...projMenuItemStyle(), fontWeight: p.folder === f ? 700 : 500 }}>
@@ -5816,7 +5852,7 @@ function pickHomeBackground() {
   return HOME_BG_IMAGES[Math.floor(Math.random() * HOME_BG_IMAGES.length)];
 }
 
-function BriefForm({ onGenerate, generating = false, error = null }) {
+function BriefForm({ onGenerate, generating = false, error = null, folders = [] }) {
   // Blank by default — no Nike/Long Run prefill anymore. v1's form
   // starts empty and so should v2. Length defaults to "30s" since
   // most spots are 30s; aspect defaults to "16:9" because most edits
@@ -5931,7 +5967,19 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
             <input value={meta.title} onChange={e => setMeta(m => ({ ...m, title: e.target.value }))} style={inp} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
-            <div><label style={lbl}>Client</label><input value={meta.client} onChange={e => setMeta(m => ({ ...m, client: e.target.value }))} style={inp} /></div>
+            <div>
+              <label style={lbl}>Client</label>
+              <input
+                value={meta.client}
+                onChange={e => setMeta(m => ({ ...m, client: e.target.value }))}
+                list="ww-client-folders"
+                placeholder="Pick or type — auto-creates a folder"
+                style={inp}
+              />
+              <datalist id="ww-client-folders">
+                {folders.map(f => <option key={f} value={f} />)}
+              </datalist>
+            </div>
             <ChevronDropdown
               label="Length"
               value={meta.format}
@@ -6290,19 +6338,19 @@ export default function WorkshopV2() {
     toast(folder ? `Moved to "${folder}"` : "Removed from folder", { kind: "info", ttl: 2500 });
   }
   async function handleNewFolder() {
-    const name = window.prompt("Folder name?");
+    const name = window.prompt("Client name? (creates a folder)");
     if (!name) return;
     const created = createFolder(name);
     if (created) {
       setFolders(listFolders());
-      toast(`Created folder "${created}"`, { kind: "success", ttl: 2500 });
+      toast(`Created client folder "${created}"`, { kind: "success", ttl: 2500 });
     }
   }
   async function handleDeleteFolder(name) {
     const ok = await uiConfirm({
-      title: `Delete folder "${name}"?`,
+      title: `Delete client folder "${name}"?`,
       message: "Projects inside will be moved out of the folder, but their data stays untouched.",
-      confirmLabel: "Delete folder",
+      confirmLabel: "Delete client folder",
       cancelLabel: "Cancel",
       danger: true,
     });
@@ -6542,6 +6590,21 @@ export default function WorkshopV2() {
       const newId = newProjectId();
       setActiveProjectId(newId);
       setActiveProjectIdState(newId);
+      // Auto-file under the client folder. If the user typed a new
+      // client name, create the folder first. The first save (debounce
+      // + ceiling auto-save) will include the folder via the
+      // project's stored metadata.
+      if (meta.client?.trim()) {
+        const clientName = meta.client.trim();
+        const existing = listFolders();
+        if (!existing.includes(clientName)) {
+          createFolder(clientName);
+        }
+        // saveProject merges this when it next runs; force a save now
+        // so the sidebar updates immediately.
+        setProjectFolder(newId, clientName);
+        setFolders(listFolders());
+      }
 
       // BriefForm inputs are authoritative for meta — don't let the
       // model rewrite the project title or aspect ratio the user
@@ -6857,12 +6920,18 @@ export default function WorkshopV2() {
     setChatFocusTrigger(prev => prev + 1);
   }, []);
 
-  // Left-rail nav — always selects the clicked tab (no toggle-to-close).
-  // Something is always visible on the right, so this is a switch, not
-  // a toggle. The argument name "Toggle" is kept for back-compat with
-  // the prop wired through OneSheetWorkspace.
+  // Left-rail nav — clicking a tab selects it; clicking the ALREADY
+  // active tab fires a "ww-asset-tab-reset" event so any drilled-in
+  // detail view (CharacterDetailView, LocationDetailView, etc.) can
+  // listen and pop back to its tile grid. Matches Logan's request
+  // that clicking the tab name returns to the grid.
   const handleToggleAssetTab = useCallback((tabKey) => {
-    setAssetTabOpen(tabKey);
+    setAssetTabOpen(prev => {
+      if (prev === tabKey) {
+        window.dispatchEvent(new CustomEvent("ww-asset-tab-reset", { detail: { tab: tabKey } }));
+      }
+      return tabKey;
+    });
   }, []);
 
   // Production view frame navigation
@@ -7083,7 +7152,7 @@ export default function WorkshopV2() {
         />
         {/* Main */}
         <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
-          {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} />}
+          {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} folders={folders} />}
           {built && !productionFrameId && (
             <OneSheetWorkspace data={data} selectedFrameId={selectedFrameId}
               highlightedFrames={highlightedFrames} onSelectFrame={selectFrame}
