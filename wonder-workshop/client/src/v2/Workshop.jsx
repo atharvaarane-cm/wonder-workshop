@@ -616,6 +616,70 @@ const uiBus = {
   },
 };
 
+// -- PENDING BUS ----------------------------------------------
+// Module-level pending state — tracks every asset slot whose image
+// has been queued or is in-flight in a generation pool. Components
+// subscribe via usePending(key) to render shimmer whether or not
+// the slot has actually started yet (so the user can see what's
+// QUEUED, not just what's running through a 3-worker pool).
+//
+// Slot keys:
+//   talent.<id>.primary
+//   talent.<id>.headshots.<view>
+//   talent.<id>.fullBody.<view>
+//   location.<id>
+//   product.<id>
+//   mood.<index>
+//   frame.<id>
+const _pending = new Set();
+const _pendingListeners = new Set();
+function _notifyPending() { for (const fn of _pendingListeners) fn(); }
+export function markPending(key) {
+  if (!key) return;
+  if (_pending.has(key)) return;
+  _pending.add(key);
+  _notifyPending();
+}
+export function markDone(key) {
+  if (!key) return;
+  if (!_pending.has(key)) return;
+  _pending.delete(key);
+  _notifyPending();
+}
+export function clearAllPending() {
+  if (_pending.size === 0) return;
+  _pending.clear();
+  _notifyPending();
+}
+function usePending(key) {
+  const [, force] = useReducer(x => x + 1, 0);
+  useEffect(() => {
+    _pendingListeners.add(force);
+    return () => { _pendingListeners.delete(force); };
+  }, []);
+  if (!key) return false;
+  return _pending.has(key);
+}
+
+// -- DEBUG LOG BUS --------------------------------------------
+// Tiny in-app logger. Calls log("info", msg, meta?) push entries
+// into a ring buffer + notify the debug panel. Cap at 500 entries.
+const _logBuffer = [];
+const _logListeners = new Set();
+const LOG_CAP = 500;
+function _notifyLog() { for (const fn of _logListeners) fn(); }
+export function log(level, message, meta) {
+  const entry = { id: Date.now() + "_" + Math.random().toString(36).slice(2, 6), time: Date.now(), level, message: String(message), meta };
+  _logBuffer.push(entry);
+  if (_logBuffer.length > LOG_CAP) _logBuffer.shift();
+  _notifyLog();
+  // Mirror to console with a recognizable tag.
+  const tag = `[ww:${level}]`;
+  if (level === "error") console.error(tag, message, meta || "");
+  else if (level === "warn") console.warn(tag, message, meta || "");
+  else console.log(tag, message, meta || "");
+}
+
 export function toast(message, opts = {}) {
   uiBus.emit("toast", { message, ...opts });
 }
@@ -730,6 +794,118 @@ function UIProvider({ children }) {
                 outline: "none",
               }}>{confirmState.confirmLabel}</button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Dev log panel — toggled with the bottom-right ⓘ button.
+          Subscribes to the log bus; the buffer holds the last 500
+          entries. Click an error row to expand its meta payload. */}
+      <DebugLogPanel />
+    </>
+  );
+}
+
+function DebugLogPanel() {
+  const [open, setOpen] = useState(false);
+  const [, force] = useReducer(x => x + 1, 0);
+  useEffect(() => {
+    _logListeners.add(force);
+    return () => { _logListeners.delete(force); };
+  }, []);
+  const entries = _logBuffer.slice().reverse();
+  const errorCount = entries.filter(e => e.level === "error").length;
+  return (
+    <>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title={open ? "Hide debug log" : `Show debug log${errorCount ? ` (${errorCount} error${errorCount > 1 ? "s" : ""})` : ""}`}
+        style={{
+          position: "fixed", bottom: 16, left: 16, zIndex: 11500,
+          width: 36, height: 36, borderRadius: 999, cursor: "pointer",
+          background: errorCount > 0 ? "rgba(255,138,128,0.18)" : "rgba(0,0,0,0.55)",
+          border: `1px solid ${errorCount > 0 ? "rgba(255,138,128,0.55)" : "rgba(255,255,255,0.18)"}`,
+          color: errorCount > 0 ? "#FF8A80" : "rgba(255,255,255,0.65)",
+          fontFamily: "var(--f)", fontSize: 11, fontWeight: 700,
+          backdropFilter: "blur(8px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          outline: "none",
+        }}
+      >
+        {errorCount > 0 ? errorCount : "ⓘ"}
+      </button>
+      {open && (
+        <div style={{
+          position: "fixed", bottom: 60, left: 16, zIndex: 11500,
+          width: 480, maxHeight: "60vh",
+          background: "rgba(14,14,16,0.96)",
+          backdropFilter: "blur(8px)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 10, padding: 8,
+          boxShadow: "0 16px 64px rgba(0,0,0,0.6)",
+          display: "flex", flexDirection: "column", gap: 6,
+        }}>
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "4px 8px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+          }}>
+            <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              Debug log · {entries.length}
+            </span>
+            <div style={{ display: "flex", gap: 4 }}>
+              <button onClick={() => { _logBuffer.length = 0; _notifyLog(); }} title="Clear" style={{
+                fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
+                padding: "2px 8px", borderRadius: 4, cursor: "pointer",
+                background: "transparent", border: "1px solid rgba(255,255,255,0.18)",
+                color: "rgba(255,255,255,0.6)", outline: "none",
+              }}>Clear</button>
+              <button onClick={() => setOpen(false)} title="Close" style={{
+                fontFamily: "var(--f)", fontSize: 12, fontWeight: 600,
+                width: 22, height: 22, borderRadius: 4, cursor: "pointer",
+                background: "transparent", border: "1px solid rgba(255,255,255,0.18)",
+                color: "rgba(255,255,255,0.6)", outline: "none",
+              }}>×</button>
+            </div>
+          </div>
+          <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+            {entries.length === 0 && (
+              <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "rgba(255,255,255,0.4)", padding: 12, textAlign: "center" }}>
+                Nothing logged yet.
+              </div>
+            )}
+            {entries.map(e => {
+              const color = e.level === "error" ? "#FF8A80" : e.level === "warn" ? "#FFC857" : "rgba(255,255,255,0.7)";
+              const tagBg = e.level === "error" ? "rgba(255,138,128,0.18)" : e.level === "warn" ? "rgba(255,200,87,0.15)" : "rgba(255,255,255,0.08)";
+              const t = new Date(e.time);
+              const hh = String(t.getHours()).padStart(2, "0");
+              const mm = String(t.getMinutes()).padStart(2, "0");
+              const ss = String(t.getSeconds()).padStart(2, "0");
+              return (
+                <div key={e.id} style={{
+                  display: "flex", gap: 6, padding: "4px 8px",
+                  fontFamily: "ui-monospace, SF Mono, Consolas, monospace",
+                  fontSize: 11, lineHeight: 1.5,
+                  borderRadius: 4,
+                  alignItems: "flex-start",
+                }}>
+                  <span style={{ color: "rgba(255,255,255,0.32)", flexShrink: 0 }}>{hh}:{mm}:{ss}</span>
+                  <span style={{
+                    flexShrink: 0,
+                    padding: "0 5px", borderRadius: 3,
+                    background: tagBg, color,
+                    fontWeight: 700, fontSize: 9, letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    alignSelf: "center",
+                  }}>{e.level}</span>
+                  <span style={{ color: "rgba(255,255,255,0.85)", wordBreak: "break-word", flex: 1 }}>
+                    {e.message}
+                    {e.meta && (
+                      <span style={{ color: "rgba(255,255,255,0.42)" }}> {JSON.stringify(e.meta).slice(0, 200)}</span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -2598,6 +2774,7 @@ function MoodTile({ item, dispatch, locked, versions = [] }) {
         label="Mood"
         ratio="1:1"
         locked={locked}
+        pendingKey={`mood.${item.id}`}
         basePrompt={moodPrompt((item.caption || "Mood reference, cinematic, evocative").trim())}
         versions={versions}
         onSelectVersion={src => dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: src })}
@@ -2718,6 +2895,8 @@ function CharacterTile({ character, onClick }) {
     || character.headshots?.back
     || null;
   const status = character.generationStatus;
+  const externalPending = usePending(`talent.${character.id}.primary`);
+  const isPending = status === "generating" || externalPending;
   return (
     <button
       onClick={onClick}
@@ -2762,7 +2941,7 @@ function CharacterTile({ character, onClick }) {
             }}
           />
         )}
-        {!img && status !== "generating" && (
+        {!img && !isPending && (
           <div style={{ textAlign: "center", color: "var(--warm-25)", position: "relative", zIndex: 1 }}>
             <SectionIcon name="users" size={20} color="var(--warm-25)" />
             <div style={{ fontFamily: "var(--f)", fontSize: 9, marginTop: 4, letterSpacing: "0.04em" }}>
@@ -2772,7 +2951,7 @@ function CharacterTile({ character, onClick }) {
         )}
         {/* Only show shimmer when there's no image yet — once an image
             lands, the shimmer would just smear over a real result. */}
-        {status === "generating" && !img && <ShimmerOverlay />}
+        {isPending && !img && <ShimmerOverlay />}
         {character.locked && (
           <div title="Locked" style={{
             position: "absolute", top: 4, right: 4, zIndex: 4,
@@ -2929,6 +3108,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
             label="Reference"
             ratio="1:1"
             locked={effLocked}
+            pendingKey={`talent.${character.id}.primary`}
             basePrompt={talentPrompt(character)}
             versions={data.versionHistory?.[`talent.${character.id}.headshot`] || []}
             onSelectVersion={src => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: src })}
@@ -2948,6 +3128,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         ratio="1:1"
         locked={effLocked}
         basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentHeadshotPrompt(character, v)]))}
+        pendingKeyByView={Object.fromEntries(VIEWS.map(v => [v, `talent.${character.id}.headshots.${v}`]))}
         versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.headshots.${v}`] || []]))}
         onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: src })}
         onRegenerate={regenerateHeadshot}
@@ -2967,6 +3148,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         ratio="3:4"
         locked={effLocked}
         basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentFullBodyPrompt(character, v)]))}
+        pendingKeyByView={Object.fromEntries(VIEWS.map(v => [v, `talent.${character.id}.fullBody.${v}`]))}
         versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.fullBody.${v}`] || []]))}
         onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: src })}
         onRegenerate={regenerateFullBody}
@@ -2992,7 +3174,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
 // view. Each cell is a V2ImageSlot; clicking the slot triggers
 // per-view regeneration. "Populate All" fires all four in sequence
 // (matches v1's button label).
-function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByView = {}, versionsBySlot = {}, onSelectVersion, onRegenerate, onClear, onUpload, onPopulateAll }) {
+function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByView = {}, pendingKeyByView = {}, versionsBySlot = {}, onSelectVersion, onRegenerate, onClear, onUpload, onPopulateAll }) {
   const [populating, setPopulating] = useState(false);
   const hasAny = views.some(v => slots[v]);
 
@@ -3027,6 +3209,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
               ratio={ratio}
               locked={locked}
               basePrompt={basePromptByView[view]}
+              pendingKey={pendingKeyByView[view]}
               versions={versionsBySlot[view] || []}
               onSelectVersion={src => onSelectVersion?.(view, src)}
               onRegenerate={instruction => onRegenerate(view, instruction)}
@@ -3049,9 +3232,14 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
 // the placeholder to fire onRegenerate. Real shimmer + lightbox + the
 // full v1 hover toolbar (8 actions) land in a follow-up — this is the
 // minimum surface for the redesign to feel right.
-function V2ImageSlot({ src, label, ratio, locked, basePrompt, versions = [], onSelectVersion, onRegenerate, onClear, onUpload }) {
+function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versions = [], onSelectVersion, onRegenerate, onClear, onUpload }) {
   const [hovered, setHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // External pending state (from the autoGen pool's pending bus).
+  // The slot shimmers whether or not its task has actually started,
+  // so queued items announce themselves alongside in-flight ones.
+  const externalPending = usePending(pendingKey);
+  const showShimmer = generating || (externalPending && !src);
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveText, setImproveText] = useState("");
   const [upscaleOpen, setUpscaleOpen] = useState(false);
@@ -3219,13 +3407,13 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, versions = [], onS
             }}
           />
         )}
-        {!src && !generating && (
+        {!src && !showShimmer && (
           <div style={{ textAlign: "center", color: "var(--warm-25)", position: "relative", zIndex: 1 }}>
             <SectionIcon name="plus" size={16} color="var(--warm-25)" />
             <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
           </div>
         )}
-        {generating && <ShimmerOverlay />}
+        {showShimmer && <ShimmerOverlay />}
         {/* Version navigator — surfaces when 2+ versions exist for
             this slot. Prev/next arrows + "N of M" badge in the
             bottom-left, doesn't block the hover bar centered below. */}
@@ -3798,6 +3986,8 @@ function LocationTile({ location, onClick }) {
   const [hovered, setHovered] = useState(false);
   const img = location.generatedImage || location.referenceImage;
   const status = location.generationStatus;
+  const externalPending = usePending(`location.${location.id}`);
+  const isPending = status === "generating" || externalPending;
   return (
     <button
       onClick={onClick}
@@ -3826,10 +4016,10 @@ function LocationTile({ location, onClick }) {
         position: "relative",
         overflow: "hidden",
       }}>
-        {!img && status !== "generating" && (
+        {!img && !isPending && (
           <SectionIcon name="map" size={20} color="var(--warm-25)" />
         )}
-        {status === "generating" && <ShimmerOverlay />}
+        {isPending && !img && <ShimmerOverlay />}
         {location.locked && (
           <div title="Locked" style={{
             position: "absolute", top: 4, right: 4, zIndex: 4,
@@ -3883,6 +4073,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
             ratio="16:9"
             locked={effLocked}
             basePrompt={locationPrompt(location)}
+            pendingKey={`location.${location.id}`}
             versions={versions}
             onSelectVersion={src => dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: src })}
             onRegenerate={regenerateReference}
@@ -3972,6 +4163,8 @@ function ElementTile({ product, onClick }) {
   const [hovered, setHovered] = useState(false);
   const img = product.referenceImage;
   const status = product.generationStatus;
+  const externalPending = usePending(`product.${product.id}`);
+  const isPending = status === "generating" || externalPending;
   return (
     <button
       onClick={onClick}
@@ -3999,10 +4192,10 @@ function ElementTile({ product, onClick }) {
         position: "relative",
         overflow: "hidden",
       }}>
-        {!img && status !== "generating" && (
+        {!img && !isPending && (
           <SectionIcon name="box" size={20} color="var(--warm-25)" />
         )}
-        {status === "generating" && <ShimmerOverlay />}
+        {isPending && !img && <ShimmerOverlay />}
         {product.locked && (
           <div title="Locked" style={{
             position: "absolute", top: 4, right: 4, zIndex: 4,
@@ -4070,6 +4263,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
             ratio="1:1"
             locked={effLocked}
             basePrompt={productPrompt(product)}
+            pendingKey={`product.${product.id}`}
             versions={versions}
             onSelectVersion={src => dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: src })}
             onRegenerate={regenerateReference}
@@ -7021,16 +7215,23 @@ export default function WorkshopV2() {
       case "generateTalentPrimary": {
         const t = findByName(current.talent || [], effect.talentName);
         if (!t) return;
+        markPending(`talent.${t.id}.primary`);
+        markPending(`talent.${t.id}.headshots.front`);
         dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
         try {
+          log("info", `chat: generating primary headshot for ${t.name}`);
           const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
           dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
           dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
           dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
+          log("info", `chat: ${t.name} done`);
         } catch (e) {
-          console.error("[chat talent gen]", e);
+          log("error", `chat talent gen failed: ${t.name}`, { error: String(e?.message || e) });
           dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
           toast(`Couldn't generate headshot for ${t.name}: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+        } finally {
+          markDone(`talent.${t.id}.primary`);
+          markDone(`talent.${t.id}.headshots.front`);
         }
         return;
       }
@@ -7038,28 +7239,38 @@ export default function WorkshopV2() {
         const l = findByName(current.locations || [], effect.locationName);
         if (!l) return;
         const aspect = current.meta?.aspect || "16:9";
+        markPending(`location.${l.id}`);
         dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
         try {
+          log("info", `chat: generating location ${l.name}`);
           const url = await generateImage(locationPrompt(l), { ratio: aspect });
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
+          log("info", `chat: ${l.name} done`);
         } catch (e) {
-          console.error("[chat location gen]", e);
+          log("error", `chat location gen failed: ${l.name}`, { error: String(e?.message || e) });
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
           toast(`Couldn't generate ${l.name}: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+        } finally {
+          markDone(`location.${l.id}`);
         }
         return;
       }
       case "generateProductImage": {
         const p = findByName(current.products || [], effect.productName);
         if (!p) return;
+        markPending(`product.${p.id}`);
         dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
         try {
+          log("info", `chat: generating product ${p.name}`);
           const url = await generateImage(productPrompt(p), { ratio: "1:1" });
           dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
+          log("info", `chat: ${p.name} done`);
         } catch (e) {
-          console.error("[chat product gen]", e);
+          log("error", `chat product gen failed: ${p.name}`, { error: String(e?.message || e) });
           dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
           toast(`Couldn't generate ${p.name}: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+        } finally {
+          markDone(`product.${p.id}`);
         }
         return;
       }
@@ -7123,14 +7334,19 @@ export default function WorkshopV2() {
       const u = p?.referenceImage;
       if (u) refs.push(u);
     }
+    markPending(`frame.${frameId}`);
     dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId, status: "generating" });
     try {
+      log("info", `retrying frame ${frame.number}`);
       const url = await generateImage(framePrompt(frame), { ratio: aspect, referenceImages: refs });
       dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId, dataUrl: url });
+      log("info", `frame ${frame.number} retry done`);
     } catch (err) {
-      console.error("[frame retry]", frame.number, err);
+      log("error", `frame ${frame.number} retry failed`, { error: String(err?.message || err) });
       dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId, status: "error" });
       toast(`Frame ${frame.number} retry failed: ${err?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+    } finally {
+      markDone(`frame.${frameId}`);
     }
   }
 
@@ -7475,6 +7691,22 @@ export default function WorkshopV2() {
     // Phase A1 — primary talent headshots ONLY. We need these done
     // before A2 can fire view-specific gens with the primary as a
     // reference image (identity preservation across all 8 views).
+    // Mark every primary as pending BEFORE the pool starts so all
+    // queued tiles shimmer even while they wait their turn.
+    log("info", `Phase A1: primary headshots × ${initialData.talent?.length || 0}`);
+    for (const t of initialData.talent || []) {
+      markPending(`talent.${t.id}.primary`);
+      markPending(`talent.${t.id}.headshots.front`);
+      // Pre-mark every other view + full-body slot too — they ARE
+      // going to be queued in Phase A2, so the empty cells should
+      // shimmer immediately rather than only when the worker thread
+      // reaches them.
+      for (const v of HEAD_VIEWS_EXTRA) markPending(`talent.${t.id}.headshots.${v}`);
+      for (const v of FULLBODY_VIEWS) markPending(`talent.${t.id}.fullBody.${v}`);
+    }
+    for (const l of initialData.locations || []) markPending(`location.${l.id}`);
+    for (const p of initialData.products || []) markPending(`product.${p.id}`);
+    for (const f of initialData.frames || []) markPending(`frame.${f.id}`);
     const phaseA1 = [];
     for (const t of initialData.talent || []) {
       phaseA1.push((async () => {
@@ -7487,9 +7719,14 @@ export default function WorkshopV2() {
           // detail-view 4-up grid — both fields point at the same image.
           dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
           dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
+          log("info", `talent primary done: ${t.name}`);
         } catch (err) {
-          console.error("[talent primary]", t.name, err);
+          log("error", `talent primary failed: ${t.name}`, { error: String(err?.message || err) });
           dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
+        } finally {
+          markDone(`talent.${t.id}.primary`);
+          // The front-slot key shares its pending lifecycle with the primary.
+          markDone(`talent.${t.id}.headshots.front`);
         }
       })());
     }
@@ -7512,8 +7749,11 @@ export default function WorkshopV2() {
               referenceImages: [primaryRef],
             }));
             dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: view, url });
+            log("info", `headshot done: ${t.name} / ${view}`);
           } catch (err) {
-            console.error("[headshot]", t.name, view, err);
+            log("error", `headshot failed: ${t.name} / ${view}`, { error: String(err?.message || err) });
+          } finally {
+            markDone(`talent.${t.id}.headshots.${view}`);
           }
         });
       }
@@ -7525,10 +7765,21 @@ export default function WorkshopV2() {
               referenceImages: [primaryRef],
             }));
             dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: t.id, slot: view, url });
+            log("info", `fullbody done: ${t.name} / ${view}`);
           } catch (err) {
-            console.error("[fullbody]", t.name, view, err);
+            log("error", `fullbody failed: ${t.name} / ${view}`, { error: String(err?.message || err) });
+          } finally {
+            markDone(`talent.${t.id}.fullBody.${view}`);
           }
         });
+      }
+    }
+    // If a talent's primary failed, their A2 slots will never run —
+    // clear the pending marks now so the placeholder text shows.
+    for (const t of initialData.talent || []) {
+      if (!generated.talent.get(t.id)) {
+        for (const v of HEAD_VIEWS_EXTRA) markDone(`talent.${t.id}.headshots.${v}`);
+        for (const v of FULLBODY_VIEWS) markDone(`talent.${t.id}.fullBody.${v}`);
       }
     }
 
@@ -7539,9 +7790,12 @@ export default function WorkshopV2() {
           const url = await withRetry(() => generateImage(locationPrompt(l), { ratio: aspect }));
           generated.locations.set(l.id, url);
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
+          log("info", `location done: ${l.name}`);
         } catch (err) {
-          console.error("[location]", l.name, err);
+          log("error", `location failed: ${l.name}`, { error: String(err?.message || err) });
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
+        } finally {
+          markDone(`location.${l.id}`);
         }
       });
     }
@@ -7552,9 +7806,12 @@ export default function WorkshopV2() {
           const url = await withRetry(() => generateImage(productPrompt(p), { ratio: "1:1" }));
           generated.products.set(p.id, url);
           dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
+          log("info", `product done: ${p.name}`);
         } catch (err) {
-          console.error("[product]", p.name, err);
+          log("error", `product failed: ${p.name}`, { error: String(err?.message || err) });
           dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
+        } finally {
+          markDone(`product.${p.id}`);
         }
       });
     }
@@ -7569,12 +7826,14 @@ export default function WorkshopV2() {
             type: "ADD_MOOD",
             data: { caption: String(prompt).slice(0, 80), image: url },
           });
+          log("info", `mood tile done: "${String(prompt).slice(0, 40)}…"`);
         } catch (err) {
-          console.error("[mood]", err);
+          log("error", `mood tile failed`, { error: String(err?.message || err) });
         }
       });
     }
 
+    log("info", `Phase A2: ${phaseA2Tasks.length} tasks queued`);
     await runPool(phaseA2Tasks);
 
     // Phase B — frames with reference images. Detect @-handle mentions
@@ -7606,13 +7865,18 @@ export default function WorkshopV2() {
         const url = await withRetry(() => generateImage(framePrompt(f), { ratio: aspect, referenceImages: refs }));
         dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
         frameSuccess++;
+        log("info", `frame done: ${f.number}`);
       } catch (err) {
-        console.error("[frame gen]", f.number, err);
+        log("error", `frame failed: ${f.number}`, { error: String(err?.message || err) });
         dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "error" });
         frameFail++;
+      } finally {
+        markDone(`frame.${f.id}`);
       }
     });
+    log("info", `Phase B: ${frameTasks.length} frames queued`);
     await runPool(frameTasks);
+    log("info", `Done. ${frameSuccess} succeeded, ${frameFail} failed.`);
     if (frameFail === 0) {
       toast("All images generated. Refine anything that needs a tweak.", { kind: "success", ttl: 4500 });
     } else {
