@@ -1971,8 +1971,10 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
       if (payload.sourceUrl) dispatch({ type: "UPDATE_BRAND", field: "url", value: payload.sourceUrl });
       if (payload.rules) dispatch({ type: "UPDATE_BRAND", field: "guidelines", value: payload.rules });
       if (payload.brand) dispatch({ type: "UPDATE_BRAND", field: "name", value: payload.brand });
+      toast(`Brand info refreshed${payload.brand ? ` for ${payload.brand}` : ""}`, { kind: "success" });
     } catch (e) {
       console.error("[brand refetch]", e);
+      toast(`Brand lookup failed: ${e?.message?.slice(0, 120) || "unknown"}`, { kind: "error" });
     } finally {
       setRefetching(false);
     }
@@ -2556,9 +2558,15 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
     if (locked) return;
     setGenerating(true);
     setImproveOpen(false);
-    try { await onRegenerate?.(instruction); }
-    catch (e) { console.error("[V2ImageSlot regen]", e); }
-    finally { setGenerating(false); }
+    try {
+      await onRegenerate?.(instruction);
+      toast(instruction ? "Improved" : "Regenerated", { kind: "success", ttl: 2200 });
+    } catch (e) {
+      console.error("[V2ImageSlot regen]", e);
+      toast(`Generation failed: ${e?.message?.slice(0, 140) || "unknown error"}`, { kind: "error" });
+    } finally {
+      setGenerating(false);
+    }
   }
   async function handleImprove() {
     const text = improveText.trim();
@@ -2583,9 +2591,11 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
       a.download = `${(label || "image").toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.png`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
+      toast("Downloaded", { kind: "success", ttl: 2000 });
     } catch (e) {
       console.error("[download]", e);
       window.open(src, "_blank", "noopener");
+      toast("Opened in new tab — right-click to save", { kind: "info" });
     }
   }
 
@@ -5028,9 +5038,18 @@ function ProjectSidebar({ projects, activeProjectId, onSwitch, onNew, onDelete, 
                   }}>
                     <button onClick={() => { setMenuOpenId(null); setRenamingId(p.id); setRenameValue(p.name); }} style={projMenuItemStyle()}>Rename</button>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         setMenuOpenId(null);
-                        if (window.confirm(`Delete "${p.name}"?`)) onDelete(p.id);
+                        const ok = await uiConfirm({
+                          title: `Delete "${p.name}"?`,
+                          message: "This deletes the project and all its generated images. This can't be undone.",
+                          confirmLabel: "Delete project",
+                          danger: true,
+                        });
+                        if (ok) {
+                          onDelete(p.id);
+                          toast(`Deleted "${p.name}"`, { kind: "info" });
+                        }
                       }}
                       style={{ ...projMenuItemStyle(), color: "#FF8A80" }}
                     >Delete</button>
@@ -5844,6 +5863,7 @@ export default function WorkshopV2() {
       })());
     }
     await Promise.allSettled(phaseB);
+    toast("All images generated. Refine anything that needs a tweak.", { kind: "success", ttl: 4500 });
   }
 
   // Real chat via Gemini + tool calls. Replaces the keyword-pattern
