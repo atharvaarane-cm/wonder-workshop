@@ -5122,7 +5122,23 @@ function ExportModal({ data, onClose }) {
       toast(`Share failed: ${e?.message?.slice(0, 120) || "unknown"}`, { kind: "error" });
     }
   };
-  const doDownloadAssets = () => { setDownloadStatus("loading"); setTimeout(() => { setDownloadStatus("complete"); setTimeout(() => setDownloadStatus(null), 2000); }, 1500); };
+  // Real PPTX export — lazy-loads pptxgenjs (~800KB) and renders a
+  // multi-slide deck (title, treatment, storyboard 2-up grid, talent,
+  // locations, elements). Writes via the browser's save flow.
+  const doDownloadAssets = async () => {
+    setDownloadStatus("loading");
+    try {
+      const { exportPptx } = await import("./pptxExport.js");
+      const filename = await exportPptx(data);
+      setDownloadStatus("complete");
+      toast(`Downloaded ${filename}`, { kind: "success" });
+      setTimeout(() => setDownloadStatus(null), 2200);
+    } catch (e) {
+      console.error("[pptx export]", e);
+      toast(`PPTX export failed: ${e?.message?.slice(0, 140) || "unknown"}`, { kind: "error" });
+      setDownloadStatus(null);
+    }
+  };
 
   const includeLabels = [
     { key: "descriptions", label: "Shot descriptions" },
@@ -5204,7 +5220,7 @@ function ExportModal({ data, onClose }) {
               <SectionIcon name="link" size={13} color="var(--warm-50)" /> {status === "copied" ? "Link Copied!" : "Share Link"}
             </PremiumButton>
             <PremiumButton variant="secondary" onClick={doDownloadAssets} loading={downloadStatus === "loading"} complete={downloadStatus === "complete"} style={{ width: "100%", padding: "10px 0" }}>
-              <SectionIcon name="zip" size={13} color="var(--warm-50)" /> {downloadStatus === "complete" ? "Downloaded!" : "Download All Assets"}
+              <SectionIcon name="zip" size={13} color="var(--warm-50)" /> {downloadStatus === "complete" ? "Downloaded!" : downloadStatus === "loading" ? "Building deck…" : "Download PPTX"}
             </PremiumButton>
           </div>
         </div>
