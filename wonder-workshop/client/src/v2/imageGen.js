@@ -45,9 +45,28 @@ export async function generateImage(prompt, opts = {}) {
 // quality images for each asset type. Each builder takes the asset
 // record and returns a prompt string ready for generateImage().
 
+// Character notes from the brief often include expression / pose
+// directions ("head-tilted laugh", "smiling warmly", "joyful"). Those
+// then get baked into every generated image of the character, which
+// makes the headshot + each storyboard frame all look like the same
+// awkward laughing pose. Strip those out so the reference shots stay
+// neutral — the storyboard frames can still direct expression per-shot
+// via the frame's own brief.
+function neutralizeCharacterNote(note) {
+  if (!note) return "";
+  return note
+    .replace(/\b(laugh(ing|s|ter)?|smil(ing|es?)|chuckl(ing|es?)|grinn?(ing|s)?|tears?|crying|frown(ing)?|scowl(ing)?|winking?|pout(ing)?)\b/gi, "")
+    .replace(/\b(head[- ]tilt(ed)?|tilted head|cocked head|hand on (hip|chin)|arms? crossed)\b/gi, "")
+    .replace(/\b(joyful|cheerful|gleeful|exuberant|enthusiastic)\b/gi, "")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function talentPrompt(t) {
-  const note = t.note ? `, ${t.note}` : "";
-  return `Cinematic character portrait headshot of ${t.name}${note}. Photorealistic, neutral seamless studio background, soft natural lighting, professional photography, sharp focus on subject.`;
+  const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
+  return `Character reference portrait headshot of ${t.name}${note}. Neutral relaxed expression, looking directly at camera. Photorealistic, neutral seamless studio background, soft even reference lighting, sharp focus on subject, professional reference photography. NOT cinematic, NOT performed, NOT laughing or smiling — straight reference shot.`;
 }
 
 // View-specific prompts for the 4-up Headshots and Full Body grids in
@@ -69,15 +88,15 @@ const FULLBODY_VIEW_PHRASES = {
 };
 
 export function talentHeadshotPrompt(t, view) {
-  const note = t.note ? `, ${t.note}` : "";
+  const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = HEADSHOT_VIEW_PHRASES[view] || HEADSHOT_VIEW_PHRASES.front;
-  return `Character reference headshot of ${t.name}${note}, ${phrase}. Photorealistic, neutral seamless studio background, soft even lighting, sharp focus, professional reference photography.`;
+  return `Character reference headshot of ${t.name}${note}, ${phrase}. Neutral relaxed expression, no laughing or smiling. Photorealistic, neutral seamless studio background, soft even reference lighting, sharp focus, professional reference photography. NOT cinematic, NOT performed — straight reference shot.`;
 }
 
 export function talentFullBodyPrompt(t, view) {
-  const note = t.note ? `, ${t.note}` : "";
+  const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = FULLBODY_VIEW_PHRASES[view] || FULLBODY_VIEW_PHRASES.front;
-  return `Character reference full body shot of ${t.name}${note}, ${phrase}. Photorealistic, neutral seamless studio background, even lighting, full body in frame head to toe, professional reference photography.`;
+  return `Character reference full body shot of ${t.name}${note}, ${phrase}. Neutral relaxed standing pose, arms at sides, no performance, no laughing or smiling. Photorealistic, neutral seamless studio background, even reference lighting, full body in frame head to toe, professional reference photography. NOT cinematic, NOT performed — straight reference shot.`;
 }
 
 export function locationPrompt(l) {

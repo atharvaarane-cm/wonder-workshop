@@ -1682,7 +1682,7 @@ function totalDuration(frames) {
   return sum > 0 ? `${sum % 1 === 0 ? sum : sum.toFixed(1)}s` : null;
 }
 
-function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highlighted, isDragSrc, dispatch, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, onClick }) {
+function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highlighted, isDragSrc, dispatch, onRetry, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, onClick }) {
   const [hovered, setHovered] = useState(false);
   const loc = data.locations.find(l => l.id === frame.locationId);
   const prods = data.products.filter(p => frame.productIds.includes(p.id));
@@ -1732,6 +1732,35 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
         )}
         {frame.imageStatus === "generating" && <ShimmerOverlay />}
+        {/* Error state — frame failed during bulk auto-gen (usually
+            a Gemini rate limit). Show a Retry pill so the user doesn't
+            have to leave the storyboard to recover the missing frame. */}
+        {frame.imageStatus === "error" && !frame.uploadedImage && (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 3,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 8, padding: 10,
+            background: "rgba(0,0,0,0.42)",
+          }}>
+            <div style={{
+              fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
+              color: "rgba(255,255,255,0.92)", letterSpacing: "0.06em", textTransform: "uppercase",
+            }}>Generation failed</div>
+            {onRetry && (
+              <button
+                onClick={e => { e.stopPropagation(); onRetry(frame.id); }}
+                style={{
+                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+                  color: "#fff", background: "rgba(255,255,255,0.12)",
+                  border: "1px solid rgba(255,255,255,0.4)", borderRadius: 999,
+                  padding: "4px 12px", cursor: "pointer", letterSpacing: "0.04em",
+                }}
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer bar — location name on the left, editable duration on
@@ -2122,6 +2151,12 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
   const fileRef = useRef(null);
   const logo = brand?.logo;
   const [refetching, setRefetching] = useState(false);
+  // Clearbit's free logo API is unreliable in 2026 (returns 404 for
+  // many domains). Track whether the current logo URL loaded — if it
+  // failed, render the upload placeholder instead of an empty square.
+  const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => { setLogoFailed(false); }, [logo]);
+  const logoUsable = logo && !logoFailed;
 
   function onLogoFile(file) {
     if (sectionLocked) return;
@@ -2178,20 +2213,36 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
         autoGenerateLabel="Refetch brand"
       />
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-        {/* Logo upload zone — square */}
+        {/* Logo upload zone — square. Renders the logo as a real <img>
+            so we can detect load failures (Clearbit's free logo API
+            often returns 404) and fall back to the upload prompt. */}
         <div
           onClick={() => fileRef.current?.click()}
           onDragOver={e => { e.preventDefault(); }}
           onDrop={e => { e.preventDefault(); onLogoFile(e.dataTransfer.files?.[0]); }}
           style={{
             width: 96, height: 96, borderRadius: 10, cursor: "pointer",
-            background: logo ? `url(${logo}) center/contain no-repeat var(--warm-04)` : "var(--warm-04)",
+            background: "var(--warm-04)",
             border: "1px dashed var(--warm-10)",
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0, transition: "border-color 0.15s ease",
+            position: "relative", overflow: "hidden",
           }}
         >
-          {!logo && (
+          {logo && (
+            <img
+              src={logo}
+              alt=""
+              onError={() => setLogoFailed(true)}
+              style={{
+                position: "absolute", inset: 6,
+                width: "calc(100% - 12px)", height: "calc(100% - 12px)",
+                objectFit: "contain",
+                display: logoUsable ? "block" : "none",
+              }}
+            />
+          )}
+          {!logoUsable && (
             <div style={{ textAlign: "center", padding: 6 }}>
               <SectionIcon name="upload" size={14} color="var(--warm-25)" />
               <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-25)", marginTop: 4 }}>Upload logo</div>
@@ -2468,6 +2519,7 @@ function CharacterTile({ character, onClick }) {
         border: hovered ? "1px solid var(--warm-12)" : "1px solid var(--warm-06)",
         transition: "all 0.15s ease",
         outline: "none",
+        overflow: "hidden",
       }}
     >
       <div style={{
@@ -2478,21 +2530,38 @@ function CharacterTile({ character, onClick }) {
       }}>{character.name || "Unnamed"}</div>
       <div style={{
         aspectRatio: "1/1", borderRadius: 8,
-        background: img ? `url(${img}) center/cover` : "var(--warm-04)",
+        background: "var(--warm-04)",
         border: "1px solid var(--warm-08)",
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative",
         overflow: "hidden",
       }}>
+        {/* Render headshot as a real <img> rather than a CSS
+            background-image. background-image was producing a faint
+            ghost behind the placeholder during the partial-state window
+            where status=generating but an old image was also present. */}
+        {img && (
+          <img
+            src={img}
+            alt=""
+            style={{
+              position: "absolute", inset: 0,
+              width: "100%", height: "100%",
+              objectFit: "cover",
+            }}
+          />
+        )}
         {!img && status !== "generating" && (
-          <div style={{ textAlign: "center", color: "var(--warm-25)" }}>
+          <div style={{ textAlign: "center", color: "var(--warm-25)", position: "relative", zIndex: 1 }}>
             <SectionIcon name="users" size={20} color="var(--warm-25)" />
             <div style={{ fontFamily: "var(--f)", fontSize: 9, marginTop: 4, letterSpacing: "0.04em" }}>
               {character.initials || "??"}
             </div>
           </div>
         )}
-        {status === "generating" && <ShimmerOverlay />}
+        {/* Only show shimmer when there's no image yet — once an image
+            lands, the shimmer would just smear over a real result. */}
+        {status === "generating" && !img && <ShimmerOverlay />}
         {character.locked && (
           <div title="Locked" style={{
             position: "absolute", top: 4, right: 4, zIndex: 4,
@@ -4102,6 +4171,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                     <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={i} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={dragId === f.id}
+                      onRetry={regenerateOneFrame}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
                       onClick={() => clickF(f.id)} />
                   ));
@@ -4119,6 +4189,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                     <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={origIdx} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={false}
+                      onRetry={regenerateOneFrame}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
                       onClick={() => clickF(f.id)} />
                   );
@@ -6458,6 +6529,52 @@ export default function WorkshopV2() {
     toast(`Deleted folder "${name}"`, { kind: "info", ttl: 2500 });
   }
 
+  // Regenerate a single frame's image inline. Used by the SheetFrame
+  // error state — when bulk auto-gen drops a frame on a rate limit,
+  // the frame card shows "Failed — Retry" and clicking it calls this.
+  // Collects reference images the same way Phase B does so the retry
+  // benefits from already-generated talent/location/product refs.
+  async function regenerateOneFrame(frameId) {
+    const current = dataRef.current;
+    if (!current) return;
+    const frame = (current.frames || []).find(f => f.id === frameId);
+    if (!frame) return;
+    const aspect = current.meta?.aspect || "16:9";
+    const briefLower = (frame.brief || "").toLowerCase();
+    const handles = {
+      talent: (current.talent || []).map(t => ({ id: t.id, handle: (t.handle || "").toLowerCase(), img: t.headshot })),
+      products: (current.products || []).map(p => ({ id: p.id, handle: (p.handle || "").toLowerCase(), img: p.referenceImage })),
+    };
+    const talentIds = handles.talent.filter(h => h.handle && briefLower.includes(h.handle)).map(h => h.id);
+    const productIds = handles.products.filter(h => h.handle && briefLower.includes(h.handle)).map(h => h.id);
+    const locationId = frame.locationId || (current.locations?.[0]?.id ?? null);
+    const refs = [];
+    for (const tid of talentIds) {
+      const t = current.talent.find(x => x.id === tid);
+      const u = t?.headshot || t?.headshots?.front;
+      if (u) refs.push(u);
+    }
+    if (locationId) {
+      const l = current.locations.find(x => x.id === locationId);
+      const u = l?.generatedImage || l?.referenceImage;
+      if (u) refs.push(u);
+    }
+    for (const pid of productIds) {
+      const p = current.products.find(x => x.id === pid);
+      const u = p?.referenceImage;
+      if (u) refs.push(u);
+    }
+    dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId, status: "generating" });
+    try {
+      const url = await generateImage(framePrompt(frame), { ratio: aspect, referenceImages: refs });
+      dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId, dataUrl: url });
+    } catch (err) {
+      console.error("[frame retry]", frame.number, err);
+      dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId, status: "error" });
+      toast(`Frame ${frame.number} retry failed: ${err?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+    }
+  }
+
   // Change project aspect ratio. The new ratio is saved immediately
   // (so future generations use it), then we prompt whether to also
   // regenerate every existing image at the new ratio. Cancel = keep
@@ -6767,6 +6884,35 @@ export default function WorkshopV2() {
     const HEAD_VIEWS_EXTRA = ["side", "threeQuarter", "back"]; // "front" filled by primary
     const FULLBODY_VIEWS = ["front", "side", "threeQuarter", "back"];
 
+    // Shared worker-pool + retry. Gemini rate-limits the account when
+    // we fire >3 image gens in parallel, so EVERY phase has to be
+    // throttled — not just Phase B (frames). Previously Phase A2 fanned
+    // out 14+ requests at once (4 fullbody × N talent + 3 extra
+    // headshots × N talent + locations + products + mood) and half
+    // were dropping silently.
+    const IMG_CONCURRENCY = 3;
+    async function withRetry(task) {
+      try {
+        return await task();
+      } catch (err) {
+        if (err?.status === 429 || (err?.status >= 500 && err?.status < 600) || !err?.status) {
+          await new Promise(r => setTimeout(r, 1500));
+          return await task();
+        }
+        throw err;
+      }
+    }
+    async function runPool(tasks, concurrency = IMG_CONCURRENCY) {
+      const queue = [...tasks];
+      const workers = Array.from({ length: concurrency }, async () => {
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (next) await next();
+        }
+      });
+      await Promise.allSettled(workers);
+    }
+
     // Phase A1 — primary talent headshots ONLY. We need these done
     // before A2 can fire view-specific gens with the primary as a
     // reference image (identity preservation across all 8 views).
@@ -6790,77 +6936,76 @@ export default function WorkshopV2() {
     }
     await Promise.allSettled(phaseA1);
 
-    // Phase A2 — fan out everything that can run in parallel:
-    //   - 3 remaining headshot views + 4 full-body views per talent
-    //     (using A1's primary as reference for identity preservation)
-    //   - locations, products
-    //   - mood board (one image per imagePrompt returned by generateBrief)
-    const phaseA2 = [];
+    // Phase A2 — everything that can run after the primary headshots
+    // exist (so they can be used as reference images for identity
+    // preservation). Pushed as closures and run through the shared
+    // worker pool so we don't overrun Gemini's per-minute rate limit.
+    const phaseA2Tasks = [];
 
     for (const t of initialData.talent || []) {
       const primaryRef = generated.talent.get(t.id);
       if (!primaryRef) continue; // primary failed — skip the rest
       for (const view of HEAD_VIEWS_EXTRA) {
-        phaseA2.push((async () => {
+        phaseA2Tasks.push(async () => {
           try {
-            const url = await generateImage(talentHeadshotPrompt(t, view), {
+            const url = await withRetry(() => generateImage(talentHeadshotPrompt(t, view), {
               ratio: "1:1",
               referenceImages: [primaryRef],
-            });
+            }));
             dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: view, url });
           } catch (err) {
             console.error("[headshot]", t.name, view, err);
           }
-        })());
+        });
       }
       for (const view of FULLBODY_VIEWS) {
-        phaseA2.push((async () => {
+        phaseA2Tasks.push(async () => {
           try {
-            const url = await generateImage(talentFullBodyPrompt(t, view), {
+            const url = await withRetry(() => generateImage(talentFullBodyPrompt(t, view), {
               ratio: "3:4",
               referenceImages: [primaryRef],
-            });
+            }));
             dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: t.id, slot: view, url });
           } catch (err) {
             console.error("[fullbody]", t.name, view, err);
           }
-        })());
+        });
       }
     }
 
     for (const l of initialData.locations || []) {
-      phaseA2.push((async () => {
+      phaseA2Tasks.push(async () => {
         dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
         try {
-          const url = await generateImage(locationPrompt(l), { ratio: aspect });
+          const url = await withRetry(() => generateImage(locationPrompt(l), { ratio: aspect }));
           generated.locations.set(l.id, url);
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
         } catch (err) {
           console.error("[location]", l.name, err);
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
         }
-      })());
+      });
     }
     for (const p of initialData.products || []) {
-      phaseA2.push((async () => {
+      phaseA2Tasks.push(async () => {
         dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
         try {
-          const url = await generateImage(productPrompt(p), { ratio: "1:1" });
+          const url = await withRetry(() => generateImage(productPrompt(p), { ratio: "1:1" }));
           generated.products.set(p.id, url);
           dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
         } catch (err) {
           console.error("[product]", p.name, err);
           dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
         }
-      })());
+      });
     }
     // Mood board — use the brief's imagePrompts (Gemini returns 4
     // cinematic visual descriptions). Each becomes a mood tile with
     // the description as caption + generated image.
     for (const prompt of (opts.imagePrompts || [])) {
-      phaseA2.push((async () => {
+      phaseA2Tasks.push(async () => {
         try {
-          const url = await generateImage(moodPrompt(prompt), { ratio: "1:1" });
+          const url = await withRetry(() => generateImage(moodPrompt(prompt), { ratio: "1:1" }));
           dispatch({
             type: "ADD_MOOD",
             data: { caption: String(prompt).slice(0, 80), image: url },
@@ -6868,10 +7013,10 @@ export default function WorkshopV2() {
         } catch (err) {
           console.error("[mood]", err);
         }
-      })());
+      });
     }
 
-    await Promise.allSettled(phaseA2);
+    await runPool(phaseA2Tasks);
 
     // Phase B — frames with reference images. Detect @-handle mentions
     // inline (matching the reducer's AUTO_DETECT_MENTIONS logic) so we
@@ -6888,35 +7033,18 @@ export default function WorkshopV2() {
     };
     let frameSuccess = 0;
     let frameFail = 0;
-    const FRAME_CONCURRENCY = 3;
-    const frameQueue = [...(initialData.frames || [])];
-    async function runOneFrame(f) {
+    const frameTasks = (initialData.frames || []).map(f => async () => {
       dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "generating" });
       const briefLower = (f.brief || "").toLowerCase();
       const talentIds = handles.talent.filter(h => briefLower.includes(h.handle)).map(h => h.id);
       const productIds = handles.products.filter(h => briefLower.includes(h.handle)).map(h => h.id);
       const locationId = f.locationId || (initialData.locations[0]?.id ?? null);
-
       const refs = [];
       for (const tid of talentIds) { const u = generated.talent.get(tid); if (u) refs.push(u); }
       if (locationId) { const u = generated.locations.get(locationId); if (u) refs.push(u); }
       for (const pid of productIds) { const u = generated.products.get(pid); if (u) refs.push(u); }
-
-      async function attemptOnce() {
-        return generateImage(framePrompt(f), { ratio: aspect, referenceImages: refs });
-      }
       try {
-        let url;
-        try { url = await attemptOnce(); }
-        catch (firstErr) {
-          // Retry once on transient errors (429 rate limit, 5xx)
-          if (firstErr?.status === 429 || (firstErr?.status >= 500 && firstErr?.status < 600) || !firstErr?.status) {
-            await new Promise(r => setTimeout(r, 1500));
-            url = await attemptOnce();
-          } else {
-            throw firstErr;
-          }
-        }
+        const url = await withRetry(() => generateImage(framePrompt(f), { ratio: aspect, referenceImages: refs }));
         dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
         frameSuccess++;
       } catch (err) {
@@ -6924,17 +7052,8 @@ export default function WorkshopV2() {
         dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "error" });
         frameFail++;
       }
-    }
-    // Concurrency-3 worker pool — each worker pulls the next frame
-    // off the shared queue until it's empty, capping parallelism at
-    // 3 in-flight Gemini requests at once.
-    const workers = Array.from({ length: FRAME_CONCURRENCY }, async () => {
-      while (frameQueue.length > 0) {
-        const next = frameQueue.shift();
-        if (next) await runOneFrame(next);
-      }
     });
-    await Promise.allSettled(workers);
+    await runPool(frameTasks);
     if (frameFail === 0) {
       toast("All images generated. Refine anything that needs a tweak.", { kind: "success", ttl: 4500 });
     } else {
