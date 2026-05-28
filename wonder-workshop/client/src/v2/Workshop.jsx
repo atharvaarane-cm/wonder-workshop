@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useReducer } from "react";
-import { generateBrief } from "../hooks/useBrief.js";
+import { generateBrief, chatWithTools } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt } from "./imageGen.js";
 import {
@@ -433,6 +433,179 @@ function storyboardReducer(state, action) {
   const next = applyAction(state.present, action);
   if (next === state.present) return state;
   return { past: [...state.past.slice(-30), state.present], present: next, future: [] };
+}
+
+// -- CHAT TOOL SCHEMA (real Gemini chat-with-tools) -----------
+// Used by handleSendMessage to turn user prompts into reducer
+// dispatches via Gemini function calling. Add new tools here +
+// matching dispatch logic in applyChatToolCall below.
+
+const V2_CHAT_TOOLS = [
+  {
+    name: "update_frame_brief",
+    description: "Replace a storyboard frame's shot description. Use this for any change to what a frame depicts. Pass the FULL new brief text — not just the modification.",
+    parameters: {
+      type: "object",
+      properties: {
+        frameNumber: { type: "string", description: "Zero-padded frame number, e.g. '01' or '06'." },
+        newBrief: { type: "string", description: "The complete replacement brief text. Use @handles to reference characters / locations / products." },
+      },
+      required: ["frameNumber", "newBrief"],
+    },
+  },
+  {
+    name: "update_frame_camera",
+    description: "Change a frame's camera settings — movement, height, lens, or angle. Any of the four fields can be omitted; only provided fields are updated.",
+    parameters: {
+      type: "object",
+      properties: {
+        frameNumber: { type: "string", description: "Zero-padded frame number." },
+        movement: { type: "string", enum: ["static", "pan", "track", "crane", "handheld", "steadicam"] },
+        cameraHeight: { type: "string", enum: ["worm", "low", "eye", "high", "bird"] },
+        lens: { type: "string", enum: ["wide", "normal", "telephoto"] },
+        cameraAngle: { type: "string", enum: ["front", "3qR", "right", "back", "left", "3qL"] },
+      },
+      required: ["frameNumber"],
+    },
+  },
+  {
+    name: "update_frame_shot_type",
+    description: "Change a frame's shot type (framing). Goes tighter (WIDE → MED → MCU → CU → ECU) or looser as the user asks.",
+    parameters: {
+      type: "object",
+      properties: {
+        frameNumber: { type: "string", description: "Zero-padded frame number." },
+        shotType: { type: "string", enum: ["WIDE", "MED", "MCU", "CU", "ECU", "OTS", "POV", "INSERT"] },
+      },
+      required: ["frameNumber", "shotType"],
+    },
+  },
+  {
+    name: "update_meta",
+    description: "Edit a project-level metadata field — title, treatment, client. Pass the FULL new value.",
+    parameters: {
+      type: "object",
+      properties: {
+        field: { type: "string", enum: ["title", "treatment", "client", "format", "aspect"] },
+        value: { type: "string" },
+      },
+      required: ["field", "value"],
+    },
+  },
+  {
+    name: "update_talent",
+    description: "Edit a character's name, role, or note. Find by current name (case-insensitive substring match).",
+    parameters: {
+      type: "object",
+      properties: {
+        talentName: { type: "string", description: "Current name of the character to find." },
+        field: { type: "string", enum: ["name", "role", "note"] },
+        value: { type: "string" },
+      },
+      required: ["talentName", "field", "value"],
+    },
+  },
+  {
+    name: "update_location",
+    description: "Edit a location's name or note. Find by current name.",
+    parameters: {
+      type: "object",
+      properties: {
+        locationName: { type: "string" },
+        field: { type: "string", enum: ["name", "note"] },
+        value: { type: "string" },
+      },
+      required: ["locationName", "field", "value"],
+    },
+  },
+  {
+    name: "update_product",
+    description: "Edit an element/product's name, category, or note. Find by current name.",
+    parameters: {
+      type: "object",
+      properties: {
+        productName: { type: "string" },
+        field: { type: "string", enum: ["name", "category", "note"] },
+        value: { type: "string" },
+      },
+      required: ["productName", "field", "value"],
+    },
+  },
+  {
+    name: "add_frame",
+    description: "Append a new frame to the storyboard. The frame starts with placeholder content the user can refine.",
+    parameters: { type: "object", properties: {} },
+  },
+];
+
+// Apply a single chat tool call to the v2 reducer. Returns metadata
+// about what happened so the chat UI can summarize + highlight.
+function applyChatToolCall(action, data, dispatch) {
+  const args = action.args || {};
+  const findFrameId = (num) => {
+    const norm = String(num || "").padStart(2, "0");
+    return data.frames.find(f => f.number === norm)?.id || null;
+  };
+  switch (action.name) {
+    case "update_frame_brief": {
+      const id = findFrameId(args.frameNumber);
+      if (!id || !args.newBrief) return null;
+      dispatch({ type: "UPDATE_FRAME", frameId: id, field: "brief", value: args.newBrief });
+      return { applied: true, kind: "frame", frameId: id, field: "brief" };
+    }
+    case "update_frame_camera": {
+      const id = findFrameId(args.frameNumber);
+      if (!id) return null;
+      const fields = {};
+      for (const k of ["movement", "cameraHeight", "lens", "cameraAngle"]) {
+        if (args[k]) fields[k] = args[k];
+      }
+      if (Object.keys(fields).length === 0) return null;
+      dispatch({ type: "UPDATE_FRAME_CAMERA", frameId: id, fields });
+      return { applied: true, kind: "camera", frameId: id, field: Object.keys(fields).join(",") };
+    }
+    case "update_frame_shot_type": {
+      const id = findFrameId(args.frameNumber);
+      if (!id || !args.shotType) return null;
+      dispatch({ type: "UPDATE_FRAME", frameId: id, field: "shotType", value: args.shotType });
+      return { applied: true, kind: "frame", frameId: id, field: "shotType" };
+    }
+    case "update_meta": {
+      if (!args.field || args.value == null) return null;
+      dispatch({ type: "UPDATE_META", field: args.field, value: args.value });
+      return { applied: true, kind: "meta", field: args.field };
+    }
+    case "update_talent": {
+      const target = (data.talent || []).find(t =>
+        t.name?.toLowerCase().includes((args.talentName || "").toLowerCase()),
+      );
+      if (!target || !args.field || args.value == null) return null;
+      dispatch({ type: "UPDATE_TALENT", id: target.id, field: args.field, value: args.value });
+      return { applied: true, kind: "talent", field: args.field };
+    }
+    case "update_location": {
+      const target = (data.locations || []).find(l =>
+        l.name?.toLowerCase().includes((args.locationName || "").toLowerCase()),
+      );
+      if (!target || !args.field || args.value == null) return null;
+      dispatch({ type: "UPDATE_LOCATION", id: target.id, field: args.field, value: args.value });
+      return { applied: true, kind: "location", field: args.field };
+    }
+    case "update_product": {
+      const target = (data.products || []).find(p =>
+        p.name?.toLowerCase().includes((args.productName || "").toLowerCase()),
+      );
+      if (!target || !args.field || args.value == null) return null;
+      dispatch({ type: "UPDATE_PRODUCT", id: target.id, field: args.field, value: args.value });
+      return { applied: true, kind: "product", field: args.field };
+    }
+    case "add_frame": {
+      dispatch({ type: "ADD_FRAME" });
+      return { applied: true, kind: "frame", field: "added" };
+    }
+    default:
+      return null;
+  }
 }
 
 // -- MOCK AI --------------------------------------------------
@@ -4780,31 +4953,86 @@ export default function WorkshopV2() {
     await Promise.allSettled(phaseB);
   }
 
-  const handleSendMessage = useCallback((text, frameId, frameNumber) => {
+  // Real chat via Gemini + tool calls. Replaces the keyword-pattern
+  // mockAI / mockFrameAI. Sends the conversation history + a compact
+  // representation of the current project state + the tool schema;
+  // applies returned function calls to the reducer.
+  const handleSendMessage = useCallback(async (text, frameId, frameNumber) => {
     setChatMessages(prev => [...prev, { id: Date.now(), role: "user", text, frameId, frameNumber }]);
     setChatBusy(true);
     const currentData = data;
-    setTimeout(() => {
-      let result;
-      if (frameId) {
-        const frame = currentData.frames.find(f => f.id === frameId);
-        result = frame ? mockFrameAI(text, frame, currentData) : mockAI(text, currentData);
-      } else {
-        result = mockAI(text, currentData);
+
+    // Compact state snapshot — keep token usage reasonable. Just the
+    // shape the model needs to reason about (names, ids, brief text,
+    // current camera settings), not image URLs or generationStatus.
+    const stateSnap = {
+      meta: currentData.meta,
+      talent: (currentData.talent || []).map(t => ({ id: t.id, name: t.name, handle: t.handle, role: t.role, note: t.note })),
+      locations: (currentData.locations || []).map(l => ({ id: l.id, name: l.name, handle: l.handle, type: l.type, note: l.note })),
+      products: (currentData.products || []).map(p => ({ id: p.id, name: p.name, handle: p.handle, category: p.category, note: p.note })),
+      frames: (currentData.frames || []).map(f => ({
+        id: f.id, number: f.number, shotType: f.shotType, brief: f.brief,
+        camera: f.camera, cameraAngle: f.cameraAngle, cameraHeight: f.cameraHeight,
+        lens: f.lens, movement: f.movement,
+        talentIds: f.talentIds, locationId: f.locationId, productIds: f.productIds,
+      })),
+    };
+
+    const focusedFrame = frameId ? currentData.frames.find(f => f.id === frameId) : null;
+
+    const systemPrompt = [
+      "You are a creative production assistant editing a storyboard.",
+      "When the user asks for changes, use the provided tools to make them.",
+      "Prefer specific, narrow edits — change one frame at a time when possible, change every frame when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
+      focusedFrame ? `The user has frame ${focusedFrame.number} selected — prefer edits to that frame unless they say otherwise.` : "No frame is selected — global / multi-frame edits are appropriate.",
+      "After making changes, briefly explain what you changed in 1-2 sentences. Don't restate every tool call.",
+      "",
+      "Current project state (JSON):",
+      JSON.stringify(stateSnap, null, 2),
+    ].join("\n");
+
+    const history = [
+      { role: "system", content: systemPrompt },
+      ...chatMessages.filter(m => m.role === "user" || m.role === "ai").map(m => ({
+        role: m.role === "ai" ? "assistant" : "user",
+        content: m.text,
+      })),
+      { role: "user", content: text },
+    ];
+
+    try {
+      const { text: replyText, actions } = await chatWithTools(history, V2_CHAT_TOOLS);
+
+      const applied = [];
+      const highlights = new Set();
+      for (const action of (actions || [])) {
+        const result = applyChatToolCall(action, currentData, dispatch);
+        if (result?.applied) applied.push(result);
+        if (result?.frameId) highlights.add(result.frameId);
       }
+      if (highlights.size > 0) setHighlightedFrames(highlights);
+
+      const summary = replyText
+        || (applied.length > 0 ? `Applied ${applied.length} change${applied.length === 1 ? "" : "s"}.` : "I'm not sure what to change here — try being more specific.");
+
+      setChatMessages(prev => [...prev, {
+        id: Date.now(),
+        role: "ai",
+        text: summary,
+        changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field })),
+      }]);
+    } catch (e) {
+      console.error("[chat] failed", e);
+      setChatMessages(prev => [...prev, {
+        id: Date.now(),
+        role: "ai",
+        text: `Chat failed: ${e?.message?.slice(0, 200) || "unknown error"}. Try again in a moment.`,
+        changes: [],
+      }]);
+    } finally {
       setChatBusy(false);
-      if (result.addFrame) {
-        dispatch({ type: "ADD_FRAME" });
-        setChatMessages(prev => [...prev, { id: Date.now(), role: "ai", text: result.message, changes: [] }]);
-        return;
-      }
-      if (result.changes.length > 0) {
-        dispatch({ type: "AI_APPLY_CHANGES", changes: result.changes });
-        setHighlightedFrames(new Set(result.changes.filter(c => c.type === "frame" || c.type === "camera").map(c => c.id)));
-      }
-      setChatMessages(prev => [...prev, { id: Date.now(), role: "ai", text: result.message, changes: result.changes.filter(c => c.type === "frame" || c.type === "camera") }]);
-    }, 500 + Math.random() * 500);
-  }, [data]);
+    }
+  }, [data, chatMessages]);
 
   const handleDeleteFrame = useCallback((id) => {
     dispatch({ type: "DELETE_FRAME", frameId: id });
