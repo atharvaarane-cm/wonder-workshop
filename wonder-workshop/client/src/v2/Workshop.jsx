@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { generateBrief } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt } from "./imageGen.js";
+import { saveState, loadState, clearState } from "./persistence.js";
 
 /*
   +======================================================+
@@ -3313,13 +3314,19 @@ function BriefForm({ onGenerate, generating = false, error = null }) {
 // -- MAIN APP -------------------------------------------------
 
 export default function WorkshopV2() {
+  // Restore persisted state on mount so refresh doesn't kill the demo.
+  // If there's no saved state, fall back to INITIAL_STATE (Nike runner
+  // sample) which is what the BriefForm anchors to.
+  const persisted = loadState();
   const [{ past, present, future }, dispatch] = useReducer(storyboardReducer, {
-    past: [], present: INITIAL_STATE, future: [],
+    past: [], present: persisted || INITIAL_STATE, future: [],
   });
   const data = present;
 
   const [ready, setReady] = useState(false);
-  const [built, setBuilt] = useState(false);
+  // If we restored persisted state, skip the BriefForm landing and
+  // go straight to the OneSheet — the user already has a project.
+  const [built, setBuilt] = useState(() => !!persisted);
   // Brief-generation lifecycle for the BriefForm landing page. Lets us
   // disable the Generate button + show progress while Gemini works.
   const [generating, setGenerating] = useState(false);
@@ -3341,6 +3348,16 @@ export default function WorkshopV2() {
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
 
+  // Auto-save to localStorage on every data change (debounced 500ms).
+  // Only kick in once the user has built a project — saving the
+  // INITIAL_STATE (Nike sample) on mount would persist sample data and
+  // make "New Project" surprising.
+  useEffect(() => {
+    if (!built) return;
+    const t = setTimeout(() => saveState(data), 500);
+    return () => clearTimeout(t);
+  }, [data, built]);
+
   // Auto-detect mentions in briefs
   useEffect(() => {
     if (built) {
@@ -3353,6 +3370,15 @@ export default function WorkshopV2() {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSidebarOpen(o => !o); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); dispatch({ type: "UNDO" }); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); dispatch({ type: "REDO" }); }
+      // Cmd+Shift+N — start a fresh project. Confirms before wiping
+      // since this is destructive (clears localStorage + reload).
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        if (window.confirm("Start a new project? Your current project will be cleared.")) {
+          clearState();
+          window.location.reload();
+        }
+      }
       if (e.key === "Escape") { if (productionFrameId) { setProductionFrameId(null); setSelectedFrameId(null); } else { setSelectedFrameId(null); } }
     };
     window.addEventListener("keydown", h);
