@@ -5914,25 +5914,54 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
     if (!text || improving || generating) return;
     setImproving(true);
     try {
+      // This brief is going to be fed into Wonder Workshop's brief
+      // generator, which extracts STRUCTURED data from it: named
+      // characters (each becomes a separately-generated reference +
+      // 8 view shots), named locations (each becomes an establishing
+      // shot), named elements/props (each becomes a product shot),
+      // and a numbered storyboard where every shot's description uses
+      // @-handles to reference those entities so they re-tile back
+      // together with consistent identity across frames.
+      //
+      // So the AI's job here is NOT just "make this sound prettier" —
+      // it's "rewrite this so the structured-extraction step produces
+      // a clean, sensible entity list and shot sequence that the
+      // image-gen pipeline can fulfill well."
       const messages = [
         { role: "system", content: [
-          "You are a senior creative director EXPANDING a rough idea into a detailed campaign brief.",
+          "You are EXPANDING a rough creative idea into a detailed campaign brief that will be fed into an AI pipeline that generates images for every named character, location, and prop in the brief — and a 6-9 frame storyboard where each frame references them.",
+          "",
           "Your output MUST be LONGER and MORE SPECIFIC than the input — never a summary, never a paraphrase.",
           "",
-          "PRESERVE EVERYTHING from the input — every character, every prop, every action, every brand name must appear in the output. Then ADD concrete sensory detail on each of:",
+          "PRESERVE EVERYTHING from the input — every character, every brand name, every action must appear in the output. Then ADD concrete sensory detail. Optimize for the downstream pipeline:",
           "",
-          "- LOCATION: exact setting, time of day, weather, era. Name the kind of architecture, street furniture, vegetation, signage.",
-          "- MOOD: lighting setup (key, fill, rim, ambient, practical), color palette (specific hues, not 'warm'), atmosphere, music feel, pacing.",
-          "- ELEMENTS: specific props by name, set pieces, textures, focal objects, wardrobe pieces with color/fabric.",
-          "- CHARACTERS: keep the exact COUNT and identity. For each, add age range, ethnicity option, hair, wardrobe details, demeanor, body language, and role in the scene.",
-          "- CAMERA / RENDER: shot type (wide / medium / close), lens feel (35mm, 50mm, 85mm), depth of field, film stock or digital look.",
+          "CHARACTERS (each becomes a generated reference + headshots + full body):",
+          "- Keep the COUNT and identity from the input — don't invent characters that weren't implied.",
+          "- For each character, give a specific look: age range, ethnicity (or 'open casting'), hair, build, wardrobe with color + fabric, demeanor.",
+          "- Use a short proper name (e.g. 'Maya', 'Coach Rivera') so it can be tagged consistently. Avoid generic 'a woman' / 'the runner' — name them.",
           "",
-          "BANNED WORDS: 'vibrant', 'lively', 'carefree', 'bustling', 'beautiful', 'great' — replace these with specific concrete imagery.",
+          "LOCATIONS (each becomes a generated establishing shot):",
+          "- Name the primary location with a short proper-noun-style label ('Bushwick rooftop', 'Sunset Beach', 'Times Square Diner') even if it's invented.",
+          "- Add time of day, weather, era, architecture, signage, key environmental textures.",
+          "- If multiple locations are needed, name each one distinctly.",
+          "",
+          "ELEMENTS / HERO PROPS (each gets its own product shot):",
+          "- Only call out HERO items the camera will actually feature (the Pepsi can, the Air Force 1s, the iPhone). Each one will be generated as a separate product reference.",
+          "- DON'T name minor background dressing like 'string lights' or 'terracotta planters' — those waste the pipeline's effort and clutter the asset list. Let those exist in the prose without being singled out as props.",
+          "- Use the brand's actual product name when the user implied a brand.",
+          "",
+          "MOOD + LIGHTING:",
+          "- Specific color palette (named hues, not 'warm'), lighting setup (key/fill/rim, practical sources), atmosphere, pacing/music feel.",
+          "",
+          "CAMERA / RENDER:",
+          "- Shot variety (wide / medium / close), lens feel (24mm, 50mm, 85mm), depth of field, film stock or digital look.",
+          "",
+          "BANNED WORDS: 'vibrant', 'lively', 'carefree', 'bustling', 'beautiful', 'great' — replace with specific concrete imagery.",
           "",
           "FORMAT:",
-          "- ONE flowing paragraph, 100-180 words",
-          "- No headings, no bullets, no labels, no quotes, no preamble",
-          "- Return ONLY the expanded brief paragraph, ready to drop into a generation tool",
+          "- ONE flowing paragraph, 120-200 words.",
+          "- No headings, no bullets, no labels, no quotes, no preamble.",
+          "- Return ONLY the expanded brief paragraph, ready to drop into the generation tool.",
         ].join("\n") },
         { role: "user", content: text },
       ];
