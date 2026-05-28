@@ -1437,7 +1437,68 @@ function AssetUploadZone({ label, hasImage, onUpload }) {
 
 // -- SHEET FRAME (Hollywood storyboard style) -----------------
 
-function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highlighted, isDragSrc, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, onClick }) {
+// Editable per-shot duration pill — sits in the SheetFrame footer.
+// Click-bubble stopped so editing doesn't trigger the frame onClick
+// (which would open ProductionView).
+function FrameDuration({ duration, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(duration || "");
+  useEffect(() => { setValue(duration || ""); }, [duration]);
+  function commit() {
+    setEditing(false);
+    const v = (value || "").trim();
+    if (!v) { onChange?.("3s"); return; }
+    // Normalize — ensure trailing "s" so "3" becomes "3s"
+    const normalized = /^\d/.test(v) && !/s$/i.test(v) ? `${v}s` : v;
+    if (normalized !== duration) onChange?.(normalized);
+  }
+  return editing ? (
+    <input
+      autoFocus
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+        if (e.key === "Escape") { e.preventDefault(); setEditing(false); setValue(duration || ""); }
+      }}
+      onClick={e => e.stopPropagation()}
+      style={{
+        width: 42, fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
+        color: "var(--warm-40)", textAlign: "center",
+        background: "var(--warm-08)", border: "1px solid var(--warm-12)",
+        borderRadius: 4, padding: "2px 4px", outline: "none",
+        letterSpacing: "0.04em",
+      }}
+    />
+  ) : (
+    <span
+      onClick={e => { e.stopPropagation(); setEditing(true); }}
+      title="Click to edit shot duration"
+      style={{
+        fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
+        color: "var(--warm-30)", letterSpacing: "0.06em",
+        padding: "2px 6px", borderRadius: 4, cursor: "pointer",
+        background: "var(--warm-04)", border: "1px solid var(--warm-06)",
+      }}
+    >{duration || "—"}</span>
+  );
+}
+
+// Sum per-shot durations to a single "Xs" string. Used by the topbar
+// to show the project's total runtime as a derived value (not from
+// meta.format, which is the user's target).
+function totalDuration(frames) {
+  if (!Array.isArray(frames) || frames.length === 0) return null;
+  let sum = 0;
+  for (const f of frames) {
+    const n = parseFloat(String(f.duration || "").match(/[\d.]+/)?.[0] || "0");
+    if (!isNaN(n)) sum += n;
+  }
+  return sum > 0 ? `${sum % 1 === 0 ? sum : sum.toFixed(1)}s` : null;
+}
+
+function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highlighted, isDragSrc, dispatch, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, onClick }) {
   const [hovered, setHovered] = useState(false);
   const loc = data.locations.find(l => l.id === frame.locationId);
   const prods = data.products.filter(p => frame.productIds.includes(p.id));
@@ -1486,13 +1547,18 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
         {frame.imageStatus === "generating" && <ShimmerOverlay />}
       </div>
 
-      {/* Footer bar -- location name only */}
+      {/* Footer bar — location name on the left, editable duration on
+          the right. Duration commits on blur via UPDATE_FRAME. */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
         padding: "5px 10px",
         borderTop: "1px solid var(--warm-04)",
       }}>
         <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-20)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{loc?.name || "—"}</span>
+        <FrameDuration
+          duration={frame.duration}
+          onChange={v => dispatch?.({ type: "UPDATE_FRAME", frameId: frame.id, field: "duration", value: v })}
+        />
       </div>
 
       {/* Brief — @-handles render as colored chips by entity type */}
@@ -3565,7 +3631,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 
                 if (!showPlaceholder) {
                   return data.frames.map((f, i) => (
-                    <SheetFrame key={f.id} frame={f} index={i} data={data} aspectCSS={aspCSS}
+                    <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={i} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={dragId === f.id}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
@@ -3582,7 +3648,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                   if (i === insertAt) items.push(dropPreview);
                   const origIdx = data.frames.indexOf(f);
                   items.push(
-                    <SheetFrame key={f.id} frame={f} index={origIdx} data={data} aspectCSS={aspCSS}
+                    <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={origIdx} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={false}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
@@ -5980,7 +6046,14 @@ export default function WorkshopV2() {
           {built && <>
             <div style={{ width: 1, height: 16, background: "var(--warm-08)" }} />
             <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 500, color: "var(--warm)" }}>{data.meta.title}</span>
-            <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)" }}>{data.meta.client} &middot; :{data.meta.format}</span>
+            <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)" }}>
+              {data.meta.client}
+              {data.meta.format ? ` · target :${data.meta.format}` : ""}
+              {(() => {
+                const total = totalDuration(data.frames);
+                return total ? ` · ${total} total` : "";
+              })()}
+            </span>
             <SaveIndicator status={saveStatus} lastSavedAt={lastSavedAt} />
           </>}
         </div>
