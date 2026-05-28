@@ -4851,17 +4851,25 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
             </div>
           </div>
 
-          {/* Treatment */}
+          {/* Treatment / Brief — clearly bordered card so the click
+              target is obvious. Click anywhere on the panel to edit. */}
           <div style={{ borderTop: "1px solid var(--warm-06)", margin: "20px 0", padding: "20px 0 0" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-              <SectionIcon name="file-text" size={11} color="var(--warm-25)" />
-              <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Brief</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <SectionIcon name="file-text" size={11} color="var(--warm-50)" />
+              <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: "var(--warm-50)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Brief</span>
+              <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, color: "var(--warm-25)", marginLeft: 6 }}>Click to edit</span>
             </div>
             {(() => {
               const treatmentText = data.meta.treatment || "";
               const isLong = treatmentText.length > 450;
               return (
-                <div>
+                <div style={{
+                  background: "var(--warm-04)",
+                  border: "1px solid var(--warm-06)",
+                  borderRadius: 10,
+                  padding: "16px 18px",
+                  minHeight: 96,
+                }}>
                   <div style={{ position: "relative" }}>
                     <div style={{
                       maxHeight: (!isLong || treatmentExpanded) ? "none" : 96,
@@ -4873,13 +4881,13 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                       } : {}),
                     }}>
                       <EditableText value={treatmentText} onChange={v => onUpdateMeta("treatment", v)} multiline
-                        style={{ fontFamily: "var(--f)", fontSize: 15, fontWeight: 300, color: "var(--warm-40)", lineHeight: 1.85, display: "block" }}
-                        placeholder="Write a brief treatment..." />
+                        style={{ fontFamily: "var(--f)", fontSize: 15, fontWeight: 300, color: "var(--warm-50)", lineHeight: 1.7, display: "block", minHeight: 64 }}
+                        placeholder="Click here to write or paste the brief — the spot's setup, characters, tone, and intent." />
                     </div>
                   </div>
                   {isLong && (
                     <button onClick={() => setTreatmentExpanded(!treatmentExpanded)} style={{
-                      fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm-30)",
+                      fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm-40)",
                       background: "none", border: "none", cursor: "pointer", padding: "8px 0 0",
                       outline: "none", transition: "color 0.15s ease",
                     }}>{treatmentExpanded ? "Show less" : "Show more"}</button>
@@ -7754,6 +7762,14 @@ export default function WorkshopV2() {
 
       const v1Brief = await generateBrief(prompt);
       const v2Data = v1BriefToV2Data(v1Brief);
+      // Preserve the user's original brief text. v1BriefToV2Data pulls
+      // meta.treatment from the LLM's creativeDirection.description,
+      // which is often empty or a rewrite — Logan wants his original
+      // typed brief to live in the editable Brief panel. Falls back to
+      // the LLM description if the user didn't write one.
+      if (meta.treatment?.trim()) {
+        v2Data.meta.treatment = meta.treatment.trim();
+      }
       // imagePrompts comes back as 4 cinematic visual descriptions —
       // perfect mood-board fodder. Capture before the v2Data discards them.
       const imagePrompts = Array.isArray(v1Brief?.imagePrompts) ? v1Brief.imagePrompts.slice(0, 4) : [];
