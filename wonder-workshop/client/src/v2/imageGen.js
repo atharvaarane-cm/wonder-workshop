@@ -90,6 +90,10 @@ export function productPrompt(p) {
   return `Product photography of ${p.name}${note}. Studio lighting, clean neutral background, photorealistic, sharp focus, commercial advertising style.`;
 }
 
+export function moodPrompt(text) {
+  return `${text}. Cinematic mood reference, evocative atmosphere, photorealistic, no text or watermarks, tone-setting visual.`;
+}
+
 export function framePrompt(frame) {
   const description = frame.brief || "";
   const shotType = frame.shotType ? `, ${frame.shotType} framing` : "";

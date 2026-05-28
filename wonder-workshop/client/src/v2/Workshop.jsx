@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { generateBrief, chatWithTools } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
-import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt } from "./imageGen.js";
+import { generateImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import {
   newProjectId,
   listProjects,
@@ -179,6 +179,9 @@ const INITIAL_STATE = {
   // locations but with a free-form caption instead of structured fields.
   // Carries v1's Mood Board section forward.
   moodBoard: [],
+  // Section-level locks. Either this OR a per-item lock blocks
+  // regeneration on that asset. Toggled from each tab's header.
+  locks: { talent: false, locations: false, products: false, mood: false, brand: false },
   frames: [
     { id: "f1", number: "01", shotType: "WIDE", camera: "Static", brief: "Dawn. Empty road to vanishing point. Heat shimmer. @maya runs toward camera, impossibly small against the landscape.", talentIds: ["t1"], locationId: "l1", productIds: [], cameraAngle: "front", cameraHeight: "eye", lens: "wide", movement: "static", imageStatus: "placeholder", uploadedImage: null },
     { id: "f2", number: "02", shotType: "ECU", camera: "Tracking \xB7 Worm's Eye", brief: "@maya's feet in @ultra. Each strike kicks dust. Breath before music. Rhythm as score.", talentIds: ["t1"], locationId: "l1", productIds: ["p1"], cameraAngle: "front", cameraHeight: "worm", lens: "normal", movement: "track", imageStatus: "placeholder", uploadedImage: null },
@@ -273,6 +276,12 @@ function applyAction(state, action) {
         talent: state.talent.map(t => t.id === action.id
           ? { ...t, fullBody: { ...(t.fullBody || {}), [action.slot]: action.url } }
           : t),
+      };
+    case "TOGGLE_SECTION_LOCK":
+      // section ∈ "talent" | "locations" | "products" | "mood" | "brand"
+      return {
+        ...state,
+        locks: { ...(state.locks || {}), [action.section]: !state.locks?.[action.section] },
       };
     case "TOGGLE_TALENT_LOCK":
       return {
@@ -1346,9 +1355,11 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
         <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-20)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{loc?.name || "—"}</span>
       </div>
 
-      {/* Brief */}
+      {/* Brief — @-handles render as colored chips by entity type */}
       <div style={{ padding: "8px 10px 10px" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{frame.brief}</div>
+        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          {renderMentions(frame.brief, data)}
+        </div>
       </div>
     </div>
   );
@@ -1714,19 +1725,63 @@ function AssetTabButton({ tab, isActive, onClick }) {
 // -- BRAND PANEL (single-record panel, not array) ---------------
 // Logo upload + name + URL + guidelines. Sits inside the Brand tab.
 
-function BrandPanel({ brand, dispatch }) {
+function BrandPanel({ brand, sectionLocked, dispatch }) {
   const fileRef = useRef(null);
   const logo = brand?.logo;
+  const [refetching, setRefetching] = useState(false);
 
   function onLogoFile(file) {
+    if (sectionLocked) return;
     if (!file) return;
     const reader = new FileReader();
     reader.onload = e => dispatch({ type: "UPLOAD_BRAND_LOGO", dataUrl: e.target.result });
     reader.readAsDataURL(file);
   }
 
+  // Brand auto-generate = re-fetch /api/brand with the current brand
+  // URL or name. Pulls in fresh logo + guidelines + colors. Unlike
+  // image gen this doesn't produce a new image — it looks up the
+  // brand's official assets.
+  async function refetchBrand() {
+    if (sectionLocked || refetching) return;
+    const input = (brand?.url || brand?.name || "").trim();
+    if (!input) return;
+    setRefetching(true);
+    try {
+      let brandKey = input;
+      try {
+        const normalized = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+        const url = new URL(normalized);
+        brandKey = url.hostname.replace(/^www\./, "").split(".")[0];
+      } catch {}
+      const res = await fetch("/api/brand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand: brandKey }),
+      });
+      const payload = await res.json();
+      if (!res.ok || payload?.error) throw new Error(payload?.error || `HTTP ${res.status}`);
+      if (payload.logoUrl) dispatch({ type: "UPLOAD_BRAND_LOGO", dataUrl: payload.logoUrl });
+      if (payload.sourceUrl) dispatch({ type: "UPDATE_BRAND", field: "url", value: payload.sourceUrl });
+      if (payload.rules) dispatch({ type: "UPDATE_BRAND", field: "guidelines", value: payload.rules });
+      if (payload.brand) dispatch({ type: "UPDATE_BRAND", field: "name", value: payload.brand });
+    } catch (e) {
+      console.error("[brand refetch]", e);
+    } finally {
+      setRefetching(false);
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <SectionHeader
+        title="Brand"
+        locked={sectionLocked}
+        generating={refetching}
+        onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "brand" })}
+        onAutoGenerate={brand?.url || brand?.name ? refetchBrand : undefined}
+        autoGenerateLabel="Refetch brand"
+      />
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
         {/* Logo upload zone — square */}
         <div
@@ -1791,18 +1846,46 @@ function BrandPanel({ brand, dispatch }) {
 // upload an image; type a caption to describe what the reference is
 // pointing at.
 
-function MoodPanel({ moodBoard, dispatch }) {
+function MoodPanel({ moodBoard, sectionLocked, dispatch }) {
   const addBtnRef = useRef(null);
+  const [bulkGenerating, setBulkGenerating] = useState(false);
 
   function onTileUpload(id, file) {
+    if (sectionLocked) return;
     if (!file) return;
     const reader = new FileReader();
     reader.onload = e => dispatch({ type: "UPLOAD_MOOD_IMAGE", id, dataUrl: e.target.result });
     reader.readAsDataURL(file);
   }
 
+  // Mood auto-gen — regenerate every existing tile's image using its
+  // caption as the prompt. Tiles without captions are skipped.
+  async function bulkRegenerate() {
+    if (sectionLocked || bulkGenerating) return;
+    setBulkGenerating(true);
+    for (const m of moodBoard) {
+      if (!m.caption) continue;
+      try {
+        const url = await generateImage(moodPrompt(m.caption), { ratio: "1:1" });
+        dispatch({ type: "UPLOAD_MOOD_IMAGE", id: m.id, dataUrl: url });
+      } catch (err) { console.error("[mood regen]", err); }
+    }
+    setBulkGenerating(false);
+  }
+
   return (
     <div>
+      <div style={{ marginBottom: 14 }}>
+        <SectionHeader
+          title="Mood"
+          count={moodBoard.length}
+          locked={sectionLocked}
+          generating={bulkGenerating}
+          onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "mood" })}
+          onAutoGenerate={moodBoard.some(m => m.caption) ? bulkRegenerate : undefined}
+          autoGenerateLabel="Regenerate all"
+        />
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         {moodBoard.map(m => (
           <MoodTile key={m.id} item={m} dispatch={dispatch} onUpload={onTileUpload} />
@@ -1883,11 +1966,12 @@ function MoodTile({ item, dispatch, onUpload }) {
 
 function CharacterTab({ data, dispatch }) {
   const [viewingId, setViewingId] = useState(null);
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+  const locked = !!data.locks?.talent;
 
   if (viewingId) {
     const character = data.talent.find(t => t.id === viewingId);
     if (!character) {
-      // Talent was deleted while we were viewing it — bail back to grid.
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
@@ -1896,29 +1980,42 @@ function CharacterTab({ data, dispatch }) {
         character={character}
         data={data}
         dispatch={dispatch}
+        sectionLocked={locked}
         onBack={() => setViewingId(null)}
       />
     );
   }
 
+  async function bulkRegenerate() {
+    if (locked || bulkGenerating) return;
+    setBulkGenerating(true);
+    for (const t of data.talent) {
+      if (t.locked) continue; // per-character lock still wins
+      dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
+      try {
+        const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
+        dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
+        dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
+        dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
+      } catch (err) {
+        console.error("[character regen]", t.name, err);
+        dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
+      }
+    }
+    setBulkGenerating(false);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Section header — AUTO-GENERATE + LOCK SECTION mirroring v1.
-          Buttons are visible but mock for now; real lock + section
-          regenerate plumbing lands in a follow-up. */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
-          Characters · {data.talent.length}
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <PremiumButton variant="secondary" style={{ fontSize: 10, padding: "5px 10px" }} title="Coming soon: regenerate every character at once">
-            <SectionIcon name="sparkle" size={11} color="var(--warm-40)" /> Auto-generate
-          </PremiumButton>
-          <PremiumButton variant="secondary" style={{ fontSize: 10, padding: "5px 10px" }} title="Coming soon: lock section">
-            <SectionIcon name="prompt" size={11} color="var(--warm-40)" /> Lock section
-          </PremiumButton>
-        </div>
-      </div>
+      <SectionHeader
+        title="Characters"
+        count={data.talent.length}
+        locked={locked}
+        generating={bulkGenerating}
+        onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "talent" })}
+        onAutoGenerate={bulkRegenerate}
+        autoGenerateLabel={data.talent.some(t => t.headshot) ? "Regenerate all" : "Auto-generate"}
+      />
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
@@ -2029,9 +2126,11 @@ function AddCharacterTile({ onClick }) {
   );
 }
 
-function CharacterDetailView({ character, data, dispatch, onBack }) {
+function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack }) {
   const VIEWS = ["front", "side", "threeQuarter", "back"];
   const VIEW_LABEL = { front: "FRONT", side: "SIDE", threeQuarter: "3/4 ANGLE", back: "BACK" };
+  // Effective lock = section lock OR per-character lock. Either blocks regen.
+  const effLocked = sectionLocked || character.locked;
 
   async function regenerateReference() {
     const url = await generateImage(talentPrompt(character), { ratio: "1:1" });
@@ -2116,7 +2215,7 @@ function CharacterDetailView({ character, data, dispatch, onBack }) {
             src={character.headshot}
             label="Reference"
             ratio="1:1"
-            locked={character.locked}
+            locked={effLocked}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: "headshot" })}
             onUpload={dataUrl => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: dataUrl })}
@@ -2131,7 +2230,7 @@ function CharacterDetailView({ character, data, dispatch, onBack }) {
         viewLabel={VIEW_LABEL}
         slots={character.headshots || {}}
         ratio="1:1"
-        locked={character.locked}
+        locked={effLocked}
         onRegenerate={regenerateHeadshot}
         onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `headshots:${view}` })}
         onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: dataUrl })}
@@ -2147,7 +2246,7 @@ function CharacterDetailView({ character, data, dispatch, onBack }) {
         viewLabel={VIEW_LABEL}
         slots={character.fullBody || {}}
         ratio="3:4"
-        locked={character.locked}
+        locked={effLocked}
         onRegenerate={regenerateFullBody}
         onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `fullBody:${view}` })}
         onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: dataUrl })}
@@ -2308,6 +2407,9 @@ function V2ImageSlot({ src, label, ratio, locked, onRegenerate, onClear, onUploa
 
 function LocationTab({ data, dispatch }) {
   const [viewingId, setViewingId] = useState(null);
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+  const aspect = data.meta?.aspect || "16:9";
+  const locked = !!data.locks?.locations;
 
   if (viewingId) {
     const loc = data.locations.find(l => l.id === viewingId);
@@ -2315,16 +2417,37 @@ function LocationTab({ data, dispatch }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
-    return <LocationDetailView location={loc} dispatch={dispatch} onBack={() => setViewingId(null)} />;
+    return <LocationDetailView location={loc} dispatch={dispatch} sectionLocked={locked} aspect={aspect} onBack={() => setViewingId(null)} />;
+  }
+
+  async function bulkRegenerate() {
+    if (locked || bulkGenerating) return;
+    setBulkGenerating(true);
+    for (const l of data.locations) {
+      if (l.locked) continue;
+      dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
+      try {
+        const url = await generateImage(locationPrompt(l), { ratio: aspect });
+        dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
+      } catch (err) {
+        console.error("[location regen]", l.name, err);
+        dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
+      }
+    }
+    setBulkGenerating(false);
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
-          Locations · {data.locations.length}
-        </div>
-      </div>
+      <SectionHeader
+        title="Locations"
+        count={data.locations.length}
+        locked={locked}
+        generating={bulkGenerating}
+        onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "locations" })}
+        onAutoGenerate={bulkRegenerate}
+        autoGenerateLabel={data.locations.some(l => l.generatedImage || l.referenceImage) ? "Regenerate all" : "Auto-generate"}
+      />
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
@@ -2386,9 +2509,10 @@ function LocationTile({ location, onClick }) {
   );
 }
 
-function LocationDetailView({ location, dispatch, onBack }) {
+function LocationDetailView({ location, dispatch, sectionLocked, aspect = "16:9", onBack }) {
+  const effLocked = sectionLocked || location.locked;
   async function regenerateReference() {
-    const url = await generateImage(locationPrompt(location), { ratio: "16:9" });
+    const url = await generateImage(locationPrompt(location), { ratio: aspect });
     dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: url });
     return url;
   }
@@ -2398,7 +2522,7 @@ function LocationDetailView({ location, dispatch, onBack }) {
         onBack={onBack}
         name={location.name}
         subtitle={`${location.type === "ai" ? "AI generated" : "Reference"} · ${location.handle}`}
-        locked={location.locked}
+        locked={effLocked}
         onToggleLock={() => dispatch({ type: "TOGGLE_LOCATION_LOCK", id: location.id })}
         onRename={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "name", value: v })}
         lockLabel="Lock location"
@@ -2416,7 +2540,7 @@ function LocationDetailView({ location, dispatch, onBack }) {
             src={location.generatedImage || location.referenceImage}
             label="Reference"
             ratio="16:9"
-            locked={location.locked}
+            locked={effLocked}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_LOCATION_IMAGE", id: location.id })}
             onUpload={dataUrl => dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: dataUrl })}
@@ -2450,6 +2574,8 @@ function LocationDetailView({ location, dispatch, onBack }) {
 
 function ElementTab({ data, dispatch }) {
   const [viewingId, setViewingId] = useState(null);
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+  const locked = !!data.locks?.products;
 
   if (viewingId) {
     const prod = data.products.find(p => p.id === viewingId);
@@ -2457,16 +2583,37 @@ function ElementTab({ data, dispatch }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
-    return <ElementDetailView product={prod} dispatch={dispatch} onBack={() => setViewingId(null)} />;
+    return <ElementDetailView product={prod} dispatch={dispatch} sectionLocked={locked} onBack={() => setViewingId(null)} />;
+  }
+
+  async function bulkRegenerate() {
+    if (locked || bulkGenerating) return;
+    setBulkGenerating(true);
+    for (const p of data.products) {
+      if (p.locked) continue;
+      dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
+      try {
+        const url = await generateImage(productPrompt(p), { ratio: "1:1" });
+        dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
+      } catch (err) {
+        console.error("[product regen]", p.name, err);
+        dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
+      }
+    }
+    setBulkGenerating(false);
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
-          Elements · {data.products.length}
-        </div>
-      </div>
+      <SectionHeader
+        title="Elements"
+        count={data.products.length}
+        locked={locked}
+        generating={bulkGenerating}
+        onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "products" })}
+        onAutoGenerate={bulkRegenerate}
+        autoGenerateLabel={data.products.some(p => p.referenceImage) ? "Regenerate all" : "Auto-generate"}
+      />
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
@@ -2532,7 +2679,8 @@ function ElementTile({ product, onClick }) {
   );
 }
 
-function ElementDetailView({ product, dispatch, onBack }) {
+function ElementDetailView({ product, dispatch, sectionLocked, onBack }) {
+  const effLocked = sectionLocked || product.locked;
   async function regenerateReference() {
     const url = await generateImage(productPrompt(product), { ratio: "1:1" });
     dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: url });
@@ -2544,7 +2692,7 @@ function ElementDetailView({ product, dispatch, onBack }) {
         onBack={onBack}
         name={product.name}
         subtitle={`${product.category || "Element"} · ${product.handle}`}
-        locked={product.locked}
+        locked={effLocked}
         onToggleLock={() => dispatch({ type: "TOGGLE_PRODUCT_LOCK", id: product.id })}
         onRename={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "name", value: v })}
         lockLabel="Lock element"
@@ -2571,7 +2719,7 @@ function ElementDetailView({ product, dispatch, onBack }) {
             src={product.referenceImage}
             label="Reference"
             ratio="1:1"
-            locked={product.locked}
+            locked={effLocked}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_PRODUCT_IMAGE", id: product.id })}
             onUpload={dataUrl => dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: dataUrl })}
@@ -2652,6 +2800,45 @@ function DescriptionField({ label, value, onChange, placeholder }) {
         style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, lineHeight: 1.7, color: "var(--warm-40)", display: "block" }}
         placeholder={placeholder}
       />
+    </div>
+  );
+}
+
+// SectionHeader — shared header for each asset tab (and Brand/Mood
+// panels). Carries the section title + count + Auto-generate button
+// + Lock section toggle. Both buttons are real: auto-generate runs a
+// caller-supplied function, lock toggles data.locks[section].
+
+function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, generating, autoGenerateLabel = "Auto-generate" }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
+        {title}{count !== undefined ? ` · ${count}` : ""}
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {onAutoGenerate && (
+          <PremiumButton
+            variant="secondary"
+            onClick={onAutoGenerate}
+            disabled={locked || generating}
+            style={{ fontSize: 10, padding: "5px 10px" }}
+            title={locked ? "Unlock section to regenerate" : "Regenerate every item in this section"}
+          >
+            <SectionIcon name="sparkle" size={11} color="var(--warm-40)" />
+            {generating ? "Generating…" : autoGenerateLabel}
+          </PremiumButton>
+        )}
+        <PremiumButton
+          variant="secondary"
+          onClick={onToggleLock}
+          style={{
+            fontSize: 10, padding: "5px 10px",
+            background: locked ? "var(--warm-12)" : undefined,
+          }}
+        >
+          {locked ? "🔒 Locked" : "Lock section"}
+        </PremiumButton>
+      </div>
     </div>
   );
 }
@@ -2742,14 +2929,14 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   if (activeTab === "brand") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <BrandPanel brand={data.brand} dispatch={dispatch} />
+        <BrandPanel brand={data.brand} sectionLocked={!!data.locks?.brand} dispatch={dispatch} />
       </div>
     );
   }
   if (activeTab === "mood") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <MoodPanel moodBoard={data.moodBoard || []} dispatch={dispatch} />
+        <MoodPanel moodBoard={data.moodBoard || []} sectionLocked={!!data.locks?.mood} dispatch={dispatch} />
       </div>
     );
   }
@@ -3151,6 +3338,49 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 }
 
 // -- CHAT: MESSAGE WITH @ MENTIONS ----------------------------
+
+// Color palette for @-mention chips by entity type. Used in SheetFrame
+// brief rendering + anywhere we want to highlight cross-references.
+const MENTION_COLORS = {
+  talent:   { bg: "rgba(91,178,255,0.18)",  text: "#7EB9FF", border: "rgba(91,178,255,0.34)" },
+  location: { bg: "rgba(124,252,156,0.16)", text: "#9CECB1", border: "rgba(124,252,156,0.34)" },
+  product:  { bg: "rgba(242,201,76,0.18)",  text: "#F2C94C", border: "rgba(242,201,76,0.34)" },
+};
+
+// Render a chunk of brief text with @-handles styled as colored chips.
+// Read-only — clicking a chip is wired up via the optional onMentionClick
+// prop (matches the chat panel's behavior). Falls back to plain text for
+// any @-handle that doesn't match a known entity.
+function renderMentions(text, data, opts = {}) {
+  const parts = parseMentions(text || "", data);
+  return parts.map((part, i) => {
+    if (part.type === "text") return <span key={i}>{part.value}</span>;
+    const colors = MENTION_COLORS[part.asset?._type];
+    if (!colors) {
+      return <span key={i} style={{ color: "var(--warm-25)" }}>{part.handle}</span>;
+    }
+    return (
+      <span
+        key={i}
+        title={part.asset?.name || part.handle}
+        onClick={opts.onMentionClick ? (e => { e.stopPropagation(); opts.onMentionClick(part.asset); }) : undefined}
+        style={{
+          display: "inline-block",
+          padding: "0 5px", margin: "0 1px",
+          borderRadius: 4,
+          background: colors.bg,
+          color: colors.text,
+          border: `1px solid ${colors.border}`,
+          fontSize: "0.95em",
+          fontWeight: 500,
+          cursor: opts.onMentionClick ? "pointer" : "default",
+        }}
+      >
+        {part.handle}
+      </span>
+    );
+  });
+}
 
 function parseMentions(text, data) {
   const allAssets = [
@@ -4822,6 +5052,9 @@ export default function WorkshopV2() {
 
       const v1Brief = await generateBrief(prompt);
       const v2Data = v1BriefToV2Data(v1Brief);
+      // imagePrompts comes back as 4 cinematic visual descriptions —
+      // perfect mood-board fodder. Capture before the v2Data discards them.
+      const imagePrompts = Array.isArray(v1Brief?.imagePrompts) ? v1Brief.imagePrompts.slice(0, 4) : [];
 
       // Each new brief gets its own project record — that way the
       // sidebar list shows every brief the user has ever generated,
@@ -4859,7 +5092,7 @@ export default function WorkshopV2() {
       // Kick off auto image generation in the background. Don't await
       // it here — we want the OneSheet to be interactive immediately
       // and have images stream in as they complete.
-      autoGenerateAssets(v2Data, meta.aspect);
+      autoGenerateAssets(v2Data, meta.aspect, { imagePrompts });
     } catch (e) {
       console.error("[handleGenerate] failed", e);
       setGenerationError(e?.message || "Generation failed. Try again.");
@@ -4876,56 +5109,120 @@ export default function WorkshopV2() {
   // them even though our React state updates are still propagating.
   // Errors are surfaced via the reducer's "error" generationStatus on
   // the affected asset — generation keeps moving for everything else.
-  async function autoGenerateAssets(initialData, aspect) {
+  async function autoGenerateAssets(initialData, aspect, opts = {}) {
     const generated = {
       talent: new Map(),
       locations: new Map(),
       products: new Map(),
     };
+    const HEAD_VIEWS_EXTRA = ["side", "threeQuarter", "back"]; // "front" filled by primary
+    const FULLBODY_VIEWS = ["front", "side", "threeQuarter", "back"];
 
-    // Phase A — talent / locations / products in parallel.
-    const phaseA = [];
+    // Phase A1 — primary talent headshots ONLY. We need these done
+    // before A2 can fire view-specific gens with the primary as a
+    // reference image (identity preservation across all 8 views).
+    const phaseA1 = [];
     for (const t of initialData.talent || []) {
-      phaseA.push((async () => {
+      phaseA1.push((async () => {
         dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
         try {
           const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
           generated.talent.set(t.id, url);
           dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
+          // The primary also fills the FRONT headshot slot in the
+          // detail-view 4-up grid — both fields point at the same image.
+          dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
           dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
         } catch (err) {
-          console.error("[talent gen]", t.name, err);
+          console.error("[talent primary]", t.name, err);
           dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
         }
       })());
     }
+    await Promise.allSettled(phaseA1);
+
+    // Phase A2 — fan out everything that can run in parallel:
+    //   - 3 remaining headshot views + 4 full-body views per talent
+    //     (using A1's primary as reference for identity preservation)
+    //   - locations, products
+    //   - mood board (one image per imagePrompt returned by generateBrief)
+    const phaseA2 = [];
+
+    for (const t of initialData.talent || []) {
+      const primaryRef = generated.talent.get(t.id);
+      if (!primaryRef) continue; // primary failed — skip the rest
+      for (const view of HEAD_VIEWS_EXTRA) {
+        phaseA2.push((async () => {
+          try {
+            const url = await generateImage(talentHeadshotPrompt(t, view), {
+              ratio: "1:1",
+              referenceImages: [primaryRef],
+            });
+            dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: view, url });
+          } catch (err) {
+            console.error("[headshot]", t.name, view, err);
+          }
+        })());
+      }
+      for (const view of FULLBODY_VIEWS) {
+        phaseA2.push((async () => {
+          try {
+            const url = await generateImage(talentFullBodyPrompt(t, view), {
+              ratio: "3:4",
+              referenceImages: [primaryRef],
+            });
+            dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: t.id, slot: view, url });
+          } catch (err) {
+            console.error("[fullbody]", t.name, view, err);
+          }
+        })());
+      }
+    }
+
     for (const l of initialData.locations || []) {
-      phaseA.push((async () => {
+      phaseA2.push((async () => {
         dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
         try {
           const url = await generateImage(locationPrompt(l), { ratio: aspect });
           generated.locations.set(l.id, url);
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
         } catch (err) {
-          console.error("[location gen]", l.name, err);
+          console.error("[location]", l.name, err);
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
         }
       })());
     }
     for (const p of initialData.products || []) {
-      phaseA.push((async () => {
+      phaseA2.push((async () => {
         dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
         try {
           const url = await generateImage(productPrompt(p), { ratio: "1:1" });
           generated.products.set(p.id, url);
           dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
         } catch (err) {
-          console.error("[product gen]", p.name, err);
+          console.error("[product]", p.name, err);
           dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
         }
       })());
     }
-    await Promise.allSettled(phaseA);
+    // Mood board — use the brief's imagePrompts (Gemini returns 4
+    // cinematic visual descriptions). Each becomes a mood tile with
+    // the description as caption + generated image.
+    for (const prompt of (opts.imagePrompts || [])) {
+      phaseA2.push((async () => {
+        try {
+          const url = await generateImage(moodPrompt(prompt), { ratio: "1:1" });
+          dispatch({
+            type: "ADD_MOOD",
+            data: { caption: String(prompt).slice(0, 80), image: url },
+          });
+        } catch (err) {
+          console.error("[mood]", err);
+        }
+      })());
+    }
+
+    await Promise.allSettled(phaseA2);
 
     // Phase B — frames with reference images. Detect @-handle mentions
     // inline (matching the reducer's AUTO_DETECT_MENTIONS logic) so we
