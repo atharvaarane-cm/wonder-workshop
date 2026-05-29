@@ -12,6 +12,15 @@ const RATIO_DIMS = {
   "2.39": { width: 1024, height: 428 },
 };
 
+// Hard cap on a single image generation. Gemini Nano Banana Pro
+// typically returns within 10-30s; if we're past 90s something is
+// stuck (rate-limit retry storm, Vercel cold-start chain, etc) and
+// the user shouldn't see the tile shimmer indefinitely. Without
+// this, a failed fetch could hang the promise forever and the
+// caller's status flag would stay at "generating" until reload —
+// which is exactly the bug that stranded Maya during kickoff.
+const GENERATE_IMAGE_TIMEOUT_MS = 90_000;
+
 export async function generateImage(prompt, opts = {}) {
   const { ratio = "16:9", referenceImages = [], provider = "gemini" } = opts;
   const endpoint = provider === "gemini" ? "/api/image-gemini" : "/api/image";
@@ -24,11 +33,26 @@ export async function generateImage(prompt, opts = {}) {
       }
     : { prompt, ...dims };
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GENERATE_IMAGE_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err?.name === "AbortError") {
+      const e = new Error(`Image gen timed out after ${GENERATE_IMAGE_TIMEOUT_MS / 1000}s`);
+      e.status = 504;
+      throw e;
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");

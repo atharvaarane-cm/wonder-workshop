@@ -253,6 +253,33 @@ function appendVersion(history, slotKey, src) {
   return { ...(history || {}), [slotKey]: trimmed };
 }
 
+// Statuses that imply an async worker is in flight. If we see one of
+// these in persisted data, the worker is almost certainly dead (the
+// page was reloaded or the user closed the tab between dispatching
+// "generating" and "complete"). Flip to "error" so the UI shows a
+// retry affordance instead of an indefinite shimmer.
+const STUCK_STATUSES = new Set(["generating", "uploading"]);
+const isStuck = (s) => s && STUCK_STATUSES.has(s);
+
+function sanitizeStuckStatuses(data) {
+  if (!data) return data;
+  const cleanList = (arr) => Array.isArray(arr)
+    ? arr.map(x => isStuck(x?.generationStatus) ? { ...x, generationStatus: "error" } : x)
+    : arr;
+  return {
+    ...data,
+    talent: cleanList(data.talent),
+    locations: cleanList(data.locations),
+    products: cleanList(data.products),
+    moodBoard: cleanList(data.moodBoard),
+    frames: Array.isArray(data.frames)
+      ? data.frames.map(f => f?.imageStatus === "generating"
+        ? { ...f, imageStatus: "error" }
+        : f)
+      : data.frames,
+  };
+}
+
 function applyAction(state, action) {
   switch (action.type) {
     case "SET_DATA":
@@ -261,10 +288,16 @@ function applyAction(state, action) {
       // the incoming meta with existing meta lets the BriefForm's
       // typed-in fields (title, client, treatment) override anything
       // the model might guess differently.
-      return {
+      //
+      // Also sanitize any in-flight statuses ("generating" / "uploading")
+      // back to "error" — if the data was persisted mid-generation and
+      // the worker that owns those statuses is long gone (page reload,
+      // tab close, deploy), we'd otherwise restore the shimmer forever.
+      // This is the bug that stranded Maya during kickoff.
+      return sanitizeStuckStatuses({
         ...action.data,
         meta: { ...action.data.meta, ...(action.metaOverrides || {}) },
-      };
+      });
     case "SET_META":
       return { ...state, meta: { ...state.meta, ...action.meta } };
     case "UPDATE_META":
@@ -6293,6 +6326,10 @@ export default function WorkshopV2() {
       // from IndexedDB. DON'T clear the active pointer here — the
       // data might be IDB-only after the persistence refactor.
       let initialData = activeId ? loadProject(activeId) : null;
+      // Reset any in-flight "generating" statuses — the worker that
+      // owned them is gone (page reload). sanitizeStuckStatuses is a
+      // no-op for fresh projects with no stuck flags.
+      if (initialData) initialData = sanitizeStuckStatuses(initialData);
       bootstrap.current = { activeId, data: initialData, shared: false };
     }
   }
