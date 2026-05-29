@@ -1454,11 +1454,12 @@ function Tag({ children, lit, onClick }) {
   );
 }
 
-function EditableText({ value, onChange, multiline, style = {}, placeholder, maxHeight }) {
+function EditableText({ value, onChange, multiline, style = {}, placeholder, maxHeight, onEditingChange }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const ref = useRef(null);
   useEffect(() => { setDraft(value); }, [value]);
+  useEffect(() => { onEditingChange?.(editing); /* eslint-disable-next-line */ }, [editing]);
   // Auto-grow the textarea to fit content, bounded by maxHeight (defaults
   // to 600px so a 12-paragraph brief doesn't push the storyboard off
   // screen). Recompute on every draft change so it tracks typing.
@@ -4779,6 +4780,48 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
 
 // -- ONE-SHEET WORKSPACE (drag-drop grid) ---------------------
 
+// Brief panel — collapsed by default (mask-faded ~96px preview), expands
+// to fit content (up to 600px) the moment EditableText switches to its
+// textarea. Tracks the EditableText editing state via onEditingChange
+// so the outer wrapper drops its clip + mask while typing.
+function BriefPanel({ value, onUpdateMeta }) {
+  const [editing, setEditing] = useState(false);
+  const treatmentText = value || "";
+  return (
+    <div style={{ borderTop: "1px solid var(--warm-06)", margin: "20px 0", padding: "20px 0 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+        <SectionIcon name="file-text" size={11} color="var(--warm-50)" />
+        <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: "var(--warm-50)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Brief</span>
+        <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, color: "var(--warm-25)", marginLeft: 6 }}>
+          {editing ? "Click outside to save" : "Click to edit"}
+        </span>
+      </div>
+      <div style={{
+        background: "var(--warm-04)",
+        border: "1px solid var(--warm-06)",
+        borderRadius: 10,
+        padding: "16px 18px",
+        minHeight: editing ? 120 : 96,
+        // Display mode: clamp to 96px and fade out the bottom so the
+        // brief preview stays compact. Edit mode: lift the clamp so the
+        // textarea (capped at 560) can grow to fit content.
+        maxHeight: editing ? 600 : 96,
+        overflow: "hidden",
+        cursor: editing ? "default" : "pointer",
+        WebkitMaskImage: editing ? "none" : "linear-gradient(to bottom, black 55%, transparent 100%)",
+        maskImage: editing ? "none" : "linear-gradient(to bottom, black 55%, transparent 100%)",
+        transition: "max-height 0.32s cubic-bezier(0.22,1,0.36,1), min-height 0.32s cubic-bezier(0.22,1,0.36,1)",
+      }}>
+        <EditableText value={treatmentText} onChange={v => onUpdateMeta("treatment", v)} multiline
+          maxHeight={560}
+          onEditingChange={setEditing}
+          style={{ fontFamily: "var(--f)", fontSize: 15, fontWeight: 300, color: "var(--warm-50)", lineHeight: 1.7, display: "block", minHeight: 64 }}
+          placeholder="Click here to write or paste the brief — the spot's setup, characters, tone, and intent." />
+      </div>
+    </div>
+  );
+}
+
 function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist, onRetryFrame }) {
   const [dragId, setDragId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
@@ -4902,39 +4945,13 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
             </div>
           </div>
 
-          {/* Treatment / Brief — clearly bordered card so the click
-              target is obvious. Click anywhere on the panel to edit. */}
-          <div style={{ borderTop: "1px solid var(--warm-06)", margin: "20px 0", padding: "20px 0 0" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-              <SectionIcon name="file-text" size={11} color="var(--warm-50)" />
-              <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: "var(--warm-50)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Brief</span>
-              <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, color: "var(--warm-25)", marginLeft: 6 }}>Click to edit</span>
-            </div>
-            {(() => {
-              const treatmentText = data.meta.treatment || "";
-              return (
-                <div style={{
-                  background: "var(--warm-04)",
-                  border: "1px solid var(--warm-06)",
-                  borderRadius: 10,
-                  padding: "16px 18px",
-                  minHeight: 96,
-                  // Cap the panel height so a 12-paragraph brief doesn't
-                  // push the rest of the workshop off screen. Scrollbar
-                  // appears only when content actually exceeds the cap.
-                  // The textarea (EditableText) self-caps to the same
-                  // 600 when editing, so the two stay aligned.
-                  maxHeight: 600,
-                  overflowY: "auto",
-                }}>
-                  <EditableText value={treatmentText} onChange={v => onUpdateMeta("treatment", v)} multiline
-                    maxHeight={560}
-                    style={{ fontFamily: "var(--f)", fontSize: 15, fontWeight: 300, color: "var(--warm-50)", lineHeight: 1.7, display: "block", minHeight: 64 }}
-                    placeholder="Click here to write or paste the brief — the spot's setup, characters, tone, and intent." />
-                </div>
-              );
-            })()}
-          </div>
+          {/* Treatment / Brief — squished preview in display mode (a few
+              lines fading out so a long brief doesn't dominate the page),
+              expands to fit content up to 600px when clicked into edit. */}
+          <BriefPanel
+            value={data.meta.treatment || ""}
+            onUpdateMeta={onUpdateMeta}
+          />
 
           {/* Asset Tab Bar */}
           <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
