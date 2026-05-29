@@ -2561,50 +2561,6 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   );
 }
 
-// -- ASSET TAB BUTTON (left-rail vertical row) -----------------
-
-function AssetTabButton({ tab, isActive, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  const bg = isActive ? "var(--warm-08)" : hovered ? "var(--warm-04)" : "transparent";
-  const accent = isActive ? "var(--warm)" : hovered ? "var(--warm-50)" : "var(--warm-30)";
-  const iconColor = isActive ? "var(--warm)" : hovered ? "var(--warm-40)" : "var(--warm-25)";
-  return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 10,
-        width: "100%", padding: "10px 12px",
-        borderRadius: 8, cursor: "pointer",
-        outline: "none", border: "none",
-        fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
-        background: bg,
-        color: accent,
-        textAlign: "left",
-        position: "relative",
-        transition: "background 0.15s ease, color 0.15s ease",
-      }}
-    >
-      {/* Left edge accent on active */}
-      {isActive && (
-        <div style={{
-          position: "absolute", left: 0, top: 6, bottom: 6, width: 2,
-          background: "var(--warm-40)", borderRadius: 1,
-        }} />
-      )}
-      <SectionIcon name={tab.icon} size={14} color={iconColor} />
-      <span style={{ flex: 1 }}>{tab.label}</span>
-      <span style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        minWidth: 20, height: 18, padding: "0 5px", borderRadius: 9,
-        background: isActive ? "var(--warm-12)" : "var(--warm-06)",
-        fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-        color: isActive ? "var(--warm-50)" : "var(--warm-25)",
-        flexShrink: 0, lineHeight: 1,
-      }}>{tab.count}</span>
-    </button>
-  );
-}
-
 // -- BRAND PANEL (single-record panel, not array) ---------------
 // Logo upload + name + URL + guidelines. Sits inside the Brand tab.
 
@@ -4460,65 +4416,26 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
 // right. Brand Info opens by default. Clicking a tab switches the
 // right pane (no toggle-to-close — something is always selected).
 
-function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
+function AssetTabBar({ data, dispatch, activeTab, onAIAssist }) {
   const [expanded, setExpanded] = useState(null);
-
-  const tabs = [
-    { key: "brand", label: "Brand", icon: "link", count: data.brand?.logo ? 1 : 0 },
-    { key: "talent", label: "Characters", icon: "users", count: data.talent.length },
-    { key: "products", label: "Elements", icon: "box", count: data.products.length },
-    { key: "locations", label: "Locations", icon: "map", count: data.locations.length },
-    { key: "mood", label: "Mood", icon: "image", count: (data.moodBoard || []).length },
-  ];
-
   const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
 
   return (
     <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16 }}>
-      <Card className="rounded-xl p-3" style={{
-        display: "grid",
-        gridTemplateColumns: "200px 1fr",
-        gap: 20,
-        // Dynamic height: never below 220 (so a near-empty Brand tab
-        // still looks intentional) and never above 800 (so a packed
-        // Characters tab doesn't push the storyboard off-screen).
-        // The right pane scrolls when content exceeds the cap.
+      <Card className="rounded-xl p-5" style={{
         minHeight: 220,
         maxHeight: 800,
+        overflowY: "auto",
       }}>
-        {/* LEFT RAIL — vertical tab stack */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {tabs.map(tab => (
-            <AssetTabButton
-              key={tab.key}
-              tab={tab}
-              isActive={activeTab === tab.key}
-              onClick={() => onToggleTab(tab.key)}
-            />
-          ))}
-        </div>
-
-        {/* RIGHT PANE — selected tab content. Own overflow so the left
-            rail stays put when the right side scrolls. minHeight:0 lets
-            the flex/grid child actually constrain its own height
-            instead of growing past the cap. */}
-        <div style={{
-          borderLeft: "1px solid var(--warm-06)",
-          paddingLeft: 20,
-          minWidth: 0,
-          minHeight: 0,
-          overflowY: "auto",
-        }}>
-          <AssetExpandedPanel
-            activeTab={activeTab}
-            data={data}
-            dispatch={dispatch}
-            expanded={expanded}
-            setExpanded={setExpanded}
-            typeKey={typeKey}
-            onAIAssist={onAIAssist}
-          />
-        </div>
+        <AssetExpandedPanel
+          activeTab={activeTab}
+          data={data}
+          dispatch={dispatch}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          typeKey={typeKey}
+          onAIAssist={onAIAssist}
+        />
       </Card>
     </div>
   );
@@ -4663,7 +4580,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 
           {/* Asset Tab Bar */}
           <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
-            onToggleTab={onToggleAssetTab} onAIAssist={onAIAssist} />
+            onAIAssist={onAIAssist} />
 
           {/* Frame Grid */}
           {(() => {
@@ -6498,6 +6415,16 @@ export default function WorkshopV2() {
     setProjects(listProjects());
   }
 
+  function handleBackToProjects() {
+    if (activeProjectId && built) {
+      saveProject(activeProjectId, data);
+    }
+    setBuilt(false);
+    setProductionFrameId(null);
+    setSelectedFrameId(null);
+    setProjects(listProjects());
+  }
+
   function handleDeleteProject(projectId) {
     // If we're deleting the active project, clear pending auto-saves
     // FIRST so a ceiling timeout doesn't fire seconds later and recreate
@@ -7433,7 +7360,7 @@ export default function WorkshopV2() {
     // Toggle the appropriate asset tab
     const typeMap = { talent: "talent", product: "products", location: "locations" };
     const tabKey = typeMap[asset._type] || "talent";
-    setAssetTabOpen(prev => prev === tabKey ? null : tabKey);
+    setAssetTabOpen(tabKey);
   }, []);
 
   const handleAssetAIAssist = useCallback((item, category) => {
@@ -7655,12 +7582,24 @@ export default function WorkshopV2() {
       <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden" }}>
         {/* Left: project sidebar (full-height multi-project nav) */}
         <ProjectSidebar
+          mode={built && activeProjectId ? "project" : "root"}
           projects={projects}
           folders={folders}
           activeProjectId={activeProjectId}
+          activeProjectTitle={data.meta?.title || "Untitled"}
+          activeAssetTab={assetTabOpen}
+          onAssetTabChange={handleToggleAssetTab}
+          onBackToProjects={handleBackToProjects}
+          assetCounts={{
+            brand: data.brand?.logo ? 1 : 0,
+            talent: data.talent.length,
+            products: data.products.length,
+            locations: data.locations.length,
+            mood: (data.moodBoard || []).length,
+          }}
           onSwitch={switchToProject}
           onNew={startNewProject}
-          onHome={() => { setBuilt(false); setProductionFrameId(null); setSelectedFrameId(null); }}
+          onHome={handleBackToProjects}
           onDelete={handleDeleteProject}
           onRename={handleRenameProject}
           onMoveToFolder={handleMoveToFolder}

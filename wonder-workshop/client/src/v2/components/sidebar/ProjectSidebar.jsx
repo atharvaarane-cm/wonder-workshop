@@ -7,7 +7,33 @@ import { SectionIcon, WLogo, timeAgo, uiConfirm, toast } from "../../Workshop.js
 // to switch; the current project saves automatically before the
 // switch so no work is lost.
 
-export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onNew, onHome, onDelete, onRename, onMoveToFolder, onNewFolder, onDeleteFolder }) {
+const PROJECT_SECTION_TABS = [
+  { key: "brand", label: "Brand", icon: "link" },
+  { key: "talent", label: "Characters", icon: "users" },
+  { key: "products", label: "Elements", icon: "box" },
+  { key: "locations", label: "Locations", icon: "map" },
+  { key: "mood", label: "Mood", icon: "image" },
+];
+
+export function ProjectSidebar({
+  projects,
+  folders = [],
+  activeProjectId,
+  onSwitch,
+  onNew,
+  onHome,
+  onDelete,
+  onRename,
+  onMoveToFolder,
+  onNewFolder,
+  onDeleteFolder,
+  mode = "root",
+  activeProjectTitle = "",
+  activeAssetTab = "brand",
+  onAssetTabChange,
+  onBackToProjects,
+  assetCounts = {},
+}) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -42,6 +68,80 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
     e.preventDefault();
     e.stopPropagation();
     onNewFolder?.();
+  }
+
+  if (mode === "project") {
+    return (
+      <div style={{
+        width: 256, flexShrink: 0,
+        borderRight: "1px solid var(--warm-06)",
+        background: "rgba(0,0,0,0.72)",
+        display: "flex", flexDirection: "column",
+        height: "100vh", overflow: "hidden",
+      }}>
+        <div style={{
+          height: 64,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "0 18px",
+        }}>
+          <button
+            type="button"
+            onClick={onBackToProjects || onHome}
+            title="Back to all projects"
+            aria-label="Back to all projects"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              color: "var(--warm-50)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              outline: "none",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M12.5 4.5 7 10l5.5 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div
+            title={activeProjectTitle || "Untitled"}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontFamily: "var(--f)",
+              fontSize: 16,
+              fontWeight: 600,
+              color: "var(--warm-50)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {activeProjectTitle || "Untitled"}
+          </div>
+        </div>
+
+        <nav aria-label="Project sections" style={{ padding: "22px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          {PROJECT_SECTION_TABS.map(tab => (
+            <ProjectSectionRow
+              key={tab.key}
+              tab={tab}
+              count={assetCounts[tab.key] ?? 0}
+              isActive={activeAssetTab === tab.key}
+              onClick={() => onAssetTabChange?.(tab.key)}
+            />
+          ))}
+        </nav>
+      </div>
+    );
   }
 
   return (
@@ -217,6 +317,72 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
         )}
       </div>
     </div>
+  );
+}
+
+function ProjectSectionRow({ tab, count, isActive, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  const bg = isActive ? "var(--warm-08)" : hovered ? "var(--warm-04)" : "transparent";
+  const accent = isActive ? "var(--warm)" : hovered ? "var(--warm-50)" : "var(--warm-30)";
+  const iconColor = isActive ? "var(--warm)" : hovered ? "var(--warm-40)" : "var(--warm-25)";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        width: "100%",
+        padding: "12px 14px",
+        minHeight: 48,
+        borderRadius: 12,
+        cursor: "pointer",
+        outline: "none",
+        border: "none",
+        fontFamily: "var(--f)",
+        fontSize: 16,
+        fontWeight: isActive ? 600 : 500,
+        background: bg,
+        color: accent,
+        textAlign: "left",
+        position: "relative",
+        transition: "background 0.15s ease, color 0.15s ease",
+      }}
+    >
+      {isActive && (
+        <div style={{
+          position: "absolute",
+          left: 0,
+          top: 10,
+          bottom: 10,
+          width: 2,
+          background: "var(--warm-40)",
+          borderRadius: 1,
+        }} />
+      )}
+      <SectionIcon name={tab.icon} size={18} color={iconColor} />
+      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tab.label}</span>
+      <span style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 24,
+        height: 24,
+        padding: "0 7px",
+        borderRadius: 12,
+        background: isActive ? "var(--warm-12)" : "var(--warm-06)",
+        fontFamily: "var(--f)",
+        fontSize: 12,
+        fontWeight: 600,
+        color: isActive ? "var(--warm-50)" : "var(--warm-25)",
+        flexShrink: 0,
+        lineHeight: 1,
+      }}>{count}</span>
+    </button>
   );
 }
 
