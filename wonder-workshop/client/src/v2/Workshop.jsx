@@ -6321,6 +6321,8 @@ export default function WorkshopV2() {
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
   const [chatBusy, setChatBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -6526,14 +6528,21 @@ export default function WorkshopV2() {
     setFolders(listFolders());
     toast(folder ? `Moved to "${folder}"` : "Removed from folder", { kind: "info", ttl: 2500 });
   }
-  async function handleNewFolder() {
-    const name = window.prompt("Client name? (creates a folder)");
+  function handleNewFolder() {
+    setNewFolderName("");
+    setNewFolderOpen(true);
+  }
+  function handleCreateFolderSubmit(e) {
+    e.preventDefault();
+    const name = newFolderName.trim();
     if (!name) return;
     const created = createFolder(name);
     if (created) {
       setFolders(listFolders());
       toast(`Created client folder "${created}"`, { kind: "success", ttl: 2500 });
     }
+    setNewFolderOpen(false);
+    setNewFolderName("");
   }
   async function handleDeleteFolder(name) {
     const ok = await uiConfirm({
@@ -7524,6 +7533,117 @@ export default function WorkshopV2() {
         const { brief, images } = briefFromV2Data(data);
         return <OnePager brief={brief} images={images} onClose={() => setExportOpen(false)} />;
       })()}
+      {newFolderOpen && (
+        <div
+          onClick={() => setNewFolderOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 11000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            background: "rgba(0,0,0,0.72)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
+          }}
+        >
+          <form
+            onSubmit={handleCreateFolderSubmit}
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "min(100%, 420px)",
+              padding: 24,
+              borderRadius: 12,
+              background: "#1A1A1D",
+              border: "1px solid rgba(255,255,255,0.18)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,0,0,0.4)",
+              animation: "fadeIn 0.18s ease",
+            }}
+          >
+            <div style={{
+              fontFamily: "var(--f)",
+              fontSize: 17,
+              fontWeight: 600,
+              color: "#fff",
+              marginBottom: 8,
+            }}>
+              New client folder
+            </div>
+            <label style={{
+              display: "block",
+              fontFamily: "var(--f)",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.62)",
+              marginBottom: 8,
+            }}>
+              Client name
+            </label>
+            <input
+              autoFocus
+              value={newFolderName}
+              onChange={e => setNewFolderName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Escape") setNewFolderOpen(false);
+              }}
+              style={{
+                width: "100%",
+                height: 42,
+                padding: "0 12px",
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.07)",
+                border: "1px solid rgba(255,255,255,0.16)",
+                color: "#fff",
+                fontFamily: "var(--f)",
+                fontSize: 13,
+                fontWeight: 500,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
+              <button
+                type="button"
+                onClick={() => setNewFolderOpen(false)}
+                style={{
+                  fontFamily: "var(--f)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  padding: "9px 18px",
+                  borderRadius: 7,
+                  cursor: "pointer",
+                  background: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  color: "#fff",
+                  outline: "none",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!newFolderName.trim()}
+                style={{
+                  fontFamily: "var(--f)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: "9px 18px",
+                  borderRadius: 7,
+                  cursor: newFolderName.trim() ? "pointer" : "not-allowed",
+                  background: newFolderName.trim() ? "#fff" : "rgba(255,255,255,0.10)",
+                  border: newFolderName.trim() ? "1px solid #fff" : "1px solid rgba(255,255,255,0.16)",
+                  color: newFolderName.trim() ? "#111" : "rgba(255,255,255,0.42)",
+                  outline: "none",
+                }}
+              >
+                Create folder
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden" }}>
         {/* Left: project sidebar (full-height multi-project nav) */}

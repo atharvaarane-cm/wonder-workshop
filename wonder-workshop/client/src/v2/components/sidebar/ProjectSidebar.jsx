@@ -38,6 +38,12 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
     setRenameValue("");
   }
 
+  function handleNewFolderClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    onNewFolder?.();
+  }
+
   return (
     <div style={{
       width: 256, flexShrink: 0,
@@ -98,6 +104,7 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
       <div style={{ padding: "18px 14px 10px" }}>
         <div style={{ display: "flex", gap: 6 }}>
           <button
+            type="button"
             onClick={onNew}
             style={{
               flex: 1,
@@ -128,7 +135,8 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
             </svg>
           </button>
           <button
-            onClick={onNewFolder}
+            type="button"
+            onClick={handleNewFolderClick}
             title="New client folder"
             style={{
               width: 36,
