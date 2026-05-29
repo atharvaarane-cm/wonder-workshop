@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { SectionIcon } from "../Workshop.jsx";
+import { Card } from "@/components/ui/card";
 
 // Brief panel — squished mask-faded preview in display mode; click to
 // expand the textarea up to 600px. Tracks a local draft so the parent
@@ -53,20 +54,15 @@ export function BriefPanel({ value, onUpdateMeta, data, dispatch, onRunRegenerat
           {editing ? "Save to audit changes" : "Click to edit"}
         </span>
       </div>
-      <div
+      <Card
         onClick={startEditing}
+        className={[
+          "overflow-hidden rounded-xl px-[18px] py-4 transition-[max-height,min-height] duration-300 ease-out",
+          editing ? "min-h-[120px] max-h-[600px] cursor-default ring-1 ring-ring/40" : "min-h-24 max-h-24 cursor-pointer",
+        ].join(" ")}
         style={{
-          background: "var(--warm-04)",
-          border: editing ? "1px solid var(--warm-15)" : "1px solid var(--warm-06)",
-          borderRadius: 10,
-          padding: "16px 18px",
-          minHeight: editing ? 120 : 96,
-          maxHeight: editing ? 600 : 96,
-          overflow: "hidden",
-          cursor: editing ? "default" : "pointer",
           WebkitMaskImage: editing ? "none" : "linear-gradient(to bottom, black 55%, transparent 100%)",
           maskImage: editing ? "none" : "linear-gradient(to bottom, black 55%, transparent 100%)",
-          transition: "max-height 0.32s cubic-bezier(0.22,1,0.36,1), min-height 0.32s cubic-bezier(0.22,1,0.36,1)",
         }}
       >
         {editing ? (
@@ -100,7 +96,7 @@ export function BriefPanel({ value, onUpdateMeta, data, dispatch, onRunRegenerat
             {treatmentText || <span style={{ opacity: 0.3 }}>Click here to write or paste the brief — the spot's setup, characters, tone, and intent.</span>}
           </div>
         )}
-      </div>
+      </Card>
       {editing && (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
           <button

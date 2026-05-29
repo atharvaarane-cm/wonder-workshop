@@ -11,6 +11,9 @@ const TAP_SCALE = 0.985;
 import { generateBrief, chatWithTools, regenerateShotList } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
 import { BriefPanel } from "./components/BriefPanel.jsx";
@@ -2088,8 +2091,17 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
   const talents = data.talent.filter(t => frame.talentIds.includes(t.id));
   const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
 
+  const frameCardClassName = [
+    "overflow-hidden rounded-lg transition-colors",
+    selected ? "ring-1 ring-ring/50" : "",
+    highlighted ? "ring-1 ring-ring/30" : "",
+    hovered ? "border-ring/40" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <motion.div
+    <Card
+      render={<motion.div />}
+      className={frameCardClassName}
       layout
       layoutId={`frame-${frame.id}`}
       draggable onDragStart={e => onDragStart(e, frame.id)}
@@ -2101,15 +2113,9 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
       whileTap={isDragSrc ? undefined : { scale: TAP_SCALE }}
       transition={TAP_SPRING}
       style={{
-        borderRadius: 8, overflow: "hidden",
-        border: selected ? "1px solid var(--warm-20)"
-          : highlighted ? "1px solid var(--warm-12)"
-          : hovered ? "1px solid var(--warm-08)" : "1px solid var(--warm-04)",
         cursor: isDragSrc ? "grabbing" : "pointer",
         opacity: isDragSrc ? 0.15 : 1,
-        boxShadow: selected ? "0 2px 20px rgba(0,0,0,0.08)" : hovered ? "0 4px 18px rgba(0,0,0,0.06)" : "none",
         animation: highlighted ? "highlightPulse 1.5s ease" : "none",
-        background: "var(--card-bg)",
       }}
     >
       {/* Header bar */}
@@ -2185,7 +2191,7 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
           {renderMentions(frame.brief, data)}
         </div>
       </div>
-    </motion.div>
+    </Card>
   );
 }
 
@@ -2448,7 +2454,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
 
         {/* === FIELDS (right column in portrait, below in landscape) === */}
         <div>
-        <div style={{ background: "var(--card-bg)", border: "1px solid var(--warm-04)", borderRadius: 10, padding: "20px 24px", marginBottom: 20 }}>
+        <Card className="mb-5 rounded-xl px-6 py-5">
           {/* Description (renamed from Brief) */}
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Description</label>
@@ -2544,7 +2550,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
               <CameraControlStrip frame={frame} dispatch={dispatch} />
             </div>
           </CollapsibleSection>
-        </div>
+        </Card>
 
         {/* Delete frame */}
         <ConfirmAction label="Delete Frame" onConfirm={() => onDeleteFrame(frame.id)} variant="danger" style={{ padding: "6px 14px", fontSize: 11 }} />
@@ -2731,32 +2737,34 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
           <div>
             <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Brand name</label>
-            <input
+            <Input
+              type="text"
+              size="lg"
               value={brand?.name || ""}
               onChange={e => dispatch({ type: "UPDATE_BRAND", field: "name", value: e.target.value })}
               placeholder="Brand name"
-              style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, padding: "7px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm)", outline: "none" }}
             />
           </div>
           <div>
             <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>URL</label>
-            <input
+            <Input
+              type="text"
+              size="lg"
               value={brand?.url || ""}
               onChange={e => dispatch({ type: "UPDATE_BRAND", field: "url", value: e.target.value })}
               placeholder="nike.com"
-              style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, padding: "7px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm)", outline: "none" }}
             />
           </div>
         </div>
       </div>
       <div>
         <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Guidelines</label>
-        <textarea
+        <Textarea
+          size="lg"
           value={brand?.guidelines || ""}
           onChange={e => dispatch({ type: "UPDATE_BRAND", field: "guidelines", value: e.target.value })}
           placeholder="Brand voice, tone, dos and don'ts…"
           rows={3}
-          style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, lineHeight: 1.6, padding: "8px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm-40)", outline: "none", resize: "vertical" }}
         />
       </div>
     </div>
@@ -4467,7 +4475,7 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
 
   return (
     <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16 }}>
-      <div style={{
+      <Card className="rounded-xl p-3" style={{
         display: "grid",
         gridTemplateColumns: "200px 1fr",
         gap: 20,
@@ -4477,10 +4485,6 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
         // The right pane scrolls when content exceeds the cap.
         minHeight: 220,
         maxHeight: 800,
-        borderRadius: 12,
-        background: "var(--warm-04)",
-        border: "1px solid var(--warm-06)",
-        padding: 12,
       }}>
         {/* LEFT RAIL — vertical tab stack */}
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -4515,7 +4519,7 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
             onAIAssist={onAIAssist}
           />
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -5369,11 +5373,14 @@ function AssetCard({ item, category, data, dispatch, isExpanded, onToggle, onAIA
     }, 1000);
   };
 
+  const assetCardClassName = [
+    "overflow-hidden rounded-xl transition-colors",
+    isComplete ? "ring-1 ring-ring/30" : "",
+    isDraft ? "border-dashed" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <div style={{
-      borderRadius: 10, overflow: "hidden", transition: "all 0.2s ease",
-      border: isComplete ? "1px solid var(--warm-10)" : isDraft ? "1px dashed var(--warm-08)" : "1px solid var(--warm-06)",
-    }}>
+    <Card className={assetCardClassName}>
       {/* Collapsed header */}
       <div onClick={onToggle} style={{
         display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
@@ -5589,7 +5596,7 @@ function AssetCard({ item, category, data, dispatch, isExpanded, onToggle, onAIA
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -7460,7 +7467,7 @@ export default function WorkshopV2() {
 
   return (
     <UIProvider>
-    <div style={{
+    <div className={isDark ? "dark" : undefined} style={{
       ...getThemeVars(isDark),
       background: isDark
         ? "radial-gradient(ellipse 80% 60% at 50% 40%, #111112 0%, #0A0A0A 100%)"
@@ -7471,7 +7478,7 @@ export default function WorkshopV2() {
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
       <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; margin: 0; }
         ::selection { background: var(--warm-10); color: var(--warm); }
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
