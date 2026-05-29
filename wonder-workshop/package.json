@@ -1,14 +1,14 @@
 {
   "name": "wonder-workshop",
   "version": "1.0.0",
-  "description": "Creative production brief tool powered by Ollama",
+  "description": "Creative production brief tool powered by Gemini",
   "type": "module",
   "scripts": {
-    "dev": "node --watch server.js & cd client && npm run dev",
-    "server": "node --watch server.js",
+    "dev": "node --watch --env-file-if-exists=.env.local server.js & cd client && npm run dev",
+    "server": "node --watch --env-file-if-exists=.env.local server.js",
     "client": "cd client && npm run dev",
     "build": "cd client && npm run build",
-    "start": "node server.js"
+    "start": "node --env-file-if-exists=.env.local server.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

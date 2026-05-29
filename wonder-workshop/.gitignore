@@ -2,3 +2,7 @@ node_modules/
 .DS_Store
 dist/
 client/stable-diffusion-webui/
+.vercel
+.env
+.env.local
+.env.*.local
