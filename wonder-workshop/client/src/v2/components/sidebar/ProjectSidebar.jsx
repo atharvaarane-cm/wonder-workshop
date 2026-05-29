@@ -7,7 +7,7 @@ import { SectionIcon, WLogo, timeAgo, uiConfirm, toast } from "../../Workshop.js
 // to switch; the current project saves automatically before the
 // switch so no work is lost.
 
-export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onNew, onDelete, onRename, onMoveToFolder, onNewFolder, onDeleteFolder }) {
+export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onNew, onHome, onDelete, onRename, onMoveToFolder, onNewFolder, onDeleteFolder }) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -40,42 +40,107 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
 
   return (
     <div style={{
-      width: 220, flexShrink: 0,
+      width: 256, flexShrink: 0,
       borderRight: "1px solid var(--warm-06)",
-      background: "var(--warm-04)",
+      background: "rgba(0,0,0,0.72)",
       display: "flex", flexDirection: "column",
-      height: "100%", overflow: "hidden",
+      height: "100vh", overflow: "hidden",
     }}>
-      <div style={{ padding: "16px 14px 10px" }}>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 6, marginBottom: 14,
-        }}>
-          <WLogo color="var(--warm-50)" size={16} />
-          <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, color: "var(--warm-50)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Workshop</span>
-        </div>
+      <div style={{
+        height: 64,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 16px",
+      }}>
+        <button
+          aria-label="Wonder Workshop"
+          onClick={onHome}
+          title="Back to home"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+            background: "transparent",
+            border: "none",
+            color: "var(--warm)",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          <WLogo color="var(--warm-50)" size={24} />
+        </button>
+        <button
+          title="Collapse sidebar"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 7,
+            border: "1px solid var(--warm-15)",
+            background: "transparent",
+            color: "var(--warm-35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <rect x="3.25" y="2.75" width="9.5" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M6.25 3.25v9.5" stroke="currentColor" strokeWidth="1.4" opacity="0.65"/>
+          </svg>
+        </button>
+      </div>
+
+      <div style={{ padding: "18px 14px 10px" }}>
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={onNew} style={{
-            flex: 1,
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "8px 10px", borderRadius: 7, cursor: "pointer",
-            background: "var(--warm-06)", border: "1px solid var(--warm-10)",
-            color: "var(--warm)", outline: "none",
-            fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-          }}>
-            <SectionIcon name="plus" size={12} color="var(--warm)" />
-            New project
+          <button
+            onClick={onNew}
+            style={{
+              flex: 1,
+              minHeight: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              padding: "8px 12px",
+              borderRadius: 8,
+              cursor: "pointer",
+              background: "#242424",
+              border: "0.5px solid #93979f",
+              boxShadow: "0 1px 2px rgba(10,13,20,0.15)",
+              color: "#fff",
+              outline: "none",
+              fontFamily: "var(--f)",
+              fontSize: 13,
+              fontWeight: 600,
+              lineHeight: "20px",
+              letterSpacing: 0,
+            }}
+          >
+            <SectionIcon name="film" size={14} color="rgba(255,255,255,0.8)" />
+            <span style={{ padding: "0 2px", whiteSpace: "nowrap" }}>New Storyboard</span>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
+              <path d="M4.5 6.25 8 9.75l3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
           <button
             onClick={onNewFolder}
             title="New client folder"
             style={{
+              width: 36,
+              minHeight: 42,
               display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "8px 10px", borderRadius: 7, cursor: "pointer",
+              padding: 0, borderRadius: 8, cursor: "pointer",
               background: "var(--warm-04)", border: "1px solid var(--warm-08)",
               color: "var(--warm-40)", outline: "none",
+              flexShrink: 0,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6a1.5 1.5 0 0 1 1.06.44L8.5 4.5h4A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
             </svg>
           </button>

@@ -7525,6 +7525,23 @@ export default function WorkshopV2() {
         return <OnePager brief={brief} images={images} onClose={() => setExportOpen(false)} />;
       })()}
 
+      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden" }}>
+        {/* Left: project sidebar (full-height multi-project nav) */}
+        <ProjectSidebar
+          projects={projects}
+          folders={folders}
+          activeProjectId={activeProjectId}
+          onSwitch={switchToProject}
+          onNew={startNewProject}
+          onHome={() => { setBuilt(false); setProductionFrameId(null); setSelectedFrameId(null); }}
+          onDelete={handleDeleteProject}
+          onRename={handleRenameProject}
+          onMoveToFolder={handleMoveToFolder}
+          onNewFolder={handleNewFolder}
+          onDeleteFolder={handleDeleteFolder}
+        />
+
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {/* Read-only banner — surfaces when the project was loaded from
           a #share=<base64> URL hash. Save-as-copy clones the data into
           a fresh local project, switches to it, and strips the hash. */}
@@ -7560,7 +7577,7 @@ export default function WorkshopV2() {
 
       {/* Nav */}
       <nav style={{
-        position: "sticky", top: 0, zIndex: 100, height: 48,
+        position: "relative", zIndex: 100, height: 64, flexShrink: 0,
         display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
         padding: "0 24px",
         borderBottom: "1px solid var(--warm-06)", background: "var(--surface)",
@@ -7568,14 +7585,7 @@ export default function WorkshopV2() {
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div onClick={() => { setBuilt(false); setProductionFrameId(null); setSelectedFrameId(null); }}
-            style={{ cursor: "pointer", display: "flex", alignItems: "center", opacity: 0.9, transition: "opacity 0.15s ease" }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "0.9"}
-            title="Back to home"
-          ><WLogo color="var(--warm)" size={16} /></div>
           {built && <>
-            <div style={{ width: 1, height: 16, background: "var(--warm-08)" }} />
             <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 500, color: "var(--warm)" }}>{data.meta.title}</span>
             <AspectRatioControl
               value={data.meta.aspect}
@@ -7636,20 +7646,7 @@ export default function WorkshopV2() {
       </nav>
 
       {/* Content area */}
-      <div style={{ display: "flex", height: "calc(100vh - 48px)" }}>
-        {/* Left: project sidebar (always visible — multi-project nav) */}
-        <ProjectSidebar
-          projects={projects}
-          folders={folders}
-          activeProjectId={activeProjectId}
-          onSwitch={switchToProject}
-          onNew={startNewProject}
-          onDelete={handleDeleteProject}
-          onRename={handleRenameProject}
-          onMoveToFolder={handleMoveToFolder}
-          onNewFolder={handleNewFolder}
-          onDeleteFolder={handleDeleteFolder}
-        />
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* Main */}
         <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
           {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} folders={folders} />}
@@ -7704,6 +7701,8 @@ export default function WorkshopV2() {
 
         {/* Floating AI Chat tab — right edge when sidebar closed */}
         {built && <AIChatTab sidebarOpen={sidebarOpen} onClick={() => setSidebarOpen(true)} />}
+      </div>
+        </div>
       </div>
     </div>
     </UIProvider>
