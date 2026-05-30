@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronDownIcon, FolderPlusIcon } from "lucide-react";
+import { ChevronDownIcon, FolderPlusIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Group, GroupSeparator } from "@/components/ui/group";
 import {
@@ -558,13 +558,37 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
         </span>
         {hovered && onDeleteFolder && (
           <button
-            onClick={e => { e.stopPropagation(); onDeleteFolder(name); }}
-            title="Delete folder"
-            style={{
-              background: "transparent", border: "none", color: "var(--warm-25)",
-              cursor: "pointer", padding: 0, lineHeight: 1, fontSize: 14, outline: "none",
+            type="button"
+            aria-label={`Delete folder ${name}`}
+            onPointerDown={e => e.stopPropagation()}
+            onMouseDown={e => {
+              e.preventDefault();
+              e.stopPropagation();
             }}
-          >×</button>
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              void onDeleteFolder(name);
+            }}
+            title={`Delete folder ${name}`}
+            style={{
+              width: 24,
+              height: 24,
+              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: "none",
+              borderRadius: 6,
+              color: "var(--warm-30)",
+              cursor: "pointer",
+              padding: 0,
+              outline: "none",
+            }}
+          >
+            <Trash2Icon aria-hidden="true" size={14} strokeWidth={1.8} />
+          </button>
         )}
       </div>
       {!collapsed && (

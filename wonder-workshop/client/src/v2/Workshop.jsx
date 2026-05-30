@@ -173,8 +173,8 @@ function getThemeVars(isDark) {
 }
 
 const CHAT_SUGGESTIONS = [
-  { label: "Create a new character based on this project's brief", icon: "users" },
-  { label: "Suggest a new location and add it", icon: "map" },
+  { label: "Create a character.", icon: "users" },
+  { label: "Add new location", icon: "map" },
   { label: "Add a hero product / element with reference image", icon: "camera" },
 ];
 
@@ -6243,21 +6243,23 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
       </Reveal>
 
       <Reveal delay={320}>
-        <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
-          <SectionIcon name="sparkle" size={15} color="rgba(255,255,255,0.8)" />
-          {generating ? " Generating brief…" : " Generate Storyboard"}
-        </LiquidGlassButton>
-        {error ? (
-          <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
-            {error}
-          </p>
-        ) : (
-          <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
-            {generating
-              ? "Talking to Gemini — characters, locations, and a 9-frame storyboard incoming. Usually ~10–20 seconds."
-              : "Creates talent, locations, products, and a complete shot sequence"}
-          </p>
-        )}
+        <div className="mt-4">
+          <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
+            <SectionIcon name="sparkle" size={15} color="rgba(255,255,255,0.8)" />
+            {generating ? " Generating brief…" : " Generate Storyboard"}
+          </LiquidGlassButton>
+          {error ? (
+            <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
+              {error}
+            </p>
+          ) : (
+            <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
+              {generating
+                ? "Talking to Gemini — characters, locations, and a 9-frame storyboard incoming. Usually ~10–20 seconds."
+                : "Creates talent, locations, products, and a complete shot sequence"}
+            </p>
+          )}
+        </div>
       </Reveal>
     </div>
     </div>

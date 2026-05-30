@@ -315,12 +315,12 @@ export default function OnePager({ brief, images = {}, onClose }) {
               <div className="op-campaign">{pi.brandCampaignName || brief?.title || ''}</div>
             </div>
             <div className="op-header-right">
-              {pi.projectName && <div className="op-meta-row"><span>Project</span>{pi.projectName}</div>}
-              {pi.jobNumber   && <div className="op-meta-row"><span>Job #</span>{pi.jobNumber}</div>}
-              {cd.format      && <div className="op-meta-row"><span>Format</span>{cd.format}</div>}
-              {cd.duration    && <div className="op-meta-row"><span>Duration</span>{cd.duration}</div>}
-              {cd.shots       && <div className="op-meta-row"><span>Shots</span>{cd.shots}</div>}
-              {cd.location    && <div className="op-meta-row"><span>Location</span>{cd.location}</div>}
+              {pi.projectName && <div className="op-meta-row op-meta-row--project"><span>Project</span>{pi.projectName}</div>}
+              {pi.jobNumber   && <div className="op-meta-row op-meta-row--job"><span>Job #</span>{pi.jobNumber}</div>}
+              {cd.format      && <div className="op-meta-row op-meta-row--format"><span>Format</span>{cd.format}</div>}
+              {cd.duration    && <div className="op-meta-row op-meta-row--duration"><span>Duration</span>{cd.duration}</div>}
+              {cd.shots       && <div className="op-meta-row op-meta-row--shots"><span>Shots</span>{cd.shots}</div>}
+              {cd.location    && <div className="op-meta-row op-meta-row--location"><span>Location</span>{cd.location}</div>}
             </div>
           </div>
 
