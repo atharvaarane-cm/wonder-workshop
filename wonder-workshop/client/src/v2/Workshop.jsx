@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/menu";
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
-import { BriefPanel } from "./components/BriefPanel.jsx";
+import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import {
@@ -4576,8 +4576,6 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
   const [dragId, setDragId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
   const didDrag = useRef(false);
-  const [brandHovered, setBrandHovered] = useState(false);
-
   const dragRef = useRef({ id: null, targetPos: null });
   const dragGhostRef = useRef(null);
 
@@ -4679,32 +4677,14 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
               </div>
             </div>
             <div style={{ paddingTop: 6 }}>
-              <span
-                onMouseEnter={() => setBrandHovered(true)}
-                onMouseLeave={() => setBrandHovered(false)}
-                style={{
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-                  color: brandHovered ? "var(--warm-40)" : "var(--warm-25)",
-                  letterSpacing: "0.12em", textTransform: "uppercase",
-                  padding: "5px 12px", borderRadius: 6,
-                  background: brandHovered ? "var(--warm-06)" : "var(--warm-04)",
-                  border: brandHovered ? "1px solid var(--warm-10)" : "1px solid var(--warm-06)",
-                  cursor: "pointer", transition: "all 0.15s ease",
-                }}
-              >{data.meta.client}</span>
+              <EditBriefDialog
+                value={data.meta.treatment || ""}
+                onUpdateMeta={onUpdateMeta}
+                data={data}
+                onRunRegeneration={onRunRegeneration}
+              />
             </div>
           </div>
-
-          {/* Treatment / Brief — squished preview in display mode (a few
-              lines fading out so a long brief doesn't dominate the page),
-              expands to fit content up to 600px when clicked into edit. */}
-          <BriefPanel
-            value={data.meta.treatment || ""}
-            onUpdateMeta={onUpdateMeta}
-            data={data}
-            dispatch={dispatch}
-            onRunRegeneration={onRunRegeneration}
-          />
 
           {/* Asset Tab Bar */}
           <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}

@@ -216,7 +216,7 @@ export function ProjectSidebar({
               color: "var(--primary-foreground)",
             }}
           >
-            New Storyboard
+            New Project
           </Button>
           <GroupSeparator style={{ background: "color-mix(in oklab, var(--primary-foreground) 24%, transparent)" }} />
           <Menu>
