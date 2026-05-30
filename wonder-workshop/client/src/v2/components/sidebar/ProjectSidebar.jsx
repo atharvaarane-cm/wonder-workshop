@@ -1,4 +1,13 @@
 import { useState, useEffect, useRef } from "react";
+import { ChevronDownIcon, FolderPlusIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Group, GroupSeparator } from "@/components/ui/group";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import { SectionIcon, WLogo, timeAgo, uiConfirm, toast } from "../../Workshop.jsx";
 
 // -- PROJECT SIDEBAR (left rail, multi-project nav) -------------
@@ -62,12 +71,6 @@ export function ProjectSidebar({
     }
     setRenamingId(null);
     setRenameValue("");
-  }
-
-  function handleNewFolderClick(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    onNewFolder?.();
   }
 
   if (mode === "project") {
@@ -201,62 +204,49 @@ export function ProjectSidebar({
         </button>
       </div>
 
-      <div style={{ padding: "18px 14px 10px" }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            type="button"
+      <div style={{ padding: "18px 14px" }}>
+        <Group aria-label="New storyboard actions" className="w-full">
+          <Button
+            className="flex-1"
             onClick={onNew}
+            size="lg"
             style={{
-              flex: 1,
-              minHeight: 42,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              padding: "8px 12px",
-              borderRadius: 8,
-              cursor: "pointer",
-              background: "#242424",
-              border: "0.5px solid #93979f",
-              boxShadow: "0 1px 2px rgba(10,13,20,0.15)",
-              color: "#fff",
-              outline: "none",
-              fontFamily: "var(--f)",
-              fontSize: 13,
-              fontWeight: 600,
-              lineHeight: "20px",
-              letterSpacing: 0,
+              background: "var(--primary)",
+              borderColor: "var(--primary)",
+              color: "var(--primary-foreground)",
             }}
           >
-            <SectionIcon name="film" size={14} color="rgba(255,255,255,0.8)" />
-            <span style={{ padding: "0 2px", whiteSpace: "nowrap" }}>New Storyboard</span>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
-              <path d="M4.5 6.25 8 9.75l3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={handleNewFolderClick}
-            title="New client folder"
-            style={{
-              width: 36,
-              minHeight: 42,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              padding: 0, borderRadius: 8, cursor: "pointer",
-              background: "var(--warm-04)", border: "1px solid var(--warm-08)",
-              color: "var(--warm-40)", outline: "none",
-              flexShrink: 0,
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6a1.5 1.5 0 0 1 1.06.44L8.5 4.5h4A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </div>
+            New Storyboard
+          </Button>
+          <GroupSeparator style={{ background: "color-mix(in oklab, var(--primary-foreground) 24%, transparent)" }} />
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button
+                  aria-label="New storyboard options"
+                  size="icon-lg"
+                  style={{
+                    background: "var(--primary)",
+                    borderColor: "var(--primary)",
+                    color: "var(--primary-foreground)",
+                  }}
+                />
+              }
+            >
+              <ChevronDownIcon aria-hidden="true" className="size-4" />
+            </MenuTrigger>
+            <MenuPopup align="end">
+              <MenuItem closeOnClick onClick={() => onNewFolder?.()}>
+                <FolderPlusIcon aria-hidden="true" />
+                New client folder
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+        </Group>
       </div>
 
       <div style={{ padding: "0 14px 6px" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm-25)", letterSpacing: 0 }}>
           Projects · {projects.length}{folders.length ? ` · ${folders.length} client${folders.length === 1 ? "" : "s"}` : ""}
         </div>
       </div>

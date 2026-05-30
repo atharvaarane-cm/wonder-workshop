@@ -9,23 +9,24 @@ app.use(express.json({ limit: '20mb' }));
 // ---------------------------------------------------------------
 // Gemini setup. Mirrors api/chat.js + api/image-gemini.js so local
 // dev behavior matches production. Keys come from .env.local at the
-// project root (loaded via node --env-file-if-exists in npm run dev).
+// project root (loaded via node --env-file-if-exists in bun run dev).
 // ---------------------------------------------------------------
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_IMAGE_API_KEY;
+const TEXT_GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_IMAGE_API_KEY;
+const IMAGE_GEMINI_KEY = process.env.GEMINI_IMAGE_API_KEY || process.env.GEMINI_API_KEY;
 const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
 const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3-pro-image-preview';
 
-function ensureGeminiKey(res) {
-  if (GEMINI_KEY) return true;
+function ensureGeminiKey(res, key = TEXT_GEMINI_KEY) {
+  if (key) return true;
   res.status(500).json({
     error: 'Gemini API key not configured',
-    hint: 'Add GEMINI_API_KEY (and optionally GEMINI_IMAGE_API_KEY) to .env.local at the repo root, then restart npm run dev.',
+    hint: 'Add GEMINI_API_KEY (and optionally GEMINI_IMAGE_API_KEY) to .env.local at the repo root, then restart bun run dev.',
   });
   return false;
 }
 
-const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
+const genAI = TEXT_GEMINI_KEY ? new GoogleGenerativeAI(TEXT_GEMINI_KEY) : null;
 
 // ---------------------------------------------------------------
 // /api/chat — Gemini text generation (mirrors api/chat.js).
@@ -35,7 +36,7 @@ const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 // ---------------------------------------------------------------
 
 app.post('/api/chat', async (req, res) => {
-  if (!ensureGeminiKey(res)) return;
+  if (!ensureGeminiKey(res, TEXT_GEMINI_KEY)) return;
 
   const { messages = [], tools } = req.body || {};
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -110,7 +111,7 @@ const RATIO_MAP = {
 };
 
 app.post('/api/image-gemini', async (req, res) => {
-  if (!ensureGeminiKey(res)) return;
+  if (!ensureGeminiKey(res, IMAGE_GEMINI_KEY)) return;
 
   const { prompt, ratio = '1:1', referenceImages = [] } = req.body || {};
   if (!prompt || typeof prompt !== 'string') {
@@ -150,7 +151,7 @@ app.post('/api/image-gemini', async (req, res) => {
     },
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${GEMINI_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${IMAGE_GEMINI_KEY}`;
 
   let geminiRes;
   try {
@@ -372,7 +373,7 @@ app.post('/api/brand', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  if (GEMINI_KEY) {
+  if (TEXT_GEMINI_KEY || IMAGE_GEMINI_KEY) {
     console.log(`API server running at http://localhost:${PORT} (Gemini: ${TEXT_MODEL} + ${IMAGE_MODEL})`);
   } else {
     console.log(`API server running at http://localhost:${PORT} (no Gemini key — set GEMINI_API_KEY in .env.local)`);
