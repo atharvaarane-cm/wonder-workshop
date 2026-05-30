@@ -6046,7 +6046,7 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
             <div>
-              <label style={lbl}>Client</label>
+              <label style={lbl}>Client Folder</label>
               <input
                 value={meta.client}
                 onChange={e => setMeta(m => ({ ...m, client: e.target.value }))}
@@ -7652,7 +7652,6 @@ export default function WorkshopV2() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {built && <>
-            <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 500, color: "var(--warm)" }}>{data.meta.title}</span>
             <AspectRatioControl
               value={data.meta.aspect}
               onChange={(newRatio) => handleAspectChange(newRatio)}

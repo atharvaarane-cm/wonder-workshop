@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { SectionIcon } from "../Workshop.jsx";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 
 // Brief panel — squished mask-faded preview in display mode; click to
 // expand the textarea up to 600px. Tracks a local draft so the parent
@@ -66,8 +67,9 @@ export function BriefPanel({ value, onUpdateMeta, data, dispatch, onRunRegenerat
         }}
       >
         {editing ? (
-          <textarea
+          <Textarea
             ref={taRef}
+            size="lg"
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onClick={e => e.stopPropagation()}
@@ -76,16 +78,7 @@ export function BriefPanel({ value, onUpdateMeta, data, dispatch, onRunRegenerat
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSave(); }
             }}
             placeholder="Click here to write or paste the brief — the spot's setup, characters, tone, and intent."
-            style={{
-              width: "100%", boxSizing: "border-box",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.18)",
-              borderRadius: 6, padding: "8px 10px",
-              fontFamily: "var(--f)", fontSize: 15, fontWeight: 300,
-              color: "var(--warm)", lineHeight: 1.7,
-              outline: "none", resize: "none",
-              minHeight: 96, maxHeight: 560,
-            }}
+            style={{ resize: "none", minHeight: 96, maxHeight: 560 }}
           />
         ) : (
           <div style={{

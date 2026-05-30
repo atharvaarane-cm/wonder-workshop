@@ -277,10 +277,11 @@ export function ProjectSidebar({
               if (!byFolder.has(p.folder)) byFolder.set(p.folder, []);
               byFolder.get(p.folder).push(p);
             }
-            const renderRow = (p) => (
+            const renderRow = (p, isNested = false) => (
               <ProjectRow
                 key={p.id}
                 project={p}
+                isNested={isNested}
                 isActive={p.id === activeProjectId}
                 isRenaming={renamingId === p.id}
                 renameValue={renameValue}
@@ -349,21 +350,9 @@ function ProjectSectionRow({ tab, count, isActive, onClick }) {
         background: bg,
         color: accent,
         textAlign: "left",
-        position: "relative",
         transition: "background 0.15s ease, color 0.15s ease",
       }}
     >
-      {isActive && (
-        <div style={{
-          position: "absolute",
-          left: 0,
-          top: 10,
-          bottom: 10,
-          width: 2,
-          background: "var(--warm-40)",
-          borderRadius: 1,
-        }} />
-      )}
       <SectionIcon name={tab.icon} size={18} color={iconColor} />
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tab.label}</span>
       <span style={{
@@ -390,7 +379,7 @@ function ProjectSectionRow({ tab, count, isActive, onClick }) {
 // folder groups and the top-level unfiled list. Draggable: dragging
 // onto a FolderDropZone or an Unfiled zone reassigns p.folder via
 // onMoveToFolder.
-function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInputRef, setRenameValue, setRenamingId, commitRename, menuOpenId, setMenuOpenId, folders, onSwitch, onDelete, onMoveToFolder }) {
+function ProjectRow({ project: p, isNested = false, isActive, isRenaming, renameValue, renameInputRef, setRenameValue, setRenamingId, commitRename, menuOpenId, setMenuOpenId, folders, onSwitch, onDelete, onMoveToFolder }) {
   return (
     <div
       draggable={!isRenaming}
@@ -401,7 +390,7 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
       }}
       style={{
         display: "flex", alignItems: "center",
-        padding: "6px 8px", borderRadius: 6, marginBottom: 2,
+        padding: isNested ? "6px 8px 6px 24px" : "6px 8px", borderRadius: 6, marginBottom: 2,
         background: isActive ? "var(--warm-08)" : "transparent",
         cursor: isRenaming ? "default" : "grab",
         position: "relative",
@@ -438,10 +427,10 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
         <span
           onDoubleClick={e => { e.stopPropagation(); setRenamingId(p.id); setRenameValue(p.name); }}
           title={`Double-click to rename · Updated ${timeAgo(p.updatedAt)}`}
+          className="text-white/90"
           style={{
             flex: 1, fontFamily: "var(--f)", fontSize: 12,
-            fontWeight: isActive ? 600 : 500,
-            color: isActive ? "var(--warm)" : "var(--warm-50)",
+            fontWeight: 500,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}
         >{p.name || "Untitled"}</span>
@@ -469,7 +458,7 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
         }}>
           <button onClick={() => { setMenuOpenId(null); setRenamingId(p.id); setRenameValue(p.name); }} style={projMenuItemStyle()}>Rename</button>
           {/* Move to folder — inline submenu. Folders array + No folder. */}
-          <div style={{ padding: "4px 8px 2px", fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Move to client</div>
+          <div style={{ padding: "4px 8px 2px", fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Move to Folder</div>
           <button onClick={() => { setMenuOpenId(null); onMoveToFolder?.(p.id, null); }} style={{ ...projMenuItemStyle(), fontWeight: !p.folder ? 700 : 500 }}>
             {!p.folder ? "✓ " : ""}Unfiled
           </button>
@@ -566,14 +555,16 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "5px 6px", borderRadius: 5, cursor: "pointer",
-          color: "var(--warm-30)",
+          display: "flex", alignItems: "center", gap: 9,
+          padding: "8px 8px", borderRadius: 8, cursor: "pointer",
         }}
       >
-        <span style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: 9, lineHeight: 1 }}>▾</span>
-        <span style={{ flex: 1, fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {name} <span style={{ opacity: 0.5 }}>· {projects.length}</span>
+        <span style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: 10, lineHeight: 1, flexShrink: 0 }}>▾</span>
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+          <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6a1.5 1.5 0 0 1 1.06.44L8.5 4.5h4A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-8z" stroke="currentColor" strokeWidth="1.45" strokeLinejoin="round"/>
+        </svg>
+        <span className="text-white/90" style={{ flex: 1, minWidth: 0, fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, letterSpacing: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {name} <span style={{ opacity: 0.48, fontSize: 12 }}>· {projects.length}</span>
         </span>
         {hovered && onDeleteFolder && (
           <button
@@ -587,10 +578,10 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
         )}
       </div>
       {!collapsed && (
-        <div style={{ paddingLeft: 6 }}>
+        <div>
           {projects.length === 0 ? (
             <div style={{ padding: "4px 8px", fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-20)", fontStyle: "italic" }}>Empty</div>
-          ) : projects.map(renderRow)}
+          ) : projects.map(p => renderRow(p, true))}
         </div>
       )}
     </div>
