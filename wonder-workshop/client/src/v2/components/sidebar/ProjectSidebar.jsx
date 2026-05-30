@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronDownIcon, FolderPlusIcon, Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, FilmIcon, FolderPlusIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Group, GroupSeparator } from "@/components/ui/group";
 import {
@@ -205,20 +205,34 @@ export function ProjectSidebar({
       </div>
 
       <div style={{ padding: "18px 14px" }}>
-        <Group aria-label="New storyboard actions" className="w-full">
+        <Group
+          aria-label="New storyboard actions"
+          className="w-full overflow-hidden rounded-[10px]"
+          style={{
+            background: "var(--warm-06)",
+            border: "1px solid var(--warm-08)",
+            boxShadow: "rgba(0, 0, 0, 0.42) 0px 1px 2px 0px, rgba(255, 255, 255, 0.045) 0px 1px 0px 0px inset",
+          }}
+        >
           <Button
             className="flex-1"
             onClick={onNew}
             size="lg"
             style={{
-              background: "var(--primary)",
-              borderColor: "var(--primary)",
-              color: "var(--primary-foreground)",
+              background: "transparent",
+              border: "none",
+              boxShadow: "none",
+              color: "var(--warm)",
             }}
           >
+            <FilmIcon
+              aria-hidden="true"
+              className="size-4 opacity-100"
+              style={{ color: "var(--warm)", opacity: 1 }}
+            />
             New Project
           </Button>
-          <GroupSeparator style={{ background: "color-mix(in oklab, var(--primary-foreground) 24%, transparent)" }} />
+          <GroupSeparator style={{ background: "var(--warm-08)" }} />
           <Menu>
             <MenuTrigger
               render={
@@ -226,14 +240,19 @@ export function ProjectSidebar({
                   aria-label="New storyboard options"
                   size="icon-lg"
                   style={{
-                    background: "var(--primary)",
-                    borderColor: "var(--primary)",
-                    color: "var(--primary-foreground)",
+                    background: "transparent",
+                    border: "none",
+                    boxShadow: "none",
+                    color: "var(--warm)",
                   }}
                 />
               }
             >
-              <ChevronDownIcon aria-hidden="true" className="size-4" />
+              <ChevronDownIcon
+                aria-hidden="true"
+                className="size-4 opacity-100"
+                style={{ color: "var(--warm)", opacity: 1 }}
+              />
             </MenuTrigger>
             <MenuPopup align="end">
               <MenuItem closeOnClick onClick={() => onNewFolder?.()}>
