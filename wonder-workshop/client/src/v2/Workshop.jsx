@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { toastManager } from "@/components/ui/toast";
 import {
   Menu,
   MenuPopup,
@@ -635,11 +636,10 @@ function parseShareHash() {
   }
 }
 
-// -- UI EVENT BUS (toasts + confirm modal) --------------------
+// -- UI EVENT BUS (confirm modal) ------------------------------
 // Module-level pub/sub so any code path — components, async
-// handlers, event listeners — can call toast(...) or confirm(...)
-// without threading context through every prop. UIProvider mounts a
-// single subscriber that renders the toast stack + confirm modal.
+// handlers, event listeners — can call confirm(...) without threading
+// context through every prop. Toasts are handled by coss toastManager.
 
 const uiBus = {
   listeners: { toast: [], confirm: [] },
@@ -718,7 +718,15 @@ export function log(level, message, meta) {
 }
 
 export function toast(message, opts = {}) {
-  uiBus.emit("toast", { message, ...opts });
+  const type = opts.kind || opts.type || "success";
+  toastManager.add({
+    id: opts.id,
+    title: opts.title || message,
+    description: opts.description,
+    type,
+    timeout: opts.ttl || (type === "error" ? 6000 : 3500),
+    priority: type === "error" ? "high" : "low",
+  });
 }
 export function uiConfirm(opts = {}) {
   return new Promise(resolve => {
@@ -727,18 +735,9 @@ export function uiConfirm(opts = {}) {
 }
 
 function UIProvider({ children }) {
-  const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
-  const idRef = useRef(0);
 
   useEffect(() => {
-    const offToast = uiBus.on("toast", (payload) => {
-      const id = ++idRef.current;
-      const kind = payload.kind || "success";
-      const ttl = payload.ttl || (kind === "error" ? 6000 : 3500);
-      setToasts(prev => [...prev, { id, message: payload.message, kind }]);
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl);
-    });
     const offConfirm = uiBus.on("confirm", (payload) => {
       setConfirmState({
         title: payload.title || "Are you sure?",
@@ -749,7 +748,7 @@ function UIProvider({ children }) {
         resolve: payload.resolve,
       });
     });
-    return () => { offToast(); offConfirm(); };
+    return () => { offConfirm(); };
   }, []);
 
   const handleConfirmResolve = (v) => {
@@ -760,38 +759,6 @@ function UIProvider({ children }) {
   return (
     <>{/* fragment wrapper, no context */}
       {children}
-      {/* Toast stack — top-right, fade in/out, stacks newest at top */}
-      {toasts.length > 0 && (
-        <div style={{
-          position: "fixed", top: 56, right: 16, zIndex: 10000,
-          display: "flex", flexDirection: "column", gap: 8,
-          pointerEvents: "none",
-        }}>
-          {toasts.slice().reverse().map(t => {
-            const colors = {
-              success: { border: "rgba(124,252,156,0.4)", dot: "#7CFC9C" },
-              error:   { border: "rgba(255,138,128,0.4)", dot: "#FF8A80" },
-              info:    { border: "rgba(91,178,255,0.4)",  dot: "#7EB9FF" },
-            }[t.kind] || { border: "var(--warm-12)", dot: "var(--warm-40)" };
-            return (
-              <div key={t.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 14px", borderRadius: 8,
-                background: "var(--surface-solid)",
-                border: `1px solid ${colors.border}`,
-                boxShadow: "0 8px 28px rgba(0,0,0,0.32)",
-                fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-                color: "var(--warm)",
-                maxWidth: 360, animation: "fadeIn 0.18s ease",
-                pointerEvents: "auto",
-              }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: colors.dot, flexShrink: 0 }} />
-                <span>{t.message}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
       {/* Confirm modal — centered overlay, click backdrop to cancel. */}
       {confirmState && (
         <div onClick={() => handleConfirmResolve(false)} style={{
@@ -7791,9 +7758,9 @@ export default function WorkshopV2() {
 
             <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
 
-            <PremiumButton variant="secondary" onClick={() => setExportOpen(true)} style={{ padding: "5px 14px", fontSize: 11, gap: 5 }}>
-              <SectionIcon name="download" size={12} color="var(--warm-50)" /> Export
-            </PremiumButton>
+            <Button variant="outline" onClick={() => setExportOpen(true)}>
+              <SectionIcon name="download" color="currentColor" /> Export
+            </Button>
 
             <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
 

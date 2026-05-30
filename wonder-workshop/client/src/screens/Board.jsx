@@ -129,7 +129,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const [activeId, setActiveId] = useState('cd')
   const [activeImageTarget, setActiveImageTarget] = useState(null)
   const [loadingBySection, setLoadingBySection] = useState({})
-  const [toast, setToast] = useState(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [onePagerOpen, setOnePagerOpen] = useState(false)
@@ -156,7 +155,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
   const rowRefs = useRef({})
   const scrollContainerRef = useRef(null)
   const isProgrammaticScroll = useRef(false)
-  const toastTimer = useRef(null)
   const saveBriefRef = useRef(onSaveBrief)
   saveBriefRef.current = onSaveBrief
   const isInitialBrief = useRef(true)
@@ -203,16 +201,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
     }, 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    function onToast(e) {
-      clearTimeout(toastTimer.current)
-      setToast(e.detail)
-      toastTimer.current = setTimeout(() => setToast(null), 3000)
-    }
-    window.addEventListener('ww-toast', onToast)
-    return () => window.removeEventListener('ww-toast', onToast)
   }, [])
 
   // Close the aspect-ratio menu on any click outside it.
@@ -614,16 +602,6 @@ export default function Board({ brief: initialBrief, onBack, theme, toggleTheme,
 
   return (
     <div className="board-screen">
-      {toast && (
-        <div className={`ww-toast ww-toast-${toast.type}`}>
-          {toast.type === 'success'
-            ? <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            : <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 4v4M7 10v.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-          }
-          {toast.msg}
-        </div>
-      )}
-
       {readOnly && (
         <div className="readonly-banner">
           <span>Viewing a shared brief — read only</span>
