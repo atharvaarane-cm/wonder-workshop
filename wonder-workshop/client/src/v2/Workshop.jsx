@@ -247,6 +247,33 @@ function computeOrphans(data) {
   return { items, handles: items.map(i => i.handle || i.name), count: items.length };
 }
 
+// Build the rich context reconcile needs to STAGE assets logically: each
+// frame's act position, shot type, current cast, location, and group-shot flag;
+// and each asset enriched with its role (talent) / focus (products) so the
+// model can weight presence proportionally.
+function buildReconcileContext(d, assets) {
+  const talentById = Object.fromEntries((d.talent || []).map(t => [t.id, t]));
+  const prodById = Object.fromEntries((d.products || []).map(p => [p.id, p]));
+  const locById = Object.fromEntries((d.locations || []).map(l => [l.id, l]));
+  const fr = d.frames || [];
+  const n = fr.length;
+  const frames = fr.map((f, i) => ({
+    number: f.number,
+    brief: f.brief,
+    shotType: f.shotType,
+    characters: (f.talentIds || []).map(id => talentById[id]?.name).filter(Boolean),
+    location: locById[f.locationId]?.name || null,
+    isGroup: (f.talentIds || []).length >= 2,
+    position: n <= 1 ? "opening" : (i < n / 3 ? "opening third" : i >= (2 * n) / 3 ? "closing third" : "middle third"),
+  }));
+  const enriched = (assets || []).map(a => ({
+    ...a,
+    role: a.type === "talent" ? (talentById[a.id]?.role || "Supporting") : undefined,
+    focus: a.type === "products" ? (prodById[a.id]?.focus || "Medium") : undefined,
+  }));
+  return { frames, assets: enriched };
+}
+
 function assetReconcileStatus(asset, type, data) {
   const brief = String(data?.meta?.treatment || "").toLowerCase();
   const name = String(asset?.name || "").toLowerCase().trim();
@@ -381,6 +408,15 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
           )}
           {!state.loading && !state.error && state.suggestion && (
             <>
+              {state.suggestion.plan && (
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 16, padding: "10px 12px", borderRadius: 10, background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.28)" }}>
+                  <SectionIcon name="sparkle" size={13} color={RECONCILE_AMBER} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 700, color: RECONCILE_AMBER, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Staging plan</div>
+                    <div style={{ fontFamily: "var(--f)", fontSize: 12, color: "var(--warm-50)", lineHeight: 1.5 }}>{state.suggestion.plan}</div>
+                  </div>
+                </div>
+              )}
               <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Proposed brief</label>
               <textarea
                 value={brief}
@@ -1629,6 +1665,14 @@ const V2_CHAT_TOOLS = [
     parameters: { type: "object", properties: {} },
   },
   {
+    name: "cleanup_deleted_references",
+    description: "REVERSE reconcile: remove leftover references to DELETED characters/elements/locations from the brief and storyboard. Use when the user says something like 'remove X everywhere', 'X is gone, take them out', 'clean up the deleted stuff', or 'get rid of the references to the deleted location'. Pass a name to clean only that one; omit to clean all deleted-item references.",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string", description: "Optional — clean only references to this deleted item's name. Omit to clean all." } },
+    },
+  },
+  {
     name: "suggest_followups",
     description: "Offer 1-3 short, specific next-step suggestions the user can tap to continue (like a creative collaborator proposing what to do next). Call this at the END of a turn, in addition to any edits you made. ALSO use it when you ask a clarifying question — pass the likely answers as the suggestions so the user can just tap one. Each suggestion is the exact prompt that will be sent if tapped, so phrase them as first-person user requests (e.g. 'Add a wide establishing shot', 'Make Chloe the lead', 'Put her in the Pepsi sweatshirt').",
     parameters: {
@@ -1910,6 +1954,10 @@ function applyChatToolCall(action, data, dispatch) {
     case "reconcile_all": {
       return { applied: true, kind: "reconcile", field: "reconcile", message: "Reconciling everything",
         effect: { type: "reconcile", scope: "all" } };
+    }
+    case "cleanup_deleted_references": {
+      return { applied: true, kind: "cleanup", field: "cleanup", message: args.name ? `Cleaning up references to ${args.name}` : "Cleaning up deleted references",
+        effect: { type: "cleanupRefs", name: args.name || null } };
     }
     case "suggest_followups": {
       const suggestions = (args.suggestions || []).filter(s => typeof s === "string" && s.trim()).slice(0, 3);
@@ -6846,10 +6894,11 @@ export default function WorkshopV2() {
     }
     setReconcile({ scope: detail.scope, type: detail.type, assets, loading: true, error: null, suggestion: null });
     try {
+      const ctx = buildReconcileContext(d, assets);
       const suggestion = await suggestReconciliation({
         brief: d.meta?.treatment || "",
-        frames: (d.frames || []).map(f => ({ number: f.number, brief: f.brief })),
-        assets,
+        frames: ctx.frames,
+        assets: ctx.assets,
       });
       setReconcile(s => s ? { ...s, loading: false, suggestion } : s);
     } catch (e) {
@@ -7247,10 +7296,11 @@ export default function WorkshopV2() {
         }
         let suggestion;
         try {
+          const ctx = buildReconcileContext(current, assets);
           suggestion = await suggestReconciliation({
             brief: current.meta?.treatment || "",
-            frames: (current.frames || []).map(f => ({ number: f.number, brief: f.brief })),
-            assets,
+            frames: ctx.frames,
+            assets: ctx.assets,
           });
         } catch (e) {
           toast(`Reconcile failed: ${e?.message?.slice(0, 120) || "unknown"}`, { kind: "error" });
@@ -7285,6 +7335,57 @@ export default function WorkshopV2() {
           if (ok) {
             await new Promise(r => setTimeout(r, 60));
             for (const fid of reconciledFrameIds) regenerateOneFrame(fid).catch(e => console.error("[reconcile regen]", e));
+          }
+        }
+        return;
+      }
+      case "cleanupRefs": {
+        // Chat-driven reverse reconcile — remove references to deleted items.
+        const orph = computeOrphans(current);
+        let targets = orph.items;
+        if (effect.name) {
+          const lc = String(effect.name).toLowerCase();
+          targets = orph.items.filter(o => (o.name || "").toLowerCase().includes(lc) || (o.handle || "").toLowerCase().includes(lc));
+        }
+        if (!targets.length) {
+          setChatMessages(prev => [...prev, { id: Date.now(), role: "ai", text: "No leftover references to deleted items.", changes: [] }]);
+          return;
+        }
+        let suggestion;
+        try {
+          suggestion = await suggestOrphanCleanup({
+            brief: current.meta?.treatment || "",
+            frames: (current.frames || []).map(f => ({ number: f.number, brief: f.brief })),
+            orphans: targets,
+          });
+        } catch (e) {
+          toast(`Cleanup failed: ${e?.message?.slice(0, 120) || "unknown"}`, { kind: "error" });
+          return;
+        }
+        dispatch({ type: "UPDATE_META", field: "treatment", value: suggestion.newBrief });
+        const ids = [];
+        for (const fe of (suggestion.frameEdits || [])) {
+          const norm = String(fe.frameNumber || "").padStart(2, "0");
+          const fr = (current.frames || []).find(f => f.number === norm);
+          if (fr && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: fr.id, field: "brief", value: fe.newBrief }); ids.push(fr.id); }
+        }
+        const n = ids.length;
+        dispatch({ type: "AUTO_DETECT_MENTIONS" });
+        setChatMessages(prev => [...prev, { id: Date.now(), role: "ai", text: `Removed references to ${targets.map(t => t.name).join(", ")} from the brief${n ? ` and ${n} frame${n === 1 ? "" : "s"}` : ""}.${n ? " Regenerating…" : ""}`, changes: [] }]);
+        setTimeout(() => {
+          const d2 = dataRef.current;
+          const refs = d2.deletedRefs || [];
+          if (refs.length) {
+            const still = new Set(computeOrphans(d2).items.map(i => (i.name || "") + "|" + (i.handle || "")));
+            const kept = refs.filter(r => still.has((r.name || "") + "|" + (r.handle || "")));
+            if (kept.length !== refs.length) dispatch({ type: "PRUNE_DELETED_REFS", refs: kept });
+          }
+        }, 140);
+        if (n) {
+          const ok = await confirmGeneration({ count: n, label: `Regenerate ${n} storyboard frame${n === 1 ? "" : "s"} after removing the deleted item${n === 1 ? "" : "s"}.` });
+          if (ok) {
+            await new Promise(r => setTimeout(r, 60));
+            for (const fid of ids) regenerateOneFrame(fid).catch(e => console.error("[cleanup regen]", e));
           }
         }
         return;
@@ -8004,6 +8105,18 @@ export default function WorkshopV2() {
       ].join("\n");
     })();
 
+    const orphanNote = (() => {
+      const orph = computeOrphans(currentData);
+      if (orph.count === 0) return "";
+      const lines = orph.items.map(i => `- ${RECONCILE_LABEL[i.type]} "${i.name}"${i.handle ? ` (${i.handle})` : ""} was DELETED but is still referenced.`).join("\n");
+      return [
+        "",
+        "DELETED ITEMS STILL REFERENCED (orphaned — the asset no longer exists but the brief/frames still mention it):",
+        lines,
+        "If the user asks to remove one of these, 'clean up', or 'get rid of it everywhere', call cleanup_deleted_references (pass a name to clean just one, or omit to clean all). It rewrites the brief + frames to remove the dangling references.",
+      ].join("\n");
+    })();
+
     const systemPrompt = [
       "You are a creative production assistant editing a storyboard.",
       "Use the provided tools to make changes — DON'T just describe what you'd do, actually do it via tool calls.",
@@ -8047,6 +8160,7 @@ export default function WorkshopV2() {
       "THE CURRENT BRIEF (meta.treatment):",
       currentData.meta?.treatment || "(no brief written yet)",
       reconcileNote,
+      orphanNote,
       "",
       "Current project state (JSON):",
       JSON.stringify(stateSnap, null, 2),
