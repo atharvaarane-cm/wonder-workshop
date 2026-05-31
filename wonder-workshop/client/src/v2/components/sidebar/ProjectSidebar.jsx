@@ -43,7 +43,21 @@ export function ProjectSidebar({
   onBackToProjects,
   assetCounts = {},
   reconcileFlags = {},
+  onCleanupDuplicates,
 }) {
+  // Count extra same-name project rows (anything beyond the first per name)
+  // — these are almost always fork-orphans from the old "Regenerate All"
+  // duplicate bug. Surfacing a one-click cleanup beats hunting per-row menus.
+  const duplicateCount = (() => {
+    const seen = new Set();
+    let extra = 0;
+    for (const p of (projects || [])) {
+      const key = (p?.name || "").trim().toLowerCase();
+      if (!key) continue;
+      if (seen.has(key)) extra++; else seen.add(key);
+    }
+    return extra;
+  })();
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -270,6 +284,22 @@ export function ProjectSidebar({
         <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm-25)", letterSpacing: 0 }}>
           Projects · {projects.length}{folders.length ? ` · ${folders.length} client${folders.length === 1 ? "" : "s"}` : ""}
         </div>
+        {duplicateCount > 0 && onCleanupDuplicates && (
+          <button
+            onClick={onCleanupDuplicates}
+            title="Remove duplicate project entries, keeping the most recently edited of each"
+            style={{
+              display: "flex", alignItems: "center", gap: 6, marginTop: 8,
+              width: "100%", padding: "6px 8px", borderRadius: 7, cursor: "pointer",
+              background: "rgba(245,166,35,0.10)", border: "1px solid rgba(245,166,35,0.45)",
+              color: "#F5A623", outline: "none",
+              fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#F5A623", flexShrink: 0 }} />
+            Clean up {duplicateCount} duplicate{duplicateCount === 1 ? "" : "s"}
+          </button>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px 16px" }}>
