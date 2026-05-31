@@ -660,7 +660,7 @@ function applyAction(state, action) {
     }
     case "ADD_PRODUCT": {
       const mx = Math.max(0, ...state.products.map(p => parseInt(p.id.slice(1))));
-      const merged = { id: "p" + (mx + 1), name: "New Product", category: "Other", hue: "#888888", referenceImage: null, generationStatus: "idle", ...action.data };
+      const merged = { id: "p" + (mx + 1), name: "New Product", category: "Other", focus: "Medium", hue: "#888888", referenceImage: null, generationStatus: "idle", ...action.data };
       merged.handle = autoHandle(merged.name);
       return { ...state, products: [...state.products, merged] };
     }
@@ -4656,7 +4656,7 @@ function ElementTile({ product, onClick }) {
         fontFamily: "var(--f)", fontSize: 9, fontWeight: 400,
         color: "var(--warm-25)", textAlign: "center",
         letterSpacing: "0.06em", textTransform: "uppercase",
-      }}>{product.category || ""}</div>
+      }}>{`${product.focus || "Medium"} focus`}</div>
     </motion.button>
   );
 }
@@ -4679,20 +4679,43 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
       <DetailHeader
         onBack={onBack}
         name={product.name}
-        subtitle={`${product.category || "Element"} · ${product.handle}`}
+        subtitle={`${product.focus || "Medium"} focus · ${product.handle}`}
         locked={effLocked}
         onToggleLock={() => dispatch({ type: "TOGGLE_PRODUCT_LOCK", id: product.id })}
         onRename={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "name", value: v })}
         lockLabel="Lock element"
       />
+      {/* Focus — High / Medium / Low. Drives how prominently the storyboard
+          features this element (High = hero/close-up, Low = supporting).
+          Mirrors a character's Lead/Supporting/Extra role. */}
       <div>
-        <SectionLabel>Category</SectionLabel>
-        <EditableText
-          value={product.category || ""}
-          onChange={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "category", value: v })}
-          placeholder="e.g. Footwear, Apparel, Beverage…"
-          style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, color: "var(--warm-50)", display: "block" }}
-        />
+        <SectionLabel>Focus</SectionLabel>
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          {[
+            ["High", "Featured — very visible, often a close-up"],
+            ["Medium", "Present and important, not the main focus"],
+            ["Low", "There as support, not featured"],
+          ].map(([f, hint]) => {
+            const active = (product.focus || "Medium").toLowerCase() === f.toLowerCase();
+            return (
+              <button
+                key={f}
+                onClick={() => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "focus", value: f })}
+                title={hint}
+                style={{
+                  padding: "6px 14px", borderRadius: 999, cursor: "pointer", outline: "none",
+                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
+                  background: active ? "var(--warm-12)" : "transparent",
+                  border: `1px solid ${active ? "var(--warm-30)" : "var(--warm-10)"}`,
+                  color: active ? "var(--warm)" : "var(--warm-40)",
+                  transition: "all 0.12s ease",
+                }}
+              >
+                {f}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <DescriptionField
         label="Description"
@@ -7067,7 +7090,7 @@ export default function WorkshopV2() {
     dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId, status: "generating" });
     try {
       log("info", `retrying frame ${frame.number}`);
-      const url = await generateImage(framePrompt(frame, current.talent), { ratio: aspect, referenceImages: refs });
+      const url = await generateImage(framePrompt(frame, current.talent, current.products), { ratio: aspect, referenceImages: refs });
       dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId, dataUrl: url });
       log("info", `frame ${frame.number} retry done`);
     } catch (err) {
@@ -7643,7 +7666,7 @@ export default function WorkshopV2() {
       if (locationId) { const u = generated.locations.get(locationId); if (u) refs.push(u); }
       for (const pid of productIds) { const u = generated.products.get(pid); if (u) refs.push(u); }
       try {
-        const url = await withRetry(() => generateImage(framePrompt(f, initialData.talent), { ratio: aspect, referenceImages: refs }));
+        const url = await withRetry(() => generateImage(framePrompt(f, initialData.talent, initialData.products), { ratio: aspect, referenceImages: refs }));
         dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
         frameSuccess++;
         log("info", `frame done: ${f.number}`);
@@ -7766,6 +7789,7 @@ export default function WorkshopV2() {
       "",
       "When creating a character: keep the `note` field to APPEARANCE only (age range, ethnicity, build, hair color/length, wardrobe). Do NOT put expression / pose / mood directions in the note — those bias every generated frame. The system will neutralize them but it's better not to add them.",
       "Each character has a ROLE: 'Lead' (hero — most screen time, appears across the storyboard, the focal/foreground subject when in a shot), 'Supporting' (secondary presence), or 'Extra' (background / incidental, rarely the focus). Respect roles when building or rebalancing the storyboard and the brief: give Leads prominence and frequency, keep Extras in the background. To change a character's importance, set its role via update_talent (field 'role', value 'Lead' | 'Supporting' | 'Extra').",
+      "Each element / prop has a FOCUS level (same idea as character roles, for hero products): 'High' (feature it prominently — very visible, often a close-up that showcases it), 'Medium' (clearly present and an important part of the scene, not the main focus), or 'Low' (present as a supporting detail, not featured). Weight elements accordingly when building the storyboard — a High-focus product should get a hero/close-up shot. Set it via update_product (field 'focus', value 'High' | 'Medium' | 'Low').",
       "",
       "BE A COLLABORATOR, NOT JUST A COMMAND RUNNER (this matters):",
       "- Clear request → just do it (the user has undo), then briefly say what you changed.",
