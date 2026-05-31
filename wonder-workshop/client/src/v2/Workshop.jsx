@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
 const HOVER_SCALE = 1.012;
 const TAP_SCALE = 0.985;
-import { generateBrief, chatWithTools, regenerateShotList } from "../hooks/useBrief.js";
+import { generateBrief, chatWithTools, regenerateShotList, suggestReconciliation } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
 import { Input } from "@/components/ui/input";
@@ -200,6 +200,199 @@ function deriveCameraText(frame) {
   const parts = [m[frame.movement] || "Static"];
   if (h[frame.cameraHeight]) parts.push(h[frame.cameraHeight]);
   return parts.join(" \xB7 ");
+}
+
+// -- RECONCILIATION ---------------------------------------------
+// An asset (character / element / location) is "reconciled" when it
+// appears in BOTH the project brief (meta.treatment) AND at least one
+// storyboard frame. Anything generated but never woven into the
+// creative drifts out of sync — these helpers detect that so the UI
+// can flag it and offer one-click AI reconciliation.
+const RECONCILE_AMBER = "#F5A623";
+const RECONCILE_LABEL = { talent: "Character", products: "Element", locations: "Location" };
+const RECONCILE_SECTION_NAME = { talent: "characters", products: "elements", locations: "locations" };
+
+function assetReconcileStatus(asset, type, data) {
+  const brief = String(data?.meta?.treatment || "").toLowerCase();
+  const name = String(asset?.name || "").toLowerCase().trim();
+  const handle = String(asset?.handle || "").toLowerCase().trim();
+  const inBrief = (!!name && brief.includes(name)) || (!!handle && brief.includes(handle));
+  const frames = data?.frames || [];
+  const idKey = type === "talent" ? "talentIds" : type === "products" ? "productIds" : null;
+  const inStoryboard = frames.some(f => {
+    const fb = String(f?.brief || "").toLowerCase();
+    if (handle && fb.includes(handle)) return true;
+    if (type === "locations") return f.locationId === asset.id;
+    if (idKey) return (f[idKey] || []).includes(asset.id);
+    return false;
+  });
+  return { inBrief, inStoryboard, needs: !inBrief || !inStoryboard };
+}
+
+// Whole-project scan → flat list of unreconciled items + per-section
+// flags + total count. Mood and Brand are excluded (no identity to sync).
+function computeReconciliation(data) {
+  const sections = [
+    ["talent", data?.talent || []],
+    ["products", data?.products || []],
+    ["locations", data?.locations || []],
+  ];
+  const items = [];
+  const bySection = { talent: false, products: false, locations: false };
+  for (const [type, list] of sections) {
+    for (const a of list) {
+      const st = assetReconcileStatus(a, type, data);
+      if (st.needs) {
+        items.push({ type, id: a.id, name: a.name, handle: a.handle, note: a.note, ...st });
+        bySection[type] = true;
+      }
+    }
+  }
+  return { items, bySection, count: items.length };
+}
+
+// Fire a reconcile request from anywhere (tile chip, section button,
+// chat). Workshop listens on window for "ww-reconcile". scope is
+// "object" | "section" | "all".
+function requestReconcile(detail) {
+  window.dispatchEvent(new CustomEvent("ww-reconcile", { detail }));
+}
+
+// Small amber "Reconcile" pill overlaid on an asset tile that isn't yet
+// in the brief / storyboard.
+function ReconcileChip({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title="This isn't in the brief or storyboard yet — reconcile it"
+      style={{
+        position: "absolute", top: 6, left: 6, zIndex: 6,
+        display: "flex", alignItems: "center", gap: 4,
+        padding: "3px 7px", borderRadius: 999, cursor: "pointer",
+        background: RECONCILE_AMBER, border: "none", outline: "none",
+        color: "#1A1206", fontFamily: "var(--f)", fontSize: 9, fontWeight: 700,
+        letterSpacing: "0.04em", textTransform: "uppercase",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+      }}
+    >
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#1A1206" }} />
+      Reconcile
+    </button>
+  );
+}
+
+// Reconcile preview: shows the AI's proposed (editable) brief + optional
+// per-frame touch-ups. The user can accept as-is, tweak the brief inline
+// (= "edit manually"), or dismiss. Applies via onApply.
+function ReconcileModal({ state, frames, onClose, onApply }) {
+  const [brief, setBrief] = useState("");
+  const [chosen, setChosen] = useState({}); // frameNumber -> bool
+
+  useEffect(() => {
+    if (state?.suggestion) {
+      setBrief(state.suggestion.newBrief || "");
+      const init = {};
+      for (const fe of state.suggestion.frameEdits || []) init[fe.frameNumber] = true;
+      setChosen(init);
+    }
+  }, [state?.suggestion]);
+
+  if (!state) return null;
+  const names = state.assets.map(a => a.name).join(", ");
+  const heading = state.assets.length === 1
+    ? `Reconcile "${state.assets[0].name}"`
+    : `Reconcile ${state.assets.length} items`;
+  const frameByNum = Object.fromEntries((frames || []).map(f => [f.number, f]));
+  const edits = state.suggestion?.frameEdits || [];
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(0,0,0,0.78)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "var(--popover-bg)", border: "1px solid var(--panel-border)",
+        borderRadius: 16, width: "100%", maxWidth: 680, maxHeight: "86vh",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        boxShadow: "0 24px 70px rgba(0,0,0,0.6)",
+      }}>
+        <div style={{ padding: "20px 24px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: RECONCILE_AMBER }} />
+            <span style={{ fontFamily: "var(--f)", fontSize: 17, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em" }}>{heading}</span>
+          </div>
+          <div style={{ fontFamily: "var(--f)", fontSize: 13, color: "var(--warm-40)", lineHeight: 1.5 }}>
+            {names} {state.assets.length === 1 ? "isn't" : "aren't"} fully reflected in the brief / storyboard yet. Review the proposed update — edit the brief inline if you like, then apply.
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+          {state.loading && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "28px 0", color: "var(--warm-40)", fontFamily: "var(--f)", fontSize: 13 }}>
+              <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid var(--warm-12)", borderTopColor: RECONCILE_AMBER, animation: "spin 0.8s linear infinite" }} />
+              Analyzing the brief and storyboard…
+            </div>
+          )}
+          {state.error && (
+            <div style={{ padding: "16px 0", fontFamily: "var(--f)", fontSize: 13, color: "#FF8A80", lineHeight: 1.5 }}>{state.error}</div>
+          )}
+          {!state.loading && !state.error && state.suggestion && (
+            <>
+              <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Proposed brief</label>
+              <textarea
+                value={brief}
+                onChange={e => setBrief(e.target.value)}
+                style={{
+                  width: "100%", minHeight: 200, resize: "vertical",
+                  fontFamily: "var(--f)", fontSize: 13, lineHeight: 1.7, color: "var(--warm)",
+                  background: "var(--warm-04)", border: "1px solid var(--warm-10)",
+                  borderRadius: 10, padding: "12px 14px", outline: "none",
+                }}
+              />
+              {edits.length > 0 && (
+                <div style={{ marginTop: 18 }}>
+                  <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Storyboard touch-ups</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {edits.map(fe => (
+                      <label key={fe.frameNumber} style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer", padding: "10px 12px", borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)" }}>
+                        <input type="checkbox" checked={!!chosen[fe.frameNumber]} onChange={e => setChosen(c => ({ ...c, [fe.frameNumber]: e.target.checked }))} style={{ marginTop: 3, accentColor: RECONCILE_AMBER }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: "var(--warm-40)", letterSpacing: "0.06em", marginBottom: 3 }}>FRAME {fe.frameNumber}</div>
+                          {frameByNum[fe.frameNumber]?.brief && (
+                            <div style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-25)", lineHeight: 1.5, textDecoration: "line-through", marginBottom: 3 }}>{frameByNum[fe.frameNumber].brief}</div>
+                          )}
+                          <div style={{ fontFamily: "var(--f)", fontSize: 12, color: "var(--warm-50)", lineHeight: 1.5 }}>{fe.newBrief}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 24px", borderTop: "1px solid var(--warm-06)" }}>
+          <button onClick={onClose} style={{
+            padding: "9px 16px", borderRadius: 8, cursor: "pointer",
+            background: "transparent", border: "1px solid var(--warm-12)",
+            color: "var(--warm-50)", outline: "none", fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
+          }}>Dismiss</button>
+          <button
+            disabled={state.loading || !!state.error || !state.suggestion}
+            onClick={() => onApply({ newBrief: brief, frameEdits: edits.filter(fe => chosen[fe.frameNumber]) })}
+            style={{
+              padding: "9px 18px", borderRadius: 8,
+              cursor: state.loading || state.error ? "default" : "pointer",
+              background: state.loading || state.error ? "var(--warm-08)" : RECONCILE_AMBER,
+              border: "none", color: state.loading || state.error ? "var(--warm-25)" : "#1A1206",
+              outline: "none", fontFamily: "var(--f)", fontSize: 13, fontWeight: 700,
+            }}>Use this brief</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const INITIAL_STATE = {
@@ -1276,6 +1469,29 @@ const V2_CHAT_TOOLS = [
       required: ["assetType", "assetName"],
     },
   },
+  {
+    name: "reconcile_asset",
+    description: "Reconcile ONE character / element / location that isn't yet in the brief and/or storyboard — rewrites the brief (and a couple of frames) to include it. Use when the user asks to 'add X to the brief', 'reconcile X', or 'put the chips in the story'.",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string", description: "The asset's name (case-insensitive substring match)." } },
+      required: ["name"],
+    },
+  },
+  {
+    name: "reconcile_section",
+    description: "Reconcile EVERY unreconciled item in a section (all characters, all elements, or all locations) into the brief & storyboard.",
+    parameters: {
+      type: "object",
+      properties: { section: { type: "string", enum: ["characters", "elements", "locations"] } },
+      required: ["section"],
+    },
+  },
+  {
+    name: "reconcile_all",
+    description: "Reconcile ALL characters, elements, and locations that aren't yet in the brief and/or storyboard.",
+    parameters: { type: "object", properties: {} },
+  },
 ];
 
 // Apply a single chat tool call to the v2 reducer. Returns metadata
@@ -1527,6 +1743,22 @@ function applyChatToolCall(action, data, dispatch) {
       if (!target || !actionType) return null;
       dispatch({ type: actionType, id: target.id });
       return { applied: true, kind: args.assetType, field: "lock", message: `Toggled lock on ${target.name}` };
+    }
+    case "reconcile_asset": {
+      if (!args.name) return null;
+      return { applied: true, kind: "reconcile", field: "reconcile", message: `Reconciling ${args.name}`,
+        effect: { type: "reconcile", scope: "object", assetName: args.name } };
+    }
+    case "reconcile_section": {
+      const map = { characters: "talent", elements: "products", locations: "locations" };
+      const assetType = map[args.section];
+      if (!assetType) return null;
+      return { applied: true, kind: "reconcile", field: "reconcile", message: `Reconciling all ${args.section}`,
+        effect: { type: "reconcile", scope: "section", assetType } };
+    }
+    case "reconcile_all": {
+      return { applied: true, kind: "reconcile", field: "reconcile", message: "Reconciling everything",
+        effect: { type: "reconcile", scope: "all" } };
     }
     default:
       return null;
@@ -3148,6 +3380,8 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
         onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "talent" })}
         onAutoGenerate={bulkRegenerate}
         autoGenerateLabel={data.talent.some(t => t.headshot) ? "Regenerate all" : "Auto-generate"}
+        reconcileCount={data.talent.filter(t => assetReconcileStatus(t, "talent", data).needs).length}
+        onReconcileAll={() => requestReconcile({ scope: "section", type: "talent" })}
       />
       <div style={{
         display: "grid",
@@ -3155,7 +3389,12 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
         gap: 12,
       }}>
         {data.talent.map(t => (
-          <CharacterTile key={t.id} character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
+          <div key={t.id} style={{ position: "relative" }}>
+            <CharacterTile character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
+            {assetReconcileStatus(t, "talent", data).needs && (
+              <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "talent", id: t.id }); }} />
+            )}
+          </div>
         ))}
         <AddCharacterTile onClick={() => dispatch({ type: "ADD_TALENT", data: {} })} />
       </div>
@@ -3977,6 +4216,8 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
         onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "locations" })}
         onAutoGenerate={bulkRegenerate}
         autoGenerateLabel={data.locations.some(l => l.generatedImage || l.referenceImage) ? "Regenerate all" : "Auto-generate"}
+        reconcileCount={data.locations.filter(l => assetReconcileStatus(l, "locations", data).needs).length}
+        onReconcileAll={() => requestReconcile({ scope: "section", type: "locations" })}
       />
       <div style={{
         display: "grid",
@@ -3989,7 +4230,12 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
           return (
             <>
               {data.locations.map(l => (
-                <LocationTile key={l.id} location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
+                <div key={l.id} style={{ position: "relative" }}>
+                  <LocationTile location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
+                  {assetReconcileStatus(l, "locations", data).needs && (
+                    <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "locations", id: l.id }); }} />
+                  )}
+                </div>
               ))}
               <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} aspectCSS={aspectCSS} />
             </>
@@ -4176,6 +4422,8 @@ function ElementTab({ data, dispatch, onFocusAsset }) {
         onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "products" })}
         onAutoGenerate={bulkRegenerate}
         autoGenerateLabel={data.products.some(p => p.referenceImage) ? "Regenerate all" : "Auto-generate"}
+        reconcileCount={data.products.filter(p => assetReconcileStatus(p, "products", data).needs).length}
+        onReconcileAll={() => requestReconcile({ scope: "section", type: "products" })}
       />
       <div style={{
         display: "grid",
@@ -4183,7 +4431,12 @@ function ElementTab({ data, dispatch, onFocusAsset }) {
         gap: 12,
       }}>
         {data.products.map(p => (
-          <ElementTile key={p.id} product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
+          <div key={p.id} style={{ position: "relative" }}>
+            <ElementTile product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
+            {assetReconcileStatus(p, "products", data).needs && (
+              <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "products", id: p.id }); }} />
+            )}
+          </div>
         ))}
         <AddTile label="Add Element" iconName="box" onClick={() => dispatch({ type: "ADD_PRODUCT", data: {} })} />
       </div>
@@ -4389,13 +4642,29 @@ function DescriptionField({ label, value, onChange, placeholder }) {
 // + Lock section toggle. Both buttons are real: auto-generate runs a
 // caller-supplied function, lock toggles data.locks[section].
 
-function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, generating, autoGenerateLabel = "Auto-generate" }) {
+function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, generating, autoGenerateLabel = "Auto-generate", reconcileCount = 0, onReconcileAll }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
         {title}{count !== undefined ? ` · ${count}` : ""}
       </div>
       <div style={{ display: "flex", gap: 6 }}>
+        {reconcileCount > 0 && onReconcileAll && (
+          <button
+            onClick={onReconcileAll}
+            title="Add the missing items to the brief & storyboard"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              fontSize: 10, padding: "5px 10px", borderRadius: 7, cursor: "pointer",
+              background: "rgba(245,166,35,0.14)", border: `1px solid ${RECONCILE_AMBER}`,
+              color: RECONCILE_AMBER, outline: "none",
+              fontFamily: "var(--f)", fontWeight: 600,
+            }}
+          >
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: RECONCILE_AMBER }} />
+            Reconcile all ({reconcileCount})
+          </button>
+        )}
         {onAutoGenerate && (
           <PremiumButton
             variant="secondary"
@@ -6002,6 +6271,12 @@ export default function WorkshopV2() {
   const [theme, setTheme] = useState("dark");
   const isDark = theme === "dark";
 
+  // Reconciliation — which assets aren't yet in the brief + storyboard.
+  // Cheap to recompute (a handful of assets × frames); drives the sidebar
+  // dots, section buttons, tile chips, and the chat notice.
+  const reconciliation = computeReconciliation(data);
+  const [reconcile, setReconcile] = useState(null); // modal state
+
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
 
   useEffect(() => {
@@ -6127,6 +6402,55 @@ export default function WorkshopV2() {
     window.addEventListener("ww-open-chat", openChat);
     return () => window.removeEventListener("ww-open-chat", openChat);
   }, []);
+
+  // Reconcile — pull a missing asset (or a whole section / everything)
+  // back into the brief + storyboard. Opens the preview modal with an AI
+  // suggestion the user can edit or apply. Triggered by tile chips,
+  // section buttons, the chat notice (window "ww-reconcile"), or chat tools.
+  const handleReconcile = useCallback(async (detail) => {
+    const d = dataRef.current;
+    const rec = computeReconciliation(d);
+    let assets;
+    if (detail.scope === "object") assets = rec.items.filter(i => i.type === detail.type && i.id === detail.id);
+    else if (detail.scope === "section") assets = rec.items.filter(i => i.type === detail.type);
+    else assets = rec.items;
+    if (!assets || assets.length === 0) {
+      toast("Everything's already in the brief & storyboard.", { kind: "info" });
+      return;
+    }
+    setReconcile({ scope: detail.scope, type: detail.type, assets, loading: true, error: null, suggestion: null });
+    try {
+      const suggestion = await suggestReconciliation({
+        brief: d.meta?.treatment || "",
+        frames: (d.frames || []).map(f => ({ number: f.number, brief: f.brief })),
+        assets,
+      });
+      setReconcile(s => s ? { ...s, loading: false, suggestion } : s);
+    } catch (e) {
+      setReconcile(s => s ? { ...s, loading: false, error: e?.message?.slice(0, 200) || "Couldn't generate a suggestion. Try again." } : s);
+    }
+  }, []);
+
+  const applyReconcile = useCallback(({ newBrief, frameEdits }) => {
+    if (typeof newBrief === "string") dispatch({ type: "UPDATE_META", field: "treatment", value: newBrief });
+    const d = dataRef.current;
+    for (const fe of (frameEdits || [])) {
+      const norm = String(fe.frameNumber || "").padStart(2, "0");
+      const frame = (d.frames || []).find(f => f.number === norm);
+      if (frame && fe.newBrief) dispatch({ type: "UPDATE_FRAME", frameId: frame.id, field: "brief", value: fe.newBrief });
+    }
+    // Relink @mentions so frame talent/product refs pick up the new text.
+    setTimeout(() => dispatch({ type: "AUTO_DETECT_MENTIONS" }), 0);
+    const n = (frameEdits || []).length;
+    toast(`Brief reconciled${n ? ` + ${n} frame${n === 1 ? "" : "s"} updated` : ""}.`, { kind: "success" });
+    setReconcile(null);
+  }, []);
+
+  useEffect(() => {
+    function onReconcile(e) { handleReconcile(e.detail || {}); }
+    window.addEventListener("ww-reconcile", onReconcile);
+    return () => window.removeEventListener("ww-reconcile", onReconcile);
+  }, [handleReconcile]);
 
   // Project switcher — load a different project into the workspace.
   // Saves the current one first so no work is lost. Async because
@@ -6401,6 +6725,45 @@ export default function WorkshopV2() {
         } finally {
           markDone(`mood.${item.id}`);
         }
+        return;
+      }
+      case "reconcile": {
+        // Chat-driven reconcile applies directly (undo is the backstop),
+        // then posts a follow-up message describing what changed.
+        const rec = computeReconciliation(current);
+        let assets;
+        if (effect.scope === "object") {
+          const lc = String(effect.assetName || "").toLowerCase();
+          assets = rec.items.filter(i => i.name?.toLowerCase().includes(lc));
+        } else if (effect.scope === "section") {
+          assets = rec.items.filter(i => i.type === effect.assetType);
+        } else {
+          assets = rec.items;
+        }
+        if (!assets.length) {
+          setChatMessages(prev => [...prev, { id: Date.now(), role: "ai", text: "Everything's already in the brief & storyboard — nothing to reconcile.", changes: [] }]);
+          return;
+        }
+        let suggestion;
+        try {
+          suggestion = await suggestReconciliation({
+            brief: current.meta?.treatment || "",
+            frames: (current.frames || []).map(f => ({ number: f.number, brief: f.brief })),
+            assets,
+          });
+        } catch (e) {
+          toast(`Reconcile failed: ${e?.message?.slice(0, 120) || "unknown"}`, { kind: "error" });
+          return;
+        }
+        dispatch({ type: "UPDATE_META", field: "treatment", value: suggestion.newBrief });
+        let n = 0;
+        for (const fe of (suggestion.frameEdits || [])) {
+          const norm = String(fe.frameNumber || "").padStart(2, "0");
+          const fr = (current.frames || []).find(f => f.number === norm);
+          if (fr && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: fr.id, field: "brief", value: fe.newBrief }); n++; }
+        }
+        setTimeout(() => dispatch({ type: "AUTO_DETECT_MENTIONS" }), 0);
+        setChatMessages(prev => [...prev, { id: Date.now(), role: "ai", text: `Reconciled ${assets.map(a => a.name).join(", ")} into the brief${n ? ` and ${n} frame${n === 1 ? "" : "s"}` : ""}.`, changes: [] }]);
         return;
       }
       default:
@@ -7101,6 +7464,21 @@ export default function WorkshopV2() {
       }
     }
 
+    const reconcileNote = (() => {
+      const rec = computeReconciliation(currentData);
+      if (rec.count === 0) return "";
+      const lines = rec.items.map(i => {
+        const miss = [!i.inBrief && "the brief", !i.inStoryboard && "the storyboard"].filter(Boolean).join(" and ");
+        return `- ${RECONCILE_LABEL[i.type]} "${i.name}" (${i.handle}) is missing from ${miss}.`;
+      }).join("\n");
+      return [
+        "",
+        "ASSETS NEEDING RECONCILIATION (generated but not yet woven into the creative):",
+        lines,
+        "If the user asks to add one of these to the brief / story, 'reconcile' it, or 'put it in', call reconcile_asset (one), reconcile_section (a whole section: characters/elements/locations), or reconcile_all. These rewrite the brief + relevant frames to include the asset.",
+      ].join("\n");
+    })();
+
     const systemPrompt = [
       "You are a creative production assistant editing a storyboard.",
       "Use the provided tools to make changes — DON'T just describe what you'd do, actually do it via tool calls.",
@@ -7135,6 +7513,7 @@ export default function WorkshopV2() {
       "",
       "THE CURRENT BRIEF (meta.treatment):",
       currentData.meta?.treatment || "(no brief written yet)",
+      reconcileNote,
       "",
       "Current project state (JSON):",
       JSON.stringify(stateSnap, null, 2),
@@ -7501,6 +7880,7 @@ export default function WorkshopV2() {
             locations: data.locations.length,
             mood: (data.moodBoard || []).length,
           }}
+          reconcileFlags={reconciliation.bySection}
           onSwitch={switchToProject}
           onNew={startNewProject}
           onHome={handleBackToProjects}
@@ -7667,6 +8047,8 @@ export default function WorkshopV2() {
                   pendingFrameEdits={pendingFrameEdits}
                   onRegeneratePending={handleRegenerateFrameEdits}
                   regenerating={anyRegenerating}
+                  reconcileCount={reconciliation.count}
+                  onReconcileAll={() => requestReconcile({ scope: "all" })}
                 />
               </SidebarPanel>
             </div>
@@ -7675,6 +8057,14 @@ export default function WorkshopV2() {
 
         {/* Floating AI Chat tab — right edge when sidebar closed */}
         {built && <AIChatTab sidebarOpen={sidebarOpen} onClick={() => setSidebarOpen(true)} />}
+
+        {/* Reconcile preview — assets missing from the brief/storyboard */}
+        <ReconcileModal
+          state={reconcile}
+          frames={data.frames}
+          onClose={() => setReconcile(null)}
+          onApply={applyReconcile}
+        />
       </div>
         </div>
       </div>

@@ -201,7 +201,7 @@ function ChatIconButton({ onClick, disabled, title, active, muted, pulsing, chil
 
 // -- AI CHAT PANEL (with @ mentions + asset context + improve button) --
 
-export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending, regenerating }) {
+export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending, regenerating, reconcileCount = 0, onReconcileAll }) {
   const [val, setVal] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
@@ -391,6 +391,24 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
 
       {/* Bottom: helper hint + context cards + input */}
       <div style={{ borderTop: "1px solid var(--warm-06)", padding: "10px 16px 14px", flexShrink: 0 }}>
+        {/* Reconcile notice — sits above the composer, covers nothing. */}
+        {reconcileCount > 0 && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+            padding: "8px 10px 8px 12px", borderRadius: 10,
+            background: "rgba(245,166,35,0.10)", border: "1px solid rgba(245,166,35,0.45)",
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#F5A623", flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--f)", fontSize: 11.5, fontWeight: 400, color: "var(--warm-50)", lineHeight: 1.4 }}>
+              {reconcileCount} item{reconcileCount === 1 ? " isn't" : "s aren't"} in the brief / storyboard yet.
+            </span>
+            <button onClick={onReconcileAll} style={{
+              flexShrink: 0, padding: "5px 10px", borderRadius: 7, cursor: "pointer",
+              background: "#F5A623", border: "none", color: "#1A1206", outline: "none",
+              fontFamily: "var(--f)", fontSize: 11, fontWeight: 700,
+            }}>Reconcile all</button>
+          </div>
+        )}
         {!hasUserMessages && (
           <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-15)", lineHeight: 1.5, textAlign: "center", marginBottom: 8 }}>
             Click any frame to open it, or use @ to reference assets.
