@@ -33,6 +33,7 @@ import iconAspectUrl from "../assets/icon-aspect.svg";
 import iconClockUrl from "../assets/icon-clock.svg";
 import iconDropfilesUrl from "../assets/icon-dropfiles.svg";
 import iconFolderUrl from "../assets/icon-folder.svg";
+import iconSparkleUrl from "../assets/icon-sparkle.svg";
 import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
 import {
   newProjectId,
@@ -6047,33 +6048,31 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
                 style={{
                   position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
                   display: "flex", alignItems: "center", gap: 6,
-                  padding: "6px 12px", borderRadius: 18,
-                  background: "rgba(255,200,87,0.10)",
-                  border: "1px solid rgba(255,200,87,0.5)",
-                  color: "#FFC857",
+                  height: 25, padding: "0 8px", borderRadius: 7,
+                  background: "linear-gradient(0deg, rgba(0, 0, 0, 0.17) 0%, rgba(102, 102, 102, 0.153) 100%), linear-gradient(0deg, rgba(219, 219, 219, 0.6), rgba(219, 219, 219, 0.6)), linear-gradient(92deg, #429FD6 3.61%, #7762E7 24.14%, #A45EE1 39.21%, #CB4FCB 56.02%, #FF3598 70.65%, #ED7180 85.72%, #E9886D 100%)",
+                  border: "0.5px solid color(display-p3 1 1 1 / 0.5)",
+                  color: "#fff",
                   cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
                   outline: "none",
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-                  letterSpacing: "0.02em",
+                  fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
+                  letterSpacing: "-0.01em",
                   opacity: meta.treatment?.trim() && !improving ? 1 : 0.5,
-                  transition: "background 0.14s, border-color 0.14s",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)",
+                  transition: "filter 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease",
                 }}
                 onMouseEnter={e => {
                   if (e.currentTarget.disabled) return;
-                  e.currentTarget.style.background = "rgba(255,200,87,0.18)";
-                  e.currentTarget.style.borderColor = "rgba(255,200,87,0.7)";
+                  e.currentTarget.style.filter = "brightness(1.05)";
+                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.65), 0 2px 8px rgba(188,87,197,0.22)";
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.background = "rgba(255,200,87,0.10)";
-                  e.currentTarget.style.borderColor = "rgba(255,200,87,0.5)";
+                  e.currentTarget.style.filter = "none";
+                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)";
                 }}
               >
-                {improving && <ShimmerSweep color="rgba(255,200,87,0.32)" />}
+                {improving && <ShimmerSweep color="rgba(255,255,255,0.38)" />}
                 <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <svg width="11" height="11" viewBox="0 0 18 18" fill="none">
-                    <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-                    <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
-                  </svg>
+                  <DropdownAssetIcon src={iconSparkleUrl} size={11} />
                   {improving ? "Improving…" : "Improve with AI"}
                 </span>
               </button>
