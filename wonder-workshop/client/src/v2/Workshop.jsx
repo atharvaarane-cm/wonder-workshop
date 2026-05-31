@@ -3733,18 +3733,13 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
       </div>
 
       {/* Description */}
-      <div>
-        <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
-          Description
-        </div>
-        <EditableText
-          value={character.note || ""}
-          onChange={v => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "note", value: v })}
-          multiline
-          style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, lineHeight: 1.7, color: "var(--warm-40)", display: "block" }}
-          placeholder="Describe this character — age, look, energy, wardrobe…"
-        />
-      </div>
+      <DescriptionField
+        label="Description"
+        value={character.note || ""}
+        onChange={v => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "note", value: v })}
+        placeholder="Describe this character — age, look, energy, wardrobe…"
+        improveContext={{ kind: "character", name: character.name, brand: data.brand?.name }}
+      />
 
       {/* Reference (primary headshot — also serves as the tile thumbnail) */}
       <div>
@@ -4502,6 +4497,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         value={location.note || ""}
         onChange={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "note", value: v })}
         placeholder="Describe this location — time of day, weather, architecture, atmosphere…"
+        improveContext={{ kind: "location", name: location.name, brand: data.brand?.name }}
       />
       <div>
         <SectionLabel>Reference</SectionLabel>
@@ -4703,6 +4699,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
         value={product.note || ""}
         onChange={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "note", value: v })}
         placeholder="Describe this element — color, material, shape, key details for product photography…"
+        improveContext={{ kind: "element", name: product.name, category: product.category, brand: data.brand?.name }}
       />
       <div>
         <SectionLabel>Reference</SectionLabel>
@@ -4785,10 +4782,72 @@ function SectionLabel({ children }) {
   );
 }
 
-function DescriptionField({ label, value, onChange, placeholder }) {
+// Write/expand an asset's description with the model. Mirrors improveBrief's
+// /api/chat pattern. Rules differ by kind so the output is fit for the image
+// pipeline (character = appearance only; location = place; element = prop).
+async function improveDescription({ kind, name, category, brand, current }) {
+  const kindLabel = kind === "character" ? "character" : kind === "location" ? "location" : "element / hero prop";
+  const rules = kind === "character"
+    ? "Describe APPEARANCE ONLY for a generated reference image: age range, ethnicity (or 'open casting'), build, hair (color/length/style), wardrobe with color + fabric, distinguishing features. Do NOT include expression, pose, mood, or actions — those bias every generated frame."
+    : kind === "location"
+    ? "Describe the place for an establishing shot: setting, architecture, time of day, lighting, weather, key environmental textures and signage. No people."
+    : "Describe this hero prop/product for a clean product shot: material, color, shape, finish, branding, distinctive details.";
+  const messages = [
+    { role: "system", content: [
+      `You write a concise, concrete ${kindLabel} description for an AI image pipeline that generates a reference image from it.`,
+      rules,
+      "1-2 tight sentences. Return ONLY the description text — no labels, no quotes, no preamble. Avoid filler adjectives like 'vibrant' or 'beautiful'; use specific concrete detail.",
+    ].join("\n") },
+    { role: "user", content: [
+      name ? `Name: ${name}` : null,
+      category ? `Category: ${category}` : null,
+      brand ? `Brand context: ${brand}` : null,
+      current?.trim() ? `Improve/expand this existing description: ${current.trim()}` : "There's no description yet — write one from the name/category above.",
+    ].filter(Boolean).join("\n") },
+  ];
+  const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages, stream: false }) });
+  if (!res.ok) throw new Error(`Server error: ${res.status}`);
+  const payload = await res.json();
+  return (payload?.message?.content || "").trim().replace(/^["'`]+|["'`]+$/g, "");
+}
+
+function DescriptionField({ label, value, onChange, placeholder, improveContext }) {
+  const [improving, setImproving] = useState(false);
+  async function handleImprove() {
+    if (improving) return;
+    setImproving(true);
+    try {
+      const out = await improveDescription({ ...improveContext, current: value });
+      if (out) onChange(out);
+    } catch (e) {
+      console.error("[improve description]", e);
+      toast(`Couldn't improve the description: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+    } finally {
+      setImproving(false);
+    }
+  }
   return (
     <div>
-      <SectionLabel>{label}</SectionLabel>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <SectionLabel>{label}</SectionLabel>
+        {improveContext && (
+          <button
+            onClick={handleImprove}
+            disabled={improving}
+            title="Write or expand this description with AI"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "4px 9px", borderRadius: 7, cursor: improving ? "default" : "pointer",
+              background: "rgba(255,200,87,0.10)", border: "1px solid rgba(255,200,87,0.40)",
+              color: "#FFC857", outline: "none",
+              fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
+            }}
+          >
+            <SectionIcon name="sparkle" size={11} color="#FFC857" />
+            {improving ? "Improving…" : "Improve with AI"}
+          </button>
+        )}
+      </div>
       <EditableText
         value={value}
         onChange={onChange}
