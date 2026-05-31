@@ -2464,19 +2464,13 @@ function CameraControlStrip({ frame, dispatch }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Angle + Height side by side */}
-      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-        <div>
-          <div style={secLabel}>Angle</div>
-          <CompassWidget value={frame.cameraAngle} onChange={v => update({ cameraAngle: v })} size={100} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={secLabel}>Height</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {CAMERA_HEIGHTS.map(h => (
-              <IconPill key={h.value} label={h.label} selected={frame.cameraHeight === h.value} onClick={() => update({ cameraHeight: h.value })} />
-            ))}
-          </div>
+      {/* Height (Angle wheel removed — it didn't influence generation) */}
+      <div>
+        <div style={secLabel}>Height</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {CAMERA_HEIGHTS.map(h => (
+            <IconPill key={h.value} label={h.label} selected={frame.cameraHeight === h.value} onClick={() => update({ cameraHeight: h.value })} />
+          ))}
         </div>
       </div>
 
@@ -2509,7 +2503,6 @@ function CameraControlStrip({ frame, dispatch }) {
 function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev, hasNext, onDeleteFrame, onFocusChat }) {
   const [genLoading, setGenLoading] = useState(false);
   const [genComplete, setGenComplete] = useState(false);
-  const [cameraInfoOpen, setCameraInfoOpen] = useState(false);
   const [heroHovered, setHeroHovered] = useState(false);
   const fileInputRef = useRef(null);
   const fIdx = data.frames.findIndex(f => f.id === frame.id);
@@ -2518,7 +2511,6 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
   const loc = data.locations.find(l => l.id === frame.locationId);
   const hasImage = !!frame.uploadedImage;
-  const cameraIsDefault = isCameraDefault(frame);
   const handleImageError = () => {
     dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
   };
@@ -2757,18 +2749,14 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
             onChange={v => update("locationId", v || null)}
           />
 
-          {/* === CAMERA INFO (Collapsible, optional) === */}
-          <CollapsibleSection
-            title="Camera Info"
-            icon="camera"
-            open={cameraInfoOpen}
-            onToggle={() => setCameraInfoOpen(!cameraInfoOpen)}
-            badge={cameraIsDefault ? "optional" : null}
-          >
-            <div style={{ padding: "4px 0 8px" }}>
-              <CameraControlStrip frame={frame} dispatch={dispatch} />
+          {/* === CAMERA INFO (always visible) === */}
+          <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 4, paddingTop: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
+              <SectionIcon name="camera" size={13} color="var(--warm-30)" />
+              <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: "var(--warm-35)", textTransform: "uppercase" }}>Camera Info</span>
             </div>
-          </CollapsibleSection>
+            <CameraControlStrip frame={frame} dispatch={dispatch} />
+          </div>
         </Card>
 
         {/* Delete frame */}
