@@ -3389,7 +3389,7 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
         gap: 12,
       }}>
         {data.talent.map(t => (
-          <div key={t.id} style={{ position: "relative" }}>
+          <div key={t.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
             <CharacterTile character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
             {assetReconcileStatus(t, "talent", data).needs && (
               <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "talent", id: t.id }); }} />
@@ -4230,7 +4230,7 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
           return (
             <>
               {data.locations.map(l => (
-                <div key={l.id} style={{ position: "relative" }}>
+                <div key={l.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
                   <LocationTile location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
                   {assetReconcileStatus(l, "locations", data).needs && (
                     <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "locations", id: l.id }); }} />
@@ -4431,7 +4431,7 @@ function ElementTab({ data, dispatch, onFocusAsset }) {
         gap: 12,
       }}>
         {data.products.map(p => (
-          <div key={p.id} style={{ position: "relative" }}>
+          <div key={p.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
             <ElementTile product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
             {assetReconcileStatus(p, "products", data).needs && (
               <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "products", id: p.id }); }} />
