@@ -2458,7 +2458,7 @@ function CompassWidget({ value, onChange, size = 100 }) {
 
 // -- CAMERA CONTROL STRIP (Angle, Height, Lens -- no Movement) -
 
-function CameraControlStrip({ frame, dispatch }) {
+function CameraControlStrip({ frame, dispatch, onStageChange }) {
   const update = (fields) => dispatch({ type: "UPDATE_FRAME_CAMERA", frameId: frame.id, fields });
 
   return (
@@ -2468,7 +2468,7 @@ function CameraControlStrip({ frame, dispatch }) {
         <div style={secLabel}>Height</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {CAMERA_HEIGHTS.map(h => (
-            <IconPill key={h.value} label={h.label} selected={frame.cameraHeight === h.value} onClick={() => update({ cameraHeight: h.value })} />
+            <IconPill key={h.value} label={h.label} selected={frame.cameraHeight === h.value} onClick={() => { update({ cameraHeight: h.value }); onStageChange?.("height", h.label); }} />
           ))}
         </div>
       </div>
@@ -2478,7 +2478,7 @@ function CameraControlStrip({ frame, dispatch }) {
         <div style={secLabel}>Lens</div>
         <div style={{ display: "flex", gap: 4 }}>
           {LENS_TYPES.map(lt => (
-            <button key={lt.value} onClick={() => update({ lens: lt.value })}
+            <button key={lt.value} onClick={() => { update({ lens: lt.value }); onStageChange?.("lens", lt.label); }}
               style={{
                 flex: 1, padding: "7px 0", borderRadius: 6, border: "none", cursor: "pointer",
                 fontFamily: "var(--f)", fontSize: 11, fontWeight: frame.lens === lt.value ? 600 : 400,
@@ -2499,7 +2499,7 @@ function CameraControlStrip({ frame, dispatch }) {
 
 // -- PRODUCTION VIEW (Hero image + dropdowns + collapsible Camera Info) --
 
-function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev, hasNext, onDeleteFrame, onFocusChat }) {
+function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev, hasNext, onDeleteFrame, onFocusChat, onStageChange }) {
   const [genLoading, setGenLoading] = useState(false);
   const [genComplete, setGenComplete] = useState(false);
   const [heroHovered, setHeroHovered] = useState(false);
@@ -2668,7 +2668,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
           {/* Description (renamed from Brief) */}
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Description</label>
-            <textarea value={frame.brief} onChange={e => update("brief", e.target.value)} style={{ ...inp, minHeight: 90, resize: "vertical", lineHeight: 1.75 }} />
+            <textarea value={frame.brief} onChange={e => { update("brief", e.target.value); onStageChange?.("description", "Description"); }} style={{ ...inp, minHeight: 90, resize: "vertical", lineHeight: 1.75 }} />
             {/* Tagged-asset preview — same colored chip palette as the
                 storyboard sheet. Only entities present in the project
                 show as chips; @-words that don't match a real asset
@@ -2730,13 +2730,13 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
               label="Shot Type"
               value={frame.shotType}
               options={SHOT_TYPES.map(s => ({ value: s, label: SHOT_TYPE_LABELS[s] || s }))}
-              onChange={v => update("shotType", v)}
+              onChange={v => { update("shotType", v); onStageChange?.("shotType", SHOT_TYPE_LABELS[v] || v); }}
             />
             <ChevronDropdown
               label="Camera Movement"
               value={frame.movement}
               options={MOVEMENT_TYPES.map(m => ({ value: m.value, label: m.label }))}
-              onChange={v => updateCamera({ movement: v })}
+              onChange={v => { updateCamera({ movement: v }); onStageChange?.("movement", MOVEMENT_TYPES.find(m => m.value === v)?.label || v); }}
             />
           </div>
 
@@ -2745,7 +2745,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
             label="Location"
             value={frame.locationId || ""}
             locations={data.locations}
-            onChange={v => update("locationId", v || null)}
+            onChange={v => { update("locationId", v || null); onStageChange?.("location", data.locations.find(l => l.id === v)?.name || "None"); }}
           />
 
           {/* === CAMERA INFO (always visible) === */}
@@ -2754,7 +2754,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
               <SectionIcon name="camera" size={13} color="var(--warm-30)" />
               <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: "var(--warm-35)", textTransform: "uppercase" }}>Camera Info</span>
             </div>
-            <CameraControlStrip frame={frame} dispatch={dispatch} />
+            <CameraControlStrip frame={frame} dispatch={dispatch} onStageChange={onStageChange} />
           </div>
         </Card>
 
@@ -7232,6 +7232,24 @@ export default function WorkshopV2() {
     setChatFocusTrigger(prev => prev + 1);
   }, []);
 
+  // Pending frame edits — when the user changes a frame control (shot type,
+  // height, lens, movement, location, description) in the ProductionView, we
+  // stage a labelled bullet here so the chat shows "what changed" + a
+  // Regenerate button. The control is applied to the frame data immediately;
+  // this just tracks that the IMAGE needs regenerating to match. Keyed by
+  // field (one bullet per field). Resets on frame switch and after regen.
+  const [pendingFrameEdits, setPendingFrameEdits] = useState({});
+  useEffect(() => { setPendingFrameEdits({}); }, [productionFrameId]);
+  const handleStageFrameChange = useCallback((field, label) => {
+    setPendingFrameEdits(prev => ({ ...prev, [field]: label }));
+    setSidebarOpen(true); // surface the chat so the Regenerate button is visible
+  }, []);
+  const handleRegenerateFrameEdits = useCallback(() => {
+    const fid = productionFrameId;
+    setPendingFrameEdits({});
+    if (fid) regenerateOneFrame(fid).catch(e => console.error("[regen pending edits]", e));
+  }, [productionFrameId]);
+
   // Left-rail nav — clicking a tab selects it; clicking the ALREADY
   // active tab fires a "ww-asset-tab-reset" event so any drilled-in
   // detail view (CharacterDetailView, LocationDetailView, etc.) can
@@ -7602,6 +7620,7 @@ export default function WorkshopV2() {
               hasPrev={prodIdx > 0} hasNext={prodIdx < data.frames.length - 1}
               onDeleteFrame={handleDeleteFrame}
               onFocusChat={handleFocusChat}
+              onStageChange={handleStageFrameChange}
             />
           )}
         </main>
@@ -7627,6 +7646,8 @@ export default function WorkshopV2() {
                   chatAssetContext={chatAssetContext}
                   onDismissAssetContext={() => setChatAssetContext(null)}
                   chatFocusTrigger={chatFocusTrigger}
+                  pendingFrameEdits={pendingFrameEdits}
+                  onRegeneratePending={handleRegenerateFrameEdits}
                 />
               </SidebarPanel>
             </div>

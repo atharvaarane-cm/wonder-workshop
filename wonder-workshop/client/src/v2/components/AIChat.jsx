@@ -201,7 +201,7 @@ function ChatIconButton({ onClick, disabled, title, active, muted, pulsing, chil
 
 // -- AI CHAT PANEL (with @ mentions + asset context + improve button) --
 
-export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger }) {
+export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending }) {
   const [val, setVal] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
@@ -404,6 +404,26 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
         {assetContextResolved?.asset && (
           <div style={{ marginBottom: 10 }}>
             <AssetContext asset={assetContextResolved.asset} type={assetContextResolved.type} thumb={assetContextResolved.thumb} onDismiss={onDismissAssetContext} />
+          </div>
+        )}
+        {/* Pending frame changes → Regenerate. Each control you change in the
+            frame editor stages a bullet here; Regenerate rebuilds the image. */}
+        {Object.keys(pendingFrameEdits).length > 0 && (
+          <div style={{ marginBottom: 10, borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", padding: "10px 12px" }}>
+            <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Pending changes</div>
+            <ul style={{ margin: "0 0 10px", paddingLeft: 16 }}>
+              {Object.entries(pendingFrameEdits).map(([field, label]) => (
+                <li key={field} style={{ fontFamily: "var(--f)", fontSize: 12, color: "var(--warm-50)", lineHeight: 1.7 }}>{label}</li>
+              ))}
+            </ul>
+            <button onClick={onRegeneratePending} style={{
+              width: "100%", padding: "9px 0", borderRadius: 8, border: "1px solid #43a3fd",
+              background: "#006dd4", color: "#fff", cursor: "pointer",
+              fontFamily: "var(--f)", fontSize: 12, fontWeight: 600,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6, outline: "none",
+            }}>
+              <SectionIcon name="sparkle" size={12} color="#fff" /> Regenerate
+            </button>
           </div>
         )}
         <div style={{ position: "relative" }}>
