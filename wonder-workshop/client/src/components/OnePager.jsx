@@ -306,7 +306,7 @@ export default function OnePager({ brief, images = {}, onClose }) {
           </div>
         </div>
 
-        <div className="onepager-page">
+        <div className={`onepager-page onepager-page--${mode}`}>
 
           {/* ── Header ── */}
           <div className="op-header">
@@ -315,112 +315,118 @@ export default function OnePager({ brief, images = {}, onClose }) {
               <div className="op-campaign">{pi.brandCampaignName || brief?.title || ''}</div>
             </div>
             <div className="op-header-right">
-              {pi.projectName && <div className="op-meta-row"><span>Project</span>{pi.projectName}</div>}
-              {pi.jobNumber   && <div className="op-meta-row"><span>Job #</span>{pi.jobNumber}</div>}
-              {cd.format      && <div className="op-meta-row"><span>Format</span>{cd.format}</div>}
-              {cd.duration    && <div className="op-meta-row"><span>Duration</span>{cd.duration}</div>}
-              {cd.shots       && <div className="op-meta-row"><span>Shots</span>{cd.shots}</div>}
-              {cd.location    && <div className="op-meta-row"><span>Location</span>{cd.location}</div>}
+              {pi.projectName && <div className="op-meta-row op-meta-row--project"><span>Project</span>{pi.projectName}</div>}
+              {pi.jobNumber   && <div className="op-meta-row op-meta-row--job"><span>Job #</span>{pi.jobNumber}</div>}
+              {cd.format      && <div className="op-meta-row op-meta-row--format"><span>Format</span>{cd.format}</div>}
+              {cd.duration    && <div className="op-meta-row op-meta-row--duration"><span>Duration</span>{cd.duration}</div>}
+              {cd.shots       && <div className="op-meta-row op-meta-row--shots"><span>Shots</span>{cd.shots}</div>}
+              {cd.location    && <div className="op-meta-row op-meta-row--location"><span>Location</span>{cd.location}</div>}
             </div>
           </div>
 
-          {/* ── Storyboard FIRST — the 95% conversation piece in production. */}
-          {shotFrames.length > 0 && (
-            <div className="op-section">
-              <SectionLabel>Storyboard</SectionLabel>
-              <div className="op-storyboard">
-                {shotFrames.map(({ shot, src }, i) => (
-                  <div key={i} className="op-sb-frame">
-                    <div className="op-shot-img-wrap">
-                      {src
-                        ? <img src={src} alt={`Shot ${shot.num}`} className="op-shot-img" />
-                        : <div className="op-shot-empty" />
-                      }
-                      <span className="op-shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
-                      <span className="op-shot-badge-framing">{shot.framing}</span>
-                    </div>
-                    {shot.description && (
-                      <p className="op-shot-desc">{shot.description}</p>
-                    )}
+          <div className="op-sheet-body">
+            <div className="op-sheet-main">
+              {/* ── Storyboard FIRST — the 95% conversation piece in production. */}
+              {shotFrames.length > 0 && (
+                <div className="op-section op-section--storyboard">
+                  <SectionLabel>Storyboard</SectionLabel>
+                  <div className="op-storyboard">
+                    {shotFrames.map(({ shot, src }, i) => (
+                      <div key={i} className="op-sb-frame">
+                        <div className="op-shot-img-wrap">
+                          {src
+                            ? <img src={src} alt={`Shot ${shot.num}`} className="op-shot-img" />
+                            : <div className="op-shot-empty" />
+                          }
+                          <span className="op-shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
+                          <span className="op-shot-badge-framing">{shot.framing}</span>
+                        </div>
+                        {shot.description && (
+                          <p className="op-shot-desc">{shot.description}</p>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Talent. Production mode lays the characters out in a row;
-              full-detail stacks the full bio + headshots + full-body grids
-              per character. */}
-          {characters.length > 0 && (
-            <div className="op-section">
-              <SectionLabel>Talent</SectionLabel>
-              <div className={mode === 'production' ? 'op-talent-row' : 'op-talent-stack'}>
-                {characters.map(({ character, key }) => (
-                  <CharacterSheet
-                    key={key}
-                    character={character}
-                    characterKey={key}
-                    images={images}
-                    mode={mode}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Locations ── */}
-          {locations.length > 0 && (
-            <div className="op-section">
-              <SectionLabel>Locations</SectionLabel>
-              {locations.map(({ data, src }, i) => (
-                <div key={i} className="op-loc-hero">
-                  {src
-                    ? <img src={src} alt={data.heroName || 'Location'} className="op-loc-hero-img" />
-                    : <div className="op-loc-hero-empty" />
-                  }
-                  {data.heroName && <div className="op-loc-caption">{data.heroName}</div>}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* ── Elements / Products ── */}
-          {elements.length > 0 && (
-            <div className="op-section">
-              <SectionLabel>Elements</SectionLabel>
-              <div className="op-elements-grid">
-                {elements.map(({ product, src }, i) => (
-                  <div key={i} className="op-element">
-                    {src
-                      ? <img src={src} alt={product?.name || 'Element'} className="op-element-img" />
-                      : <div className="op-element-empty" />
-                    }
-                    {product?.name && <div className="op-element-name">{product.name}</div>}
-                    {mode === 'full' && product?.description && (
-                      <p className="op-body op-element-desc">{product.description}</p>
-                    )}
+              {/* ── Treatment — auto-generated narrative from the storyboard
+                  captions. Present-tense short story used to pitch the spot.
+                  Falls back to the brief's creative-direction prose if
+                  generation fails or shots are absent. */}
+              {(treatment || treatmentLoading || cd.description) && (
+                <div className="op-section op-direction">
+                  <SectionLabel>Treatment</SectionLabel>
+                  {treatmentLoading && !treatment && (
+                    <p className="op-body op-treatment-loading">Composing treatment from the storyboard…</p>
+                  )}
+                  {treatment && <p className="op-body">{treatment}</p>}
+                  {!treatment && !treatmentLoading && cd.description && (
+                    <p className="op-body">{cd.description}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="op-sheet-rail">
+              {/* ── Talent. Production mode lays the characters out in a row;
+                  full-detail stacks the full bio + headshots + full-body grids
+                  per character. */}
+              {characters.length > 0 && (
+                <div className="op-section op-section--talent">
+                  <SectionLabel>Talent</SectionLabel>
+                  <div className={mode === 'production' ? 'op-talent-row' : 'op-talent-stack'}>
+                    {characters.map(({ character, key }) => (
+                      <CharacterSheet
+                        key={key}
+                        character={character}
+                        characterKey={key}
+                        images={images}
+                        mode={mode}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* ── Treatment — auto-generated narrative from the storyboard
-              captions. Present-tense short story used to pitch the spot.
-              Falls back to the brief's creative-direction prose if
-              generation fails or shots are absent. */}
-          {(treatment || treatmentLoading || cd.description) && (
-            <div className="op-section op-direction">
-              <SectionLabel>Treatment</SectionLabel>
-              {treatmentLoading && !treatment && (
-                <p className="op-body op-treatment-loading">Composing treatment from the storyboard…</p>
+              {/* ── Locations ── */}
+              {locations.length > 0 && (
+                <div className="op-section op-section--locations">
+                  <SectionLabel>Locations</SectionLabel>
+                  {locations.map(({ data, src }, i) => (
+                    <div key={i} className="op-loc-hero">
+                      {src
+                        ? <img src={src} alt={data.heroName || 'Location'} className="op-loc-hero-img" />
+                        : <div className="op-loc-hero-empty" />
+                      }
+                      {data.heroName && <div className="op-loc-caption">{data.heroName}</div>}
+                    </div>
+                  ))}
+                </div>
               )}
-              {treatment && <p className="op-body">{treatment}</p>}
-              {!treatment && !treatmentLoading && cd.description && (
-                <p className="op-body">{cd.description}</p>
+
+              {/* ── Elements / Products ── */}
+              {elements.length > 0 && (
+                <div className="op-section op-section--elements">
+                  <SectionLabel>Elements</SectionLabel>
+                  <div className="op-elements-grid">
+                    {elements.map(({ product, src }, i) => (
+                      <div key={i} className="op-element">
+                        {src
+                          ? <img src={src} alt={product?.name || 'Element'} className="op-element-img" />
+                          : <div className="op-element-empty" />
+                        }
+                        {product?.name && <div className="op-element-name">{product.name}</div>}
+                        {mode === 'full' && product?.description && (
+                          <p className="op-body op-element-desc">{product.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
-          )}
+          </div>
 
           <div className="op-footer">
             <span>WONDER WORKSHOP</span>

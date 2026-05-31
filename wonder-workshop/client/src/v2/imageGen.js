@@ -3,6 +3,8 @@
 // Used by v2's auto-generation pipeline after a brief is created, and
 // later by per-asset regenerate buttons.
 
+import { getImageProvider } from "../utils/imageProvider.js";
+
 const RATIO_DIMS = {
   "16:9": { width: 896, height: 504 },
   "9:16": { width: 504, height: 896 },
@@ -22,47 +24,56 @@ const RATIO_DIMS = {
 const GENERATE_IMAGE_TIMEOUT_MS = 90_000;
 
 export async function generateImage(prompt, opts = {}) {
-  const { ratio = "16:9", referenceImages = [], provider = "gemini" } = opts;
-  const endpoint = provider === "gemini" ? "/api/image-gemini" : "/api/image";
+  const { ratio = "16:9", referenceImages = [], provider = getImageProvider() } = opts;
   const dims = RATIO_DIMS[ratio] || RATIO_DIMS["16:9"];
-  const payload = provider === "gemini"
-    ? {
-        prompt,
-        ratio,
-        ...(referenceImages.length ? { referenceImages: referenceImages.slice(0, 4) } : {}),
-      }
-    : { prompt, ...dims };
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), GENERATE_IMAGE_TIMEOUT_MS);
-  let res;
-  try {
-    res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-  } catch (err) {
+  async function requestImage(activeProvider) {
+    const endpoint = activeProvider === "gemini" ? "/api/image-gemini" : "/api/image";
+    const payload = activeProvider === "gemini"
+      ? {
+          prompt,
+          ratio,
+          ...(referenceImages.length ? { referenceImages: referenceImages.slice(0, 4) } : {}),
+        }
+      : { prompt, ...dims };
+
+    // 90s per-request timeout (prod's Maya fix) wrapped around Court's
+    // per-provider request helper, so a hung fetch throws 504 instead of
+    // stranding the caller's status at "generating".
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GENERATE_IMAGE_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err?.name === "AbortError") {
+        const e = new Error(`Image gen timed out after ${GENERATE_IMAGE_TIMEOUT_MS / 1000}s`);
+        e.status = 504;
+        throw e;
+      }
+      throw err;
+    }
     clearTimeout(timeoutId);
-    if (err?.name === "AbortError") {
-      const e = new Error(`Image gen timed out after ${GENERATE_IMAGE_TIMEOUT_MS / 1000}s`);
-      e.status = 504;
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      const e = new Error(`Image gen failed (${res.status})${body ? `: ${body.slice(0, 120)}` : ""}`);
+      e.status = res.status;
       throw e;
     }
-    throw err;
-  }
-  clearTimeout(timeoutId);
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    const e = new Error(`Image gen failed (${res.status})${body ? `: ${body.slice(0, 120)}` : ""}`);
-    e.status = res.status;
-    throw e;
+    const data = await res.json();
+    if (!data.image) throw new Error("Image gen returned no image URL");
+    return data.image;
   }
-  const data = await res.json();
-  if (!data.image) throw new Error("Image gen returned no image URL");
-  return data.image;
+
+  return requestImage(provider);
 }
 
 // Prompt builders — tuned to make consistent, production-reference-

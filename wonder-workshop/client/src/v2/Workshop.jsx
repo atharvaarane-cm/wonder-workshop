@@ -11,11 +11,30 @@ const TAP_SCALE = 0.985;
 import { generateBrief, chatWithTools, regenerateShotList } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { toastManager } from "@/components/ui/toast";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
-import { BriefPanel } from "./components/BriefPanel.jsx";
+import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
+import { AIChatPanel, AIChatTab } from "./components/AIChat.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
+import iconAspectUrl from "../assets/icon-aspect.svg";
+import iconClockUrl from "../assets/icon-clock.svg";
+import iconDropfilesUrl from "../assets/icon-dropfiles.svg";
+import iconFolderUrl from "../assets/icon-folder.svg";
+import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
 import {
   newProjectId,
   listProjects,
@@ -71,7 +90,7 @@ export function WLogo({ color = "#fff", size = 18 }) {
 
 // -- CONSTANTS ------------------------------------------------
 
-const FILM = [
+export const FILM = [
   "linear-gradient(145deg, #161618 0%, #252528 35%, #161618 100%)",
   "linear-gradient(180deg, #121214 0%, #1e1e22 50%, #121214 100%)",
   "linear-gradient(200deg, #101016 0%, #1a1a24 50%, #101016 100%)",
@@ -160,13 +179,13 @@ function getThemeVars(isDark) {
   };
 }
 
-const CHAT_SUGGESTIONS = [
+export const CHAT_SUGGESTIONS = [
   { label: "Create a new character based on this project's brief", icon: "users" },
   { label: "Suggest a new location and add it", icon: "map" },
   { label: "Add a hero product / element with reference image", icon: "camera" },
 ];
 
-function isCameraDefault(frame) {
+export function isCameraDefault(frame) {
   return frame.cameraAngle === "front" && frame.cameraHeight === "eye" && frame.lens === "normal" && frame.movement === "static";
 }
 
@@ -317,6 +336,8 @@ function applyAction(state, action) {
     }
     case "SET_FRAME_IMAGE_STATUS":
       return { ...state, frames: state.frames.map(f => f.id === action.frameId ? { ...f, imageStatus: action.status } : f) };
+    case "CLEAR_FRAME_IMAGE":
+      return { ...state, frames: state.frames.map(f => f.id === action.frameId ? { ...f, uploadedImage: null, imageStatus: action.status || "error" } : f) };
     case "UPLOAD_FRAME_IMAGE":
       return {
         ...state,
@@ -655,11 +676,10 @@ function parseShareHash() {
   }
 }
 
-// -- UI EVENT BUS (toasts + confirm modal) --------------------
+// -- UI EVENT BUS (confirm modal) ------------------------------
 // Module-level pub/sub so any code path — components, async
-// handlers, event listeners — can call toast(...) or confirm(...)
-// without threading context through every prop. UIProvider mounts a
-// single subscriber that renders the toast stack + confirm modal.
+// handlers, event listeners — can call confirm(...) without threading
+// context through every prop. Toasts are handled by coss toastManager.
 
 const uiBus = {
   listeners: { toast: [], confirm: [] },
@@ -738,7 +758,15 @@ export function log(level, message, meta) {
 }
 
 export function toast(message, opts = {}) {
-  uiBus.emit("toast", { message, ...opts });
+  const type = opts.kind || opts.type || "success";
+  toastManager.add({
+    id: opts.id,
+    title: opts.title || message,
+    description: opts.description,
+    type,
+    timeout: opts.ttl || (type === "error" ? 6000 : 3500),
+    priority: type === "error" ? "high" : "low",
+  });
 }
 export function uiConfirm(opts = {}) {
   return new Promise(resolve => {
@@ -747,18 +775,9 @@ export function uiConfirm(opts = {}) {
 }
 
 function UIProvider({ children }) {
-  const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
-  const idRef = useRef(0);
 
   useEffect(() => {
-    const offToast = uiBus.on("toast", (payload) => {
-      const id = ++idRef.current;
-      const kind = payload.kind || "success";
-      const ttl = payload.ttl || (kind === "error" ? 6000 : 3500);
-      setToasts(prev => [...prev, { id, message: payload.message, kind }]);
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl);
-    });
     const offConfirm = uiBus.on("confirm", (payload) => {
       setConfirmState({
         title: payload.title || "Are you sure?",
@@ -769,7 +788,7 @@ function UIProvider({ children }) {
         resolve: payload.resolve,
       });
     });
-    return () => { offToast(); offConfirm(); };
+    return () => { offConfirm(); };
   }, []);
 
   const handleConfirmResolve = (v) => {
@@ -780,38 +799,6 @@ function UIProvider({ children }) {
   return (
     <>{/* fragment wrapper, no context */}
       {children}
-      {/* Toast stack — top-right, fade in/out, stacks newest at top */}
-      {toasts.length > 0 && (
-        <div style={{
-          position: "fixed", top: 56, right: 16, zIndex: 10000,
-          display: "flex", flexDirection: "column", gap: 8,
-          pointerEvents: "none",
-        }}>
-          {toasts.slice().reverse().map(t => {
-            const colors = {
-              success: { border: "rgba(124,252,156,0.4)", dot: "#7CFC9C" },
-              error:   { border: "rgba(255,138,128,0.4)", dot: "#FF8A80" },
-              info:    { border: "rgba(91,178,255,0.4)",  dot: "#7EB9FF" },
-            }[t.kind] || { border: "var(--warm-12)", dot: "var(--warm-40)" };
-            return (
-              <div key={t.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 14px", borderRadius: 8,
-                background: "var(--surface-solid)",
-                border: `1px solid ${colors.border}`,
-                boxShadow: "0 8px 28px rgba(0,0,0,0.32)",
-                fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-                color: "var(--warm)",
-                maxWidth: 360, animation: "fadeIn 0.18s ease",
-                pointerEvents: "auto",
-              }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: colors.dot, flexShrink: 0 }} />
-                <span>{t.message}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
       {/* Confirm modal — centered overlay, click backdrop to cancel. */}
       {confirmState && (
         <div onClick={() => handleConfirmResolve(false)} style={{
@@ -1150,6 +1137,129 @@ const V2_CHAT_TOOLS = [
       required: ["frameNumber"],
     },
   },
+  {
+    name: "delete_frame",
+    description: "Delete a storyboard frame. Remaining frames renumber automatically. Won't delete the last remaining frame.",
+    parameters: {
+      type: "object",
+      properties: { frameNumber: { type: "string", description: "Zero-padded frame number." } },
+      required: ["frameNumber"],
+    },
+  },
+  {
+    name: "reorder_frames",
+    description: "Reorder the whole storyboard. Pass EVERY existing frame number exactly once, in the desired new order.",
+    parameters: {
+      type: "object",
+      properties: { order: { type: "array", items: { type: "string" }, description: "All frame numbers in the new order, e.g. ['02','01','03']." } },
+      required: ["order"],
+    },
+  },
+  {
+    name: "delete_talent",
+    description: "Remove a character from the project. Also untags it from any frames it appeared in.",
+    parameters: {
+      type: "object",
+      properties: { talentName: { type: "string", description: "Current name (case-insensitive substring match)." } },
+      required: ["talentName"],
+    },
+  },
+  {
+    name: "delete_location",
+    description: "Remove a location. Also clears it from any frames that used it.",
+    parameters: {
+      type: "object",
+      properties: { locationName: { type: "string" } },
+      required: ["locationName"],
+    },
+  },
+  {
+    name: "delete_product",
+    description: "Remove a product / element. Also untags it from any frames it appeared in.",
+    parameters: {
+      type: "object",
+      properties: { productName: { type: "string" } },
+      required: ["productName"],
+    },
+  },
+  {
+    name: "update_brand",
+    description: "Edit the project's brand info — the brand name, website URL, or written brand guidelines.",
+    parameters: {
+      type: "object",
+      properties: {
+        field: { type: "string", enum: ["name", "url", "guidelines"] },
+        value: { type: "string" },
+      },
+      required: ["field", "value"],
+    },
+  },
+  {
+    name: "add_mood",
+    description: "Add a new mood-board reference. Optionally generate its image from the caption.",
+    parameters: {
+      type: "object",
+      properties: {
+        caption: { type: "string", description: "Short description of the visual reference." },
+        generateImage: { type: "boolean", description: "Default false — set true only if the user wants an image generated now." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "update_mood",
+    description: "Edit a mood-board item's caption. Reference the item by its 1-based position in the mood board.",
+    parameters: {
+      type: "object",
+      properties: {
+        index: { type: "number", description: "1-based position in the mood board." },
+        caption: { type: "string" },
+      },
+      required: ["index", "caption"],
+    },
+  },
+  {
+    name: "delete_mood",
+    description: "Remove a mood-board item by its 1-based position.",
+    parameters: {
+      type: "object",
+      properties: { index: { type: "number" } },
+      required: ["index"],
+    },
+  },
+  {
+    name: "generate_mood_image",
+    description: "Generate (or regenerate) the image for a mood-board item by its 1-based position, from its caption.",
+    parameters: {
+      type: "object",
+      properties: {
+        index: { type: "number" },
+        promptOverride: { type: "string", description: "Optional custom prompt." },
+      },
+      required: ["index"],
+    },
+  },
+  {
+    name: "toggle_section_lock",
+    description: "Lock or unlock an entire section so its images are protected from regeneration. Toggles the current state.",
+    parameters: {
+      type: "object",
+      properties: { section: { type: "string", enum: ["talent", "locations", "products", "mood", "brand"] } },
+      required: ["section"],
+    },
+  },
+  {
+    name: "toggle_asset_lock",
+    description: "Lock or unlock a single character, location, or product so it's protected from regeneration. Toggles the current state.",
+    parameters: {
+      type: "object",
+      properties: {
+        assetType: { type: "string", enum: ["talent", "location", "product"] },
+        assetName: { type: "string" },
+      },
+      required: ["assetType", "assetName"],
+    },
+  },
 ];
 
 // Apply a single chat tool call to the v2 reducer. Returns metadata
@@ -1307,6 +1417,101 @@ function applyChatToolCall(action, data, dispatch) {
         message: `Generating new image for frame ${args.frameNumber}…`,
       };
     }
+    case "delete_frame": {
+      const id = findFrameId(args.frameNumber);
+      if (!id) return null;
+      if ((data.frames || []).length <= 1) {
+        return { applied: false, kind: "frame", message: "Can't delete the last remaining frame." };
+      }
+      dispatch({ type: "DELETE_FRAME", frameId: id });
+      return { applied: true, kind: "frame", field: "deleted", message: `Deleted frame ${args.frameNumber}` };
+    }
+    case "reorder_frames": {
+      const order = Array.isArray(args.order) ? args.order : [];
+      const orderedIds = order.map(findFrameId).filter(Boolean);
+      // Only reorder if we matched every frame exactly once — a partial
+      // order would silently drop frames via the reducer's filter.
+      if (orderedIds.length !== (data.frames || []).length) return null;
+      dispatch({ type: "REORDER_FRAMES", orderedIds });
+      return { applied: true, kind: "frame", field: "reordered", message: "Reordered the storyboard" };
+    }
+    case "delete_talent": {
+      const target = (data.talent || []).find(t =>
+        t.name?.toLowerCase().includes((args.talentName || "").toLowerCase()),
+      );
+      if (!target) return null;
+      dispatch({ type: "DELETE_TALENT", id: target.id });
+      return { applied: true, kind: "talent", field: "deleted", message: `Deleted character ${target.name}` };
+    }
+    case "delete_location": {
+      const target = (data.locations || []).find(l =>
+        l.name?.toLowerCase().includes((args.locationName || "").toLowerCase()),
+      );
+      if (!target) return null;
+      dispatch({ type: "DELETE_LOCATION", id: target.id });
+      return { applied: true, kind: "location", field: "deleted", message: `Deleted location ${target.name}` };
+    }
+    case "delete_product": {
+      const target = (data.products || []).find(p =>
+        p.name?.toLowerCase().includes((args.productName || "").toLowerCase()),
+      );
+      if (!target) return null;
+      dispatch({ type: "DELETE_PRODUCT", id: target.id });
+      return { applied: true, kind: "product", field: "deleted", message: `Deleted element ${target.name}` };
+    }
+    case "update_brand": {
+      if (!args.field || args.value == null) return null;
+      dispatch({ type: "UPDATE_BRAND", field: args.field, value: args.value });
+      return { applied: true, kind: "brand", field: args.field, message: `Updated brand ${args.field}` };
+    }
+    case "add_mood": {
+      dispatch({ type: "ADD_MOOD", data: { caption: args.caption || "" } });
+      const wantImage = args.generateImage === true;
+      // New item lands at the end → its 1-based index is current length + 1.
+      const idx = (data.moodBoard || []).length + 1;
+      return {
+        applied: true, kind: "mood", field: "created",
+        message: `Added mood reference${wantImage ? " — generating…" : ""}`,
+        effect: wantImage ? { type: "generateMoodImage", index: idx, promptOverride: args.caption || null } : null,
+      };
+    }
+    case "update_mood": {
+      const item = (data.moodBoard || [])[Number(args.index) - 1];
+      if (!item) return null;
+      dispatch({ type: "UPDATE_MOOD", id: item.id, field: "caption", value: args.caption || "" });
+      return { applied: true, kind: "mood", field: "caption", message: "Updated mood caption" };
+    }
+    case "delete_mood": {
+      const item = (data.moodBoard || [])[Number(args.index) - 1];
+      if (!item) return null;
+      dispatch({ type: "DELETE_MOOD", id: item.id });
+      return { applied: true, kind: "mood", field: "deleted", message: "Removed mood reference" };
+    }
+    case "generate_mood_image": {
+      const item = (data.moodBoard || [])[Number(args.index) - 1];
+      if (!item) return null;
+      return {
+        applied: true, kind: "mood", field: "regenerating",
+        effect: { type: "generateMoodImage", index: Number(args.index), promptOverride: args.promptOverride || null },
+        message: "Generating mood image…",
+      };
+    }
+    case "toggle_section_lock": {
+      if (!args.section) return null;
+      dispatch({ type: "TOGGLE_SECTION_LOCK", section: args.section });
+      return { applied: true, kind: "lock", field: args.section, message: `Toggled ${args.section} lock` };
+    }
+    case "toggle_asset_lock": {
+      const list = args.assetType === "talent" ? (data.talent || [])
+        : args.assetType === "location" ? (data.locations || [])
+        : args.assetType === "product" ? (data.products || [])
+        : [];
+      const target = list.find(x => x.name?.toLowerCase().includes((args.assetName || "").toLowerCase()));
+      const actionType = { talent: "TOGGLE_TALENT_LOCK", location: "TOGGLE_LOCATION_LOCK", product: "TOGGLE_PRODUCT_LOCK" }[args.assetType];
+      if (!target || !actionType) return null;
+      dispatch({ type: actionType, id: target.id });
+      return { applied: true, kind: args.assetType, field: "lock", message: `Toggled lock on ${target.name}` };
+    }
     default:
       return null;
   }
@@ -1429,7 +1634,7 @@ function mockFrameAI(command, frame, state) {
 
 // -- MOCK IMPROVE WITH AI -------------------------------------
 
-function mockImproveText(text, hasImage) {
+export function mockImproveText(text, hasImage) {
   if (hasImage) {
     return text.replace(/\.$/, "") + ". Cinematic depth of field, volumetric lighting, photorealistic detail. 8K resolution, anamorphic lens flare.";
   }
@@ -1566,7 +1771,7 @@ export function ShimmerSweep({ color = "rgba(255,255,255,0.22)" }) {
   );
 }
 
-function PremiumButton({ children, onClick, disabled, loading, complete, variant = "secondary", style = {}, title }) {
+export function PremiumButton({ children, onClick, disabled, loading, complete, variant = "secondary", style = {}, title }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
   const isDisabled = disabled || loading;
@@ -1703,93 +1908,65 @@ function ChevronDropdown({ label, value, options, onChange, style: extraStyle = 
   );
 }
 
-// -- ASPECT RATIO DROPDOWN (visual icons) -----------------------
-
-function AspectIcon({ ratio, size = 18, color = "var(--warm-30)" }) {
-  // Each entry = the actual width/height of the rectangle drawn for
-  // that ratio. Missing entries (the previous bug) fell back to 16:9
-  // so 4:5, 4:3, 2:1 all looked identical. Fixed: every supported
-  // ratio has its own dims.
-  const dims = {
-    "16:9": [16, 9],
-    "9:16": [9, 16],
-    "1:1":  [12, 12],
-    "4:5":  [12, 15],
-    "5:4":  [15, 12],
-    "4:3":  [16, 12],
-    "3:4":  [12, 16],
-    "2:1":  [18, 9],
-    "2.39": [21, 9],
-  };
-  const [w, h] = dims[ratio] || [16, 9];
-  const scale = size / Math.max(w, h);
-  const rw = Math.round(w * scale);
-  const rh = Math.round(h * scale);
+function DropdownAssetIcon({ src, size = 18, alt = "" }) {
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}>
-      <rect x={(size - rw) / 2} y={(size - rh) / 2} width={rw} height={rh} rx={1.5} ry={1.5}
-        fill="none" stroke={color} strokeWidth={1.2} />
-    </svg>
+    <img
+      src={src}
+      alt={alt}
+      width={size}
+      height={size}
+      style={{ display: "block", width: size, height: size, flexShrink: 0, objectFit: "contain" }}
+    />
   );
 }
 
-function AspectDropdown({ label, value, options, onChange }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
-
-  const selected = options.find(o => o.value === value);
+function RootMenuDropdown({ label, value, options, onChange, renderIcon, triggerIcon, triggerLabel, popupClassName }) {
+  const selected = options.find(o => !o.type && o.value === value);
+  const selectedLabel = triggerLabel || selected?.triggerLabel || selected?.label || value;
+  const menuClassName = popupClassName || "w-[var(--anchor-width)] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]";
 
   return (
-    <div style={{ marginBottom: 14 }} ref={ref}>
+    <div style={{ marginBottom: 14 }}>
       {label && <label style={lbl}>{label}</label>}
-      <div style={{ position: "relative" }}>
-        <div onClick={() => setOpen(!open)} style={{
-          width: "100%", background: "var(--warm-06)", border: "1px solid var(--warm-08)",
-          borderRadius: 8, padding: "8px 36px 8px 10px", color: "var(--warm)", fontSize: 13,
-          fontWeight: 500, fontFamily: "var(--f)", cursor: "pointer", display: "flex",
-          alignItems: "center", gap: 8, boxSizing: "border-box", transition: "border-color 0.2s ease",
-        }}>
-          <AspectIcon ratio={value} size={18} color="var(--warm-30)" />
-          <span>{selected?.label || value}</span>
-        </div>
-        <div style={{
-          position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-          pointerEvents: "none", display: "flex", alignItems: "center",
-        }}>
-          <SectionIcon name="chevron-down" size={14} color="var(--warm-35)" />
-        </div>
-        {open && (
-          <div style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
-            background: "#151517", border: "1px solid var(--warm-08)", borderRadius: 8,
-            overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-          }}>
-            {options.map(o => (
-              <div key={o.value} onClick={() => { onChange(o.value); setOpen(false); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: "9px 12px",
-                  cursor: "pointer", fontFamily: "var(--f)", fontSize: 12, fontWeight: 400,
-                  color: o.value === value ? "#fff" : "var(--warm-35)",
-                  background: o.value === value ? "rgba(255,255,255,0.06)" : "transparent",
-                  transition: "background 0.1s ease",
-                }}
-                onMouseEnter={e => { if (o.value !== value) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
-                onMouseLeave={e => { if (o.value !== value) e.currentTarget.style.background = "transparent"; }}
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full justify-between dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_1px_2px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.045)] dark:hover:bg-[#181818] dark:data-pressed:bg-[#181818]"
+            />
+          }
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            {triggerIcon || renderIcon?.(value, "currentColor", 18)}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedLabel}</span>
+          </span>
+          <SectionIcon name="chevron-down" size={14} color="currentColor" />
+        </MenuTrigger>
+        <MenuPopup
+          align="start"
+          className={menuClassName}
+        >
+          <MenuRadioGroup value={value} onValueChange={onChange}>
+            {options.map((o, idx) => o.type === "separator" ? (
+              <MenuSeparator key={`separator-${idx}`} className="dark:bg-white/10" />
+            ) : (
+              <MenuRadioItem
+                key={o.value}
+                value={o.value}
+                closeOnClick
+                label={o.label}
               >
-                <AspectIcon ratio={o.value} size={20} color={o.value === value ? "#fff" : "var(--warm-25)"} />
-                <span>{o.label}</span>
-              </div>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                  {renderIcon?.(o.value, "currentColor", 20)}
+                  <span style={{ whiteSpace: "nowrap" }}>{o.label}</span>
+                </span>
+              </MenuRadioItem>
             ))}
-          </div>
-        )}
-      </div>
+          </MenuRadioGroup>
+        </MenuPopup>
+      </Menu>
     </div>
   );
 }
@@ -1982,17 +2159,23 @@ function ConfirmAction({ label, onConfirm, variant = "danger", style = {} }) {
 
 // -- ASSET CONTEXT (for AI chat) ------------------------------
 
-function AssetContext({ asset, type, onDismiss }) {
-  const badges = { talent: "T", product: "P", location: "L" };
+export function AssetContext({ asset, type, thumb, onDismiss }) {
+  const badges = { talent: "T", product: "P", location: "L", mood: "M", brand: "B" };
+  const labels = { talent: "Character", product: "Element", location: "Location", mood: "Mood", brand: "Brand" };
   return (
     <div style={{ borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", overflow: "hidden" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px" }}>
-        <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 700, color: "var(--warm-30)", background: "var(--warm-06)", padding: "3px 6px", borderRadius: 3 }}>{badges[type]}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm)" }}>{asset.name}</div>
-          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-25)" }}>{asset.handle}</div>
+        {thumb ? (
+          <img src={thumb} alt="" style={{ width: 34, height: 34, borderRadius: 6, objectFit: "cover", flexShrink: 0, border: "1px solid var(--warm-08)", background: "var(--warm-06)" }} />
+        ) : (
+          <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: "var(--warm-30)", background: "var(--warm-06)", width: 34, height: 34, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{badges[type]}</span>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{labels[type] || "Selected"}</div>
+          <div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, color: "var(--warm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{asset.name}</div>
+          {asset.handle ? <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-25)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{asset.handle}</div> : null}
         </div>
-        <button onClick={onDismiss} style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--warm-08)", background: "transparent", color: "var(--warm-30)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 11, flexShrink: 0 }}>&times;</button>
+        <button onClick={onDismiss} title="Dismiss" style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--warm-08)", background: "transparent", color: "var(--warm-30)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 11, flexShrink: 0 }}>&times;</button>
       </div>
     </div>
   );
@@ -2120,9 +2303,21 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
   const prods = data.products.filter(p => frame.productIds.includes(p.id));
   const talents = data.talent.filter(t => frame.talentIds.includes(t.id));
   const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
+  const handleImageError = () => {
+    dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
+  };
+
+  const frameCardClassName = [
+    "overflow-hidden rounded-lg transition-colors",
+    selected ? "ring-1 ring-ring/50" : "",
+    highlighted ? "ring-1 ring-ring/30" : "",
+    hovered ? "border-ring/40" : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <motion.div
+    <Card
+      render={<motion.div />}
+      className={frameCardClassName}
       layout
       layoutId={`frame-${frame.id}`}
       draggable onDragStart={e => onDragStart(e, frame.id)}
@@ -2134,15 +2329,9 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
       whileTap={isDragSrc ? undefined : { scale: TAP_SCALE }}
       transition={TAP_SPRING}
       style={{
-        borderRadius: 8, overflow: "hidden",
-        border: selected ? "1px solid var(--warm-20)"
-          : highlighted ? "1px solid var(--warm-12)"
-          : hovered ? "1px solid var(--warm-08)" : "1px solid var(--warm-04)",
         cursor: isDragSrc ? "grabbing" : "pointer",
         opacity: isDragSrc ? 0.15 : 1,
-        boxShadow: selected ? "0 2px 20px rgba(0,0,0,0.08)" : hovered ? "0 4px 18px rgba(0,0,0,0.06)" : "none",
         animation: highlighted ? "highlightPulse 1.5s ease" : "none",
-        background: "var(--card-bg)",
       }}
     >
       {/* Header bar */}
@@ -2162,7 +2351,7 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
           an image IS loaded, only the image shows — no overlay, no
           film-strip bars (Logan asked to remove them). */}
       <div style={{ aspectRatio: aspectCSS, background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length], position: "relative", overflow: "hidden" }}>
-        {frame.uploadedImage && <img src={frame.uploadedImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+        {frame.uploadedImage && <img src={frame.uploadedImage} alt="" onError={handleImageError} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
         {!frame.uploadedImage && (
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
         )}
@@ -2218,7 +2407,7 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
           {renderMentions(frame.brief, data)}
         </div>
       </div>
-    </motion.div>
+    </Card>
   );
 }
 
@@ -2330,6 +2519,9 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const loc = data.locations.find(l => l.id === frame.locationId);
   const hasImage = !!frame.uploadedImage;
   const cameraIsDefault = isCameraDefault(frame);
+  const handleImageError = () => {
+    dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
+  };
 
   const handleGenerate = () => {
     setGenLoading(true);
@@ -2396,7 +2588,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
           }}
         >
           <div style={{ aspectRatio: aspCSS, background: frame.uploadedImage ? "transparent" : FILM[fIdx >= 0 ? fIdx % FILM.length : 0], position: "relative", overflow: "hidden" }}>
-            {frame.uploadedImage && <img src={frame.uploadedImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+            {frame.uploadedImage && <img src={frame.uploadedImage} alt="" onError={handleImageError} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
             {!frame.uploadedImage && (
               <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
             )}
@@ -2481,7 +2673,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
 
         {/* === FIELDS (right column in portrait, below in landscape) === */}
         <div>
-        <div style={{ background: "var(--card-bg)", border: "1px solid var(--warm-04)", borderRadius: 10, padding: "20px 24px", marginBottom: 20 }}>
+        <Card className="mb-5 rounded-xl px-6 py-5">
           {/* Description (renamed from Brief) */}
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Description</label>
@@ -2577,7 +2769,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
               <CameraControlStrip frame={frame} dispatch={dispatch} />
             </div>
           </CollapsibleSection>
-        </div>
+        </Card>
 
         {/* Delete frame */}
         <ConfirmAction label="Delete Frame" onConfirm={() => onDeleteFrame(frame.id)} variant="danger" style={{ padding: "6px 14px", fontSize: 11 }} />
@@ -2585,50 +2777,6 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
         </div>{/* close portrait grid wrapper */}
       </Reveal>
     </div>
-  );
-}
-
-// -- ASSET TAB BUTTON (left-rail vertical row) -----------------
-
-function AssetTabButton({ tab, isActive, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  const bg = isActive ? "var(--warm-08)" : hovered ? "var(--warm-04)" : "transparent";
-  const accent = isActive ? "var(--warm)" : hovered ? "var(--warm-50)" : "var(--warm-30)";
-  const iconColor = isActive ? "var(--warm)" : hovered ? "var(--warm-40)" : "var(--warm-25)";
-  return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 10,
-        width: "100%", padding: "10px 12px",
-        borderRadius: 8, cursor: "pointer",
-        outline: "none", border: "none",
-        fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
-        background: bg,
-        color: accent,
-        textAlign: "left",
-        position: "relative",
-        transition: "background 0.15s ease, color 0.15s ease",
-      }}
-    >
-      {/* Left edge accent on active */}
-      {isActive && (
-        <div style={{
-          position: "absolute", left: 0, top: 6, bottom: 6, width: 2,
-          background: "var(--warm-40)", borderRadius: 1,
-        }} />
-      )}
-      <SectionIcon name={tab.icon} size={14} color={iconColor} />
-      <span style={{ flex: 1 }}>{tab.label}</span>
-      <span style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        minWidth: 20, height: 18, padding: "0 5px", borderRadius: 9,
-        background: isActive ? "var(--warm-12)" : "var(--warm-06)",
-        fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-        color: isActive ? "var(--warm-50)" : "var(--warm-25)",
-        flexShrink: 0, lineHeight: 1,
-      }}>{tab.count}</span>
-    </button>
   );
 }
 
@@ -2764,32 +2912,34 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
           <div>
             <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Brand name</label>
-            <input
+            <Input
+              type="text"
+              size="lg"
               value={brand?.name || ""}
               onChange={e => dispatch({ type: "UPDATE_BRAND", field: "name", value: e.target.value })}
               placeholder="Brand name"
-              style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, padding: "7px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm)", outline: "none" }}
             />
           </div>
           <div>
             <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>URL</label>
-            <input
+            <Input
+              type="text"
+              size="lg"
               value={brand?.url || ""}
               onChange={e => dispatch({ type: "UPDATE_BRAND", field: "url", value: e.target.value })}
               placeholder="nike.com"
-              style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, padding: "7px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm)", outline: "none" }}
             />
           </div>
         </div>
       </div>
       <div>
         <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Guidelines</label>
-        <textarea
+        <Textarea
+          size="lg"
           value={brand?.guidelines || ""}
           onChange={e => dispatch({ type: "UPDATE_BRAND", field: "guidelines", value: e.target.value })}
           placeholder="Brand voice, tone, dos and don'ts…"
           rows={3}
-          style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, lineHeight: 1.6, padding: "8px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm-40)", outline: "none", resize: "vertical" }}
         />
       </div>
     </div>
@@ -2936,7 +3086,7 @@ function MoodTile({ item, dispatch, locked, versions = [] }) {
 // mirroring v1's Character Design section layout while keeping the
 // v2 IA (left-rail asset nav + persistent right pane).
 
-function CharacterTab({ data, dispatch }) {
+function CharacterTab({ data, dispatch, onFocusAsset }) {
   const [viewingId, setViewingId] = useState(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const locked = !!data.locks?.talent;
@@ -3000,7 +3150,7 @@ function CharacterTab({ data, dispatch }) {
         gap: 12,
       }}>
         {data.talent.map(t => (
-          <CharacterTile key={t.id} character={t} onClick={() => setViewingId(t.id)} />
+          <CharacterTile key={t.id} character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
         ))}
         <AddCharacterTile onClick={() => dispatch({ type: "ADD_TALENT", data: {} })} />
       </div>
@@ -3788,7 +3938,7 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
 // Same shape as CharacterTab. Single reference image per location
 // (no FRONT/SIDE/BACK grid — locations aren't multi-angle assets).
 
-function LocationTab({ data, dispatch }) {
+function LocationTab({ data, dispatch, onFocusAsset }) {
   const [viewingId, setViewingId] = useState(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const aspect = data.meta?.aspect || "16:9";
@@ -3847,7 +3997,7 @@ function LocationTab({ data, dispatch }) {
           return (
             <>
               {data.locations.map(l => (
-                <LocationTile key={l.id} location={l} onClick={() => setViewingId(l.id)} aspectCSS={aspectCSS} />
+                <LocationTile key={l.id} location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
               ))}
               <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} aspectCSS={aspectCSS} />
             </>
@@ -3988,7 +4138,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
 
 // -- ELEMENT TAB (products tile grid + drill-down) --------------
 
-function ElementTab({ data, dispatch }) {
+function ElementTab({ data, dispatch, onFocusAsset }) {
   const [viewingId, setViewingId] = useState(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const locked = !!data.locks?.products;
@@ -4041,7 +4191,7 @@ function ElementTab({ data, dispatch }) {
         gap: 12,
       }}>
         {data.products.map(p => (
-          <ElementTile key={p.id} product={p} onClick={() => setViewingId(p.id)} />
+          <ElementTile key={p.id} product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
         ))}
         <AddTile label="Add Element" iconName="box" onClick={() => dispatch({ type: "ADD_PRODUCT", data: {} })} />
       </div>
@@ -4367,7 +4517,7 @@ function HoverBarBtn({ children, title, onClick, disabled, danger, active, accen
 
 // -- ASSET EXPANDED PANEL (scrollable with fade hints) ----------
 
-function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist }) {
+function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist, onFocusAsset }) {
   const scrollRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -4413,21 +4563,21 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   if (activeTab === "talent") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <CharacterTab data={data} dispatch={dispatch} />
+        <CharacterTab data={data} dispatch={dispatch} onFocusAsset={onFocusAsset} />
       </div>
     );
   }
   if (activeTab === "locations") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <LocationTab data={data} dispatch={dispatch} />
+        <LocationTab data={data} dispatch={dispatch} onFocusAsset={onFocusAsset} />
       </div>
     );
   }
   if (activeTab === "products") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <ElementTab data={data} dispatch={dispatch} />
+        <ElementTab data={data} dispatch={dispatch} onFocusAsset={onFocusAsset} />
       </div>
     );
   }
@@ -4485,70 +4635,28 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
 // right. Brand Info opens by default. Clicking a tab switches the
 // right pane (no toggle-to-close — something is always selected).
 
-function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
+function AssetTabBar({ data, dispatch, activeTab, onAIAssist }) {
   const [expanded, setExpanded] = useState(null);
-
-  const tabs = [
-    { key: "brand", label: "Brand", icon: "link", count: data.brand?.logo ? 1 : 0 },
-    { key: "talent", label: "Characters", icon: "users", count: data.talent.length },
-    { key: "products", label: "Elements", icon: "box", count: data.products.length },
-    { key: "locations", label: "Locations", icon: "map", count: data.locations.length },
-    { key: "mood", label: "Mood", icon: "image", count: (data.moodBoard || []).length },
-  ];
-
   const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
 
   return (
     <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16 }}>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "200px 1fr",
-        gap: 20,
-        // Dynamic height: never below 220 (so a near-empty Brand tab
-        // still looks intentional) and never above 800 (so a packed
-        // Characters tab doesn't push the storyboard off-screen).
-        // The right pane scrolls when content exceeds the cap.
+      <Card className="rounded-xl p-5" style={{
+        background: "#141414",
         minHeight: 220,
         maxHeight: 800,
-        borderRadius: 12,
-        background: "var(--warm-04)",
-        border: "1px solid var(--warm-06)",
-        padding: 12,
+        overflowY: "auto",
       }}>
-        {/* LEFT RAIL — vertical tab stack */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {tabs.map(tab => (
-            <AssetTabButton
-              key={tab.key}
-              tab={tab}
-              isActive={activeTab === tab.key}
-              onClick={() => onToggleTab(tab.key)}
-            />
-          ))}
-        </div>
-
-        {/* RIGHT PANE — selected tab content. Own overflow so the left
-            rail stays put when the right side scrolls. minHeight:0 lets
-            the flex/grid child actually constrain its own height
-            instead of growing past the cap. */}
-        <div style={{
-          borderLeft: "1px solid var(--warm-06)",
-          paddingLeft: 20,
-          minWidth: 0,
-          minHeight: 0,
-          overflowY: "auto",
-        }}>
-          <AssetExpandedPanel
-            activeTab={activeTab}
-            data={data}
-            dispatch={dispatch}
-            expanded={expanded}
-            setExpanded={setExpanded}
-            typeKey={typeKey}
-            onAIAssist={onAIAssist}
-          />
-        </div>
-      </div>
+        <AssetExpandedPanel
+          activeTab={activeTab}
+          data={data}
+          dispatch={dispatch}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          typeKey={typeKey}
+          onAIAssist={onAIAssist}
+        />
+      </Card>
     </div>
   );
 }
@@ -4556,12 +4664,10 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
 // -- ONE-SHEET WORKSPACE (drag-drop grid) ---------------------
 
 
-function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist, onRetryFrame, onRunRegeneration }) {
+function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist, onFocusAsset, onRetryFrame, onRunRegeneration }) {
   const [dragId, setDragId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
   const didDrag = useRef(false);
-  const [brandHovered, setBrandHovered] = useState(false);
-
   const dragRef = useRef({ id: null, targetPos: null });
   const dragGhostRef = useRef(null);
 
@@ -4663,36 +4769,18 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
               </div>
             </div>
             <div style={{ paddingTop: 6 }}>
-              <span
-                onMouseEnter={() => setBrandHovered(true)}
-                onMouseLeave={() => setBrandHovered(false)}
-                style={{
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-                  color: brandHovered ? "var(--warm-40)" : "var(--warm-25)",
-                  letterSpacing: "0.12em", textTransform: "uppercase",
-                  padding: "5px 12px", borderRadius: 6,
-                  background: brandHovered ? "var(--warm-06)" : "var(--warm-04)",
-                  border: brandHovered ? "1px solid var(--warm-10)" : "1px solid var(--warm-06)",
-                  cursor: "pointer", transition: "all 0.15s ease",
-                }}
-              >{data.meta.client}</span>
+              <EditBriefDialog
+                value={data.meta.treatment || ""}
+                onUpdateMeta={onUpdateMeta}
+                data={data}
+                onRunRegeneration={onRunRegeneration}
+              />
             </div>
           </div>
 
-          {/* Treatment / Brief — squished preview in display mode (a few
-              lines fading out so a long brief doesn't dominate the page),
-              expands to fit content up to 600px when clicked into edit. */}
-          <BriefPanel
-            value={data.meta.treatment || ""}
-            onUpdateMeta={onUpdateMeta}
-            data={data}
-            dispatch={dispatch}
-            onRunRegeneration={onRunRegeneration}
-          />
-
           {/* Asset Tab Bar */}
           <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
-            onToggleTab={onToggleAssetTab} onAIAssist={onAIAssist} />
+            onAIAssist={onAIAssist} />
 
           {/* Frame Grid */}
           {(() => {
@@ -4865,7 +4953,7 @@ function renderMentions(text, data, opts = {}) {
   });
 }
 
-function parseMentions(text, data) {
+export function parseMentions(text, data) {
   const allAssets = [
     ...data.talent.map(t => ({ ...t, _type: "talent" })),
     ...data.products.map(p => ({ ...p, _type: "product" })),
@@ -4919,407 +5007,6 @@ function parseMentions(text, data) {
   }
   if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
   return parts;
-}
-
-function ChatMessage({ message: m, data, onMentionClick }) {
-  // Slide-in: subtle 6px rise + fade. Spring transition gives a little
-  // settle instead of the linear bottom-up scrolls every chat UI does.
-  const MotionWrap = ({ children }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.7 }}
-    >{children}</motion.div>
-  );
-  if (m.role === "system") {
-    return <MotionWrap><div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)", lineHeight: 1.65, padding: "4px 0" }}>{m.text}</div></MotionWrap>;
-  }
-
-  const renderText = (text) => {
-    const parts = parseMentions(text, data);
-    return parts.map((p, i) => {
-      if (p.type === "mention") {
-        return (
-          <span key={i} onClick={p.matched ? () => onMentionClick(p.asset) : undefined}
-            style={{
-              background: p.matched ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
-              color: p.matched ? "#fff" : "var(--warm-20)",
-              padding: "1px 6px", borderRadius: 4, fontWeight: 500,
-              cursor: p.matched ? "pointer" : "default",
-              transition: "background 0.15s ease",
-            }}
-          >{p.handle}</span>
-        );
-      }
-      return <span key={i}>{p.value}</span>;
-    });
-  };
-
-  if (m.role === "user") {
-    return (
-      <MotionWrap>
-      <div style={{ padding: "8px 12px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid var(--warm-06)" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, color: "var(--warm-60)", lineHeight: 1.5 }}>{renderText(m.text)}</div>
-        {m.frameId && <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, color: "var(--warm-15)", marginTop: 4 }}>Frame {m.frameNumber || "?"}</div>}
-      </div>
-      </MotionWrap>
-    );
-  }
-
-  return (
-    <MotionWrap>
-    <div style={{ padding: "0 0 4px" }}>
-      <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, color: "var(--warm-40)", lineHeight: 1.6 }}>{renderText(m.text)}</div>
-      {m.changes && m.changes.length > 0 && (
-        <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 6, background: "rgba(255,255,255,0.02)", border: "1px solid var(--warm-06)" }}>
-          <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Changes</div>
-          {m.changes.map((c, j) => {
-            const fr = data.frames.find(f => f.id === c.id);
-            const label = c.type === "camera" ? "camera" : c.field;
-            return <div key={j} style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-20)", marginBottom: 2 }}>Frame {fr?.number || "?"} {"\xB7"} {label}</div>;
-          })}
-        </div>
-      )}
-    </div>
-    </MotionWrap>
-  );
-}
-
-// -- MENTION POPUP --------------------------------------------
-
-function MentionPopup({ query, data, onSelect, onClose, selectedIndex }) {
-  const allAssets = [
-    ...data.talent.map(t => ({ ...t, _type: "talent", _badge: "T" })),
-    ...data.products.map(p => ({ ...p, _type: "product", _badge: "P" })),
-    ...data.locations.map(l => ({ ...l, _type: "location", _badge: "L" })),
-  ];
-  const q = query.toLowerCase();
-  const filtered = allAssets.filter(a =>
-    a.name.toLowerCase().includes(q) || a.handle.toLowerCase().includes("@" + q) || a.handle.toLowerCase().includes(q)
-  );
-  if (filtered.length === 0) return null;
-
-  return (
-    <div style={{
-      position: "absolute", bottom: "100%", left: 0, right: 0, marginBottom: 4,
-      background: "#151517", border: "1px solid var(--warm-10)", borderRadius: 10,
-      boxShadow: "0 -8px 32px rgba(0,0,0,0.4)", overflow: "hidden",
-      animation: "fadeIn 0.15s ease", maxHeight: 200, overflowY: "auto",
-    }}>
-      {filtered.map((a, i) => (
-        <div key={a.id} onClick={() => onSelect(a)}
-          style={{
-            display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
-            cursor: "pointer", transition: "background 0.1s ease",
-            background: i === selectedIndex ? "rgba(255,255,255,0.06)" : "transparent",
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-          onMouseLeave={e => e.currentTarget.style.background = i === selectedIndex ? "rgba(255,255,255,0.06)" : "transparent"}
-        >
-          <span style={{
-            fontFamily: "var(--f)", fontSize: 9, fontWeight: 700, color: "var(--warm-30)",
-            background: "var(--warm-06)", padding: "2px 5px", borderRadius: 3, letterSpacing: "0.02em",
-          }}>{a._badge}</span>
-          <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, color: "var(--warm)" }}>{a.name}</span>
-          <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-20)" }}>{a.handle}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// -- FRAME CONTEXT (simplified) -------------------------------
-
-function FrameContext({ frame, data, onDismiss, onOpenProduction }) {
-  if (!frame) return null;
-  const fIdx = data.frames.findIndex(f => f.id === frame.id);
-
-  return (
-    <div style={{ borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", overflow: "hidden" }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px" }}>
-        <div style={{
-          width: 52, height: 22, borderRadius: 4, flexShrink: 0, position: "relative", overflow: "hidden",
-          background: FILM[fIdx >= 0 ? fIdx % FILM.length : 0],
-        }}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "8%", background: "rgba(0,0,0,0.4)" }} />
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "8%", background: "rgba(0,0,0,0.4)" }} />
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontFamily: "var(--f)", fontSize: 7, fontWeight: 600, color: "var(--warm-20)" }}>{frame.number}</span>
-          </div>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm)" }}>Frame {frame.number} {"\xB7"} {frame.shotType}</div>
-          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-25)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{!isCameraDefault(frame) ? frame.camera : ""}</div>
-        </div>
-        <PremiumButton variant="ghost" onClick={onOpenProduction} style={{ padding: "4px 8px", fontSize: 10, gap: 4 }}>
-          <SectionIcon name="edit" size={10} color="var(--warm-40)" /> Edit
-        </PremiumButton>
-        <button onClick={onDismiss} style={{
-          width: 20, height: 20, borderRadius: 4, border: "1px solid var(--warm-08)",
-          background: "transparent", color: "var(--warm-30)", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 11, flexShrink: 0,
-        }}>&times;</button>
-      </div>
-    </div>
-  );
-}
-
-// -- CHAT ICON BUTTON (with hover state) -------------------------
-
-function ChatIconButton({ onClick, disabled, title, active, muted, pulsing, children, size = 24, borderRadius: br = 5 }) {
-  const [hovered, setHovered] = useState(false);
-  const showHover = (active || muted) && hovered && !disabled;
-  return (
-    <button onClick={disabled ? undefined : onClick} title={title}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{
-        width: size, height: size, borderRadius: br, border: "none",
-        background: showHover ? "var(--hover-fill)" : active ? "var(--warm-06)" : "transparent",
-        color: showHover ? "var(--hover-text)" : active ? "var(--warm)" : muted ? "var(--warm-25)" : "var(--warm-10)",
-        cursor: active ? "pointer" : muted ? "default" : "default",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        transition: "all 0.2s ease", outline: "none", flexShrink: 0,
-        opacity: active ? 1 : muted ? 0.6 : 0.3,
-        animation: pulsing ? "pulse 0.6s ease infinite" : "none",
-      }}
-    >{children}</button>
-  );
-}
-
-// -- AI CHAT PANEL (with @ mentions + asset context + improve button) --
-
-function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger }) {
-  const [val, setVal] = useState("");
-  const [mentionOpen, setMentionOpen] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState("");
-  const [mentionIdx, setMentionIdx] = useState(0);
-  const [improving, setImproving] = useState(false);
-  const endRef = useRef(null);
-  const inputRef = useRef(null);
-  const selectedFrame = selectedFrameId ? data.frames.find(f => f.id === selectedFrameId) : null;
-
-  // Resolve asset context
-  const assetContextResolved = chatAssetContext ? (() => {
-    const { type, id } = chatAssetContext;
-    if (type === "talent") return { type, asset: data.talent.find(t => t.id === id) };
-    if (type === "product") return { type, asset: data.products.find(p => p.id === id) };
-    if (type === "location") return { type, asset: data.locations.find(l => l.id === id) };
-    return null;
-  })() : null;
-
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatBusy]);
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 100); }, []);
-
-  // Focus input when chatFocusTrigger changes (hero image click)
-  useEffect(() => {
-    if (chatFocusTrigger > 0) {
-      setTimeout(() => inputRef.current?.focus(), 150);
-    }
-  }, [chatFocusTrigger]);
-
-  const detectMention = (text, pos) => {
-    const before = text.slice(0, pos);
-    const match = before.match(/@(\w*)$/);
-    return match ? match[1] : null;
-  };
-
-  const handleChange = (e) => {
-    const v = e.target.value;
-    setVal(v);
-    const pos = e.target.selectionStart;
-    const mq = detectMention(v, pos);
-    if (mq !== null) {
-      setMentionOpen(true);
-      setMentionQuery(mq);
-      setMentionIdx(0);
-    } else {
-      setMentionOpen(false);
-    }
-  };
-
-  const handleMentionSelect = (asset) => {
-    const pos = inputRef.current?.selectionStart || val.length;
-    const before = val.slice(0, pos);
-    const atPos = before.lastIndexOf("@");
-    if (atPos === -1) return;
-    const after = val.slice(pos);
-    const newVal = before.slice(0, atPos) + asset.handle + " " + after;
-    setVal(newVal);
-    setMentionOpen(false);
-    setTimeout(() => inputRef.current?.focus(), 10);
-  };
-
-  const allMentionAssets = [
-    ...data.talent.map(t => ({ ...t, _type: "talent", _badge: "T" })),
-    ...data.products.map(p => ({ ...p, _type: "product", _badge: "P" })),
-    ...data.locations.map(l => ({ ...l, _type: "location", _badge: "L" })),
-  ];
-  const filteredMentions = allMentionAssets.filter(a => {
-    const q = mentionQuery.toLowerCase();
-    return a.name.toLowerCase().includes(q) || a.handle.toLowerCase().includes(q);
-  });
-
-  const send = () => {
-    if (!val.trim() || chatBusy) return;
-    const frame = selectedFrame;
-    onSendMessage(val.trim(), selectedFrameId, frame ? frame.number : null);
-    setVal("");
-    setMentionOpen(false);
-  };
-
-  const handleImproveWithAI = () => {
-    if (!val.trim() || improving) return;
-    setImproving(true);
-    const hasImageContext = selectedFrame && selectedFrame.uploadedImage;
-    setTimeout(() => {
-      setVal(mockImproveText(val.trim(), !!hasImageContext));
-      setImproving(false);
-      setTimeout(() => inputRef.current?.focus(), 10);
-    }, 600);
-  };
-
-  const handleKeyDown = (e) => {
-    if (mentionOpen && filteredMentions.length > 0) {
-      if (e.key === "ArrowDown") { e.preventDefault(); setMentionIdx(i => (i + 1) % filteredMentions.length); return; }
-      if (e.key === "ArrowUp") { e.preventDefault(); setMentionIdx(i => (i - 1 + filteredMentions.length) % filteredMentions.length); return; }
-      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); handleMentionSelect(filteredMentions[mentionIdx]); return; }
-      if (e.key === "Escape") { e.preventDefault(); setMentionOpen(false); return; }
-    }
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-  };
-
-  // Determine placeholder
-  let placeholder = selectedFrame ? `Describe changes for Frame ${selectedFrame.number}...` : "What do you want to change?";
-  if (assetContextResolved?.asset) {
-    const pMap = { talent: "Describe this character...", product: "Describe this product...", location: "Help me refine this location..." };
-    placeholder = pMap[assetContextResolved.type] || placeholder;
-  }
-
-  const hasUserMessages = chatMessages.some(m => m.role === "user" || m.role === "assistant");
-
-  const handleSuggestion = (text) => {
-    const frame = selectedFrame;
-    onSendMessage(text, selectedFrameId, frame ? frame.number : null);
-  };
-
-  // Auto-expand textarea height
-  const autoResize = useCallback(() => {
-    const el = inputRef.current;
-    if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }
-  }, []);
-  useEffect(() => { autoResize(); }, [val, autoResize]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Messages — bottom-aligned like text messages, centered when empty */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px", display: "flex", flexDirection: "column", gap: 12, justifyContent: hasUserMessages ? "flex-end" : "center" }}>
-        {hasUserMessages ? (
-          <>
-            {chatMessages.map((m, i) => <ChatMessage key={m.id || i} message={m} data={data} onMentionClick={onMentionClick} />)}
-            {chatBusy && (
-              <div style={{ display: "flex", gap: 5, padding: "8px 0" }}>
-                {[0, 1, 2].map(i => <div key={i} style={{ width: 4, height: 4, borderRadius: 1, background: "var(--warm)", animation: `pulse 1.2s ease ${i * 0.15}s infinite` }} />)}
-              </div>
-            )}
-          </>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "0 16px", flex: 1, justifyContent: "center" }}>
-            <div style={{ fontFamily: "var(--f)", fontSize: 20, fontWeight: 300, color: "var(--warm-35)", letterSpacing: "-0.02em" }}>
-              What should we do?
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
-              {CHAT_SUGGESTIONS.map(s => (
-                <button key={s.label} onClick={() => handleSuggestion(s.label)}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 8,
-                    padding: "8px 16px", borderRadius: 8,
-                    background: "var(--warm-04)", border: "1px solid var(--warm-06)",
-                    fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-35)",
-                    cursor: "pointer", transition: "all 0.2s ease", outline: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "var(--warm-06)"; e.currentTarget.style.borderColor = "var(--warm-10)"; e.currentTarget.style.color = "var(--warm-50)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "var(--warm-04)"; e.currentTarget.style.borderColor = "var(--warm-06)"; e.currentTarget.style.color = "var(--warm-35)"; }}
-                >
-                  <SectionIcon name={s.icon} size={12} color="currentColor" />
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      {/* Bottom: helper hint + context cards + input */}
-      <div style={{ borderTop: "1px solid var(--warm-06)", padding: "10px 16px 14px", flexShrink: 0 }}>
-        {!hasUserMessages && (
-          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-15)", lineHeight: 1.5, textAlign: "center", marginBottom: 8 }}>
-            Click any frame to open it, or use @ to reference assets.
-          </div>
-        )}
-        {selectedFrame && (
-          <div style={{ marginBottom: 10 }}>
-            <FrameContext frame={selectedFrame} data={data} onDismiss={onDismissFrame} onOpenProduction={onOpenProduction} />
-          </div>
-        )}
-        {assetContextResolved?.asset && (
-          <div style={{ marginBottom: 10 }}>
-            <AssetContext asset={assetContextResolved.asset} type={assetContextResolved.type} onDismiss={onDismissAssetContext} />
-          </div>
-        )}
-        <div style={{ position: "relative" }}>
-          {mentionOpen && filteredMentions.length > 0 && (
-            <MentionPopup query={mentionQuery} data={data} onSelect={handleMentionSelect} onClose={() => setMentionOpen(false)} selectedIndex={mentionIdx} />
-          )}
-          <div style={{
-            display: "flex", alignItems: "flex-end", gap: 6,
-            padding: "8px 10px", borderRadius: 10,
-            background: "var(--warm-04)", border: "1px solid var(--warm-06)",
-          }}>
-            <textarea ref={inputRef} value={val}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              rows={1}
-              style={{
-                flex: 1, border: "none", outline: "none", background: "transparent",
-                fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, color: "var(--warm)",
-                letterSpacing: "-0.01em", resize: "none", lineHeight: 1.5,
-                minHeight: 26, maxHeight: 120, overflow: "auto",
-                padding: "3px 4px",
-              }}
-            />
-            {/* Improve with AI button — muted at 50% until text typed */}
-            <ChatIconButton
-              onClick={handleImproveWithAI}
-              disabled={!val.trim() || improving}
-              title="Improve with AI"
-              active={!!val.trim() && !improving}
-              muted={!val.trim() && !improving}
-              pulsing={improving}
-              size={26}
-              borderRadius={6}
-            >
-              <SectionIcon name="pencil-sparkle" size={12} color="currentColor" />
-            </ChatIconButton>
-            {/* Send button — always-visible bright arrow */}
-            <ChatIconButton
-              onClick={send}
-              disabled={!val.trim() || chatBusy}
-              title="Send"
-              active={!!val.trim()}
-              muted={!val.trim()}
-              size={26}
-              borderRadius={6}
-            >
-              <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 700, color: "var(--warm)" }}>{"↑"}</span>
-            </ChatIconButton>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // -- PROGRESS CIRCLE (character completion) --------------------
@@ -5402,11 +5089,14 @@ function AssetCard({ item, category, data, dispatch, isExpanded, onToggle, onAIA
     }, 1000);
   };
 
+  const assetCardClassName = [
+    "overflow-hidden rounded-xl transition-colors",
+    isComplete ? "ring-1 ring-ring/30" : "",
+    isDraft ? "border-dashed" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <div style={{
-      borderRadius: 10, overflow: "hidden", transition: "all 0.2s ease",
-      border: isComplete ? "1px solid var(--warm-10)" : isDraft ? "1px dashed var(--warm-08)" : "1px solid var(--warm-06)",
-    }}>
+    <Card className={assetCardClassName}>
       {/* Collapsed header */}
       <div onClick={onToggle} style={{
         display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
@@ -5622,89 +5312,7 @@ function AssetCard({ item, category, data, dispatch, isExpanded, onToggle, onAIA
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// -- FLOATING AI CHAT TAB ------------------------------------
-
-function AIChatTab({ sidebarOpen, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div style={{
-      position: "fixed",
-      right: 0,
-      top: "50%",
-      transform: `translateY(-50%) translateX(${sidebarOpen ? "100%" : "0"})`,
-      opacity: sidebarOpen ? 0 : 1,
-      pointerEvents: sidebarOpen ? "none" : "auto",
-      transition: "transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.25s ease",
-      zIndex: 90,
-    }}>
-      {/* Primary glow — centered behind button */}
-      <div style={{
-        position: "absolute", top: 4, left: 2, right: 0, bottom: 4, borderRadius: "14px 0 0 14px", zIndex: 0,
-        backgroundImage: "linear-gradient(135deg, #8855f0, #5577f4, #9960f0, #6070f8, #7755ee, #4a68f0)",
-        backgroundSize: "300% 300%",
-        animation: "liquidGradient 18s ease infinite",
-        filter: "blur(7px)",
-        opacity: hovered ? 0.85 : 0.5,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Secondary glow */}
-      <div style={{
-        position: "absolute", top: 8, left: 4, right: 0, bottom: 8, borderRadius: "14px 0 0 14px", zIndex: 0,
-        backgroundImage: "linear-gradient(225deg, #6644dd, #3b62e8, #8050e4, #5060ec, #6644dd)",
-        backgroundSize: "350% 350%",
-        animation: "liquidGradient 24s ease-in-out infinite reverse",
-        filter: "blur(10px)",
-        opacity: hovered ? 0.55 : 0.25,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Ambient glow — wider spread */}
-      <div style={{
-        position: "absolute", top: -2, left: -2, right: -2, bottom: -2, borderRadius: "18px 0 0 18px", zIndex: 0,
-        backgroundImage: "radial-gradient(ellipse at 50% 50%, rgba(120,60,230,0.5), transparent 70%), radial-gradient(ellipse at 50% 50%, rgba(60,100,240,0.4), transparent 70%)",
-        backgroundSize: "200% 200%",
-        animation: "liquidGradient 20s ease infinite",
-        filter: "blur(14px)",
-        opacity: hovered ? 0.45 : 0.2,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Button */}
-      <button
-        onClick={onClick}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        title="Open AI Chat"
-        style={{
-          position: "relative",
-          zIndex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 8,
-          padding: "16px 12px",
-          background: hovered ? "var(--warm-06)" : "var(--surface-solid)",
-          borderTop: `1px solid ${hovered ? "var(--warm-12)" : "var(--warm-08)"}`,
-          borderLeft: `1px solid ${hovered ? "var(--warm-12)" : "var(--warm-08)"}`,
-          borderBottom: `1px solid ${hovered ? "var(--warm-12)" : "var(--warm-08)"}`,
-          borderRight: "none",
-          borderRadius: "12px 0 0 12px",
-          cursor: "pointer",
-          outline: "none",
-          fontFamily: "var(--f)",
-        }}
-      >
-        <SectionIcon name="sparkle" size={20} color={hovered ? "var(--warm)" : "var(--warm-30)"} />
-        <span style={{
-          fontSize: 10, fontWeight: 600, letterSpacing: "0.06em",
-          color: hovered ? "var(--warm-50)" : "var(--warm-20)",
-          transition: "color 0.2s ease",
-          whiteSpace: "nowrap",
-        }}>AI Chat</span>
-      </button>
-    </div>
+    </Card>
   );
 }
 
@@ -5778,10 +5386,10 @@ function LiquidGlassButton({ onClick, children }) {
         onMouseLeave={() => setHovered(false)}
         style={{
           position: "relative", zIndex: 1, width: "100%", padding: "16px 0",
-          fontFamily: "var(--f)", fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em",
-          border: "none",
+          fontFamily: "var(--f)", fontSize: 17, fontWeight: 500, letterSpacing: "-0.01em",
+          border: "1px solid rgba(255,255,255,0.18)",
           borderRadius: 14, cursor: "pointer", outline: "none",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
           color: hovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.85)",
           backgroundImage: hovered
             ? "linear-gradient(135deg, rgba(0,0,0,0.97), rgba(4,4,8,0.98), rgba(0,0,0,0.97))"
@@ -5790,8 +5398,8 @@ function LiquidGlassButton({ onClick, children }) {
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           boxShadow: hovered
-            ? "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.03), 0 0 0 1px rgba(255,255,255,0.06)"
-            : "inset 0 1px 0 rgba(255,255,255,0.05)",
+            ? "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(255,255,255,0.035), 0 1px 2px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.06)"
+            : "inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 2px rgba(0,0,0,0.42)",
           transition: "all 0.4s cubic-bezier(0.22,1,0.36,1)",
           overflow: "hidden",
         }}
@@ -6147,50 +5755,72 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
           WebkitBackdropFilter: "blur(20px)",
           border: "1px solid rgba(255, 255, 255, 0.08)",
           boxShadow: "0 24px 64px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
-          borderRadius: 14, padding: "3% 5%", marginBottom: "2%",
+          borderRadius: 14, padding: "3%", marginBottom: "2%",
         }}>
-          <div style={{ marginBottom: 20 }}>
-            <label style={lbl}>Project</label>
-            <input value={meta.title} onChange={e => setMeta(m => ({ ...m, title: e.target.value }))} style={inp} />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
-            <div>
-              <label style={lbl}>Client</label>
-              <input
-                value={meta.client}
-                onChange={e => setMeta(m => ({ ...m, client: e.target.value }))}
-                list="ww-client-folders"
-                placeholder="Pick or type — auto-creates a folder"
-                style={inp}
-              />
-              <datalist id="ww-client-folders">
-                {folders.map(f => <option key={f} value={f} />)}
-              </datalist>
-            </div>
-            <ChevronDropdown
-              label="Length"
-              value={meta.format}
-              options={BRIEF_LENGTHS.map(s => ({ value: s.replace(/s$/, ""), label: `:${s.replace(/s$/, "")}` }))}
-              onChange={v => setMeta(m => ({ ...m, format: v }))}
-              style={{}}
+          <div style={{ marginBottom: 20, position: "relative" }}>
+            <span aria-hidden="true" style={{
+              position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)",
+              zIndex: 2, pointerEvents: "none", display: "inline-flex", alignItems: "center",
+            }}>
+              <DropdownAssetIcon src={iconStoryboardTitleUrl} size={17} />
+            </span>
+            <Input
+              type="text"
+              size="lg"
+              value={meta.title}
+              onChange={e => setMeta(m => ({ ...m, title: e.target.value }))}
+              placeholder="Enter storyboard title..."
+              className="[&_[data-slot=input]]:pl-11"
             />
-            <AspectDropdown
-              label="Aspect Ratio"
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 5 }}>
+            <RootMenuDropdown
+              value={meta.client}
+              options={[
+                { value: "", label: "No Folder" },
+                ...(folders.length ? [{ type: "separator" }] : []),
+                ...folders.map(folder => ({ value: folder, label: folder })),
+              ]}
+              onChange={client => setMeta(m => ({ ...m, client }))}
+              triggerIcon={<DropdownAssetIcon src={iconFolderUrl} size={18} />}
+              triggerLabel={meta.client || "Select Folder"}
+              renderIcon={() => <DropdownAssetIcon src={iconFolderUrl} size={18} />}
+              popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+            />
+            <RootMenuDropdown
+              value={meta.format}
+              options={BRIEF_LENGTHS.map(s => {
+                const seconds = s.replace(/s$/, "");
+                return { value: seconds, label: `${seconds} sec` };
+              })}
+              onChange={v => setMeta(m => ({ ...m, format: v }))}
+              triggerIcon={<DropdownAssetIcon src={iconClockUrl} size={18} />}
+              triggerLabel={`Length: ${meta.format || "30"} sec`}
+              renderIcon={() => <DropdownAssetIcon src={iconClockUrl} size={18} />}
+            />
+            <RootMenuDropdown
               value={meta.aspect}
               options={BRIEF_RATIOS.map(r => ({ value: r.id, label: r.label }))}
               onChange={v => setMeta(m => ({ ...m, aspect: v }))}
+              triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={18} />}
+              triggerLabel={`Aspect: ${meta.aspect || "16:9"}`}
+              renderIcon={() => <DropdownAssetIcon src={iconAspectUrl} size={18} />}
             />
           </div>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
-              <label style={{ ...lbl, marginBottom: 0 }}>Brief</label>
+          <div style={{ marginBottom: 20, position: "relative" }}>
+            <Textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
+              size="lg"
+              disabled={improving}
+              placeholder="Storyboard Brief..."
+              className="[&_[data-slot=textarea]]:pt-2 [&_[data-slot=textarea]]:pb-16"
+              style={{ minHeight: 160, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
               <button
                 onClick={improveBrief}
                 disabled={!meta.treatment?.trim() || improving || generating}
                 type="button"
                 title="Use Gemini to expand a rough idea into a 100-180 word grounded brief"
                 style={{
-                  position: "relative", overflow: "hidden",
+                  position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 12px", borderRadius: 18,
                   background: "rgba(255,200,87,0.10)",
@@ -6222,15 +5852,10 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
                   {improving ? "Improving…" : "Improve with AI"}
                 </span>
               </button>
-            </div>
-            <textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
-              disabled={improving}
-              style={{ ...inp, minHeight: 120, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
           </div>
 
           {/* File upload zone */}
           <div>
-            <label style={lbl}>Reference Files</label>
             <div
               onDragOver={e => { e.preventDefault(); setFileDragOver(true); }}
               onDragLeave={() => setFileDragOver(false)}
@@ -6238,16 +5863,21 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
               onClick={() => fileRef.current.click()}
               style={{
                 border: `1.5px dashed ${fileDragOver ? "rgba(255,255,255,0.3)" : "var(--warm-10)"}`,
-                borderRadius: 10, padding: "18px 16px", textAlign: "center",
+                borderRadius: 10, padding: "26px 16px 24px", textAlign: "center",
                 cursor: "pointer", transition: "all 0.2s ease",
-                background: fileDragOver ? "rgba(255,255,255,0.02)" : "transparent",
+                background: fileDragOver ? "rgba(255,255,255,0.02)" : "#1b1b1b",
               }}
             >
-              <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, color: "var(--warm-25)", marginBottom: 3 }}>
-                Drop files here or click to browse
+              <div style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
+                fontFamily: "var(--f)", fontSize: 15, fontWeight: 500, color: "var(--warm)",
+                marginBottom: 10, letterSpacing: "-0.01em",
+              }}>
+                <DropdownAssetIcon src={iconDropfilesUrl} size={18} />
+                <span>Add Reference Files</span>
               </div>
-              <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-15)" }}>
-                Treatments, scripts, product images, mood boards
+              <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, color: "var(--warm-25)" }}>
+                Drop treatments, scripts, images, or mood boards here or click to browse
               </div>
             </div>
             <input ref={fileRef} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt,.rtf"
@@ -6281,21 +5911,23 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
       </Reveal>
 
       <Reveal delay={320}>
-        <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
-          <SectionIcon name="sparkle" size={15} color="rgba(255,255,255,0.8)" />
-          {generating ? " Generating brief…" : " Generate Storyboard"}
-        </LiquidGlassButton>
-        {error ? (
-          <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
-            {error}
-          </p>
-        ) : (
-          <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
-            {generating
-              ? "Talking to Gemini — characters, locations, and a 9-frame storyboard incoming. Usually ~10–20 seconds."
-              : "Creates talent, locations, products, and a complete shot sequence"}
-          </p>
-        )}
+        <div className="mt-4">
+          <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
+            <DropdownAssetIcon src={iconStoryboardTitleUrl} size={17} />
+            {generating ? "Generating brief…" : "Generate Storyboard"}
+          </LiquidGlassButton>
+          {error ? (
+            <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
+              {error}
+            </p>
+          ) : (
+            <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
+              {generating
+                ? "Talking to Gemini — characters, locations, and a 9-frame storyboard incoming. Usually ~10–20 seconds."
+                : "Creates talent, locations, products, and a complete shot sequence"}
+            </p>
+          )}
+        </div>
       </Reveal>
     </div>
     </div>
@@ -6358,6 +5990,8 @@ export default function WorkshopV2() {
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
   const [chatBusy, setChatBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -6371,6 +6005,11 @@ export default function WorkshopV2() {
   const isDark = theme === "dark";
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [theme, isDark]);
 
   // Hydrate the active project's full data from IndexedDB on mount.
   // localStorage's bootstrap gave us a lightweight (data-URL-stripped)
@@ -6526,6 +6165,16 @@ export default function WorkshopV2() {
     setProjects(listProjects());
   }
 
+  function handleBackToProjects() {
+    if (activeProjectId && built) {
+      saveProject(activeProjectId, data);
+    }
+    setBuilt(false);
+    setProductionFrameId(null);
+    setSelectedFrameId(null);
+    setProjects(listProjects());
+  }
+
   function handleDeleteProject(projectId) {
     // If we're deleting the active project, clear pending auto-saves
     // FIRST so a ceiling timeout doesn't fire seconds later and recreate
@@ -6563,14 +6212,21 @@ export default function WorkshopV2() {
     setFolders(listFolders());
     toast(folder ? `Moved to "${folder}"` : "Removed from folder", { kind: "info", ttl: 2500 });
   }
-  async function handleNewFolder() {
-    const name = window.prompt("Client name? (creates a folder)");
+  function handleNewFolder() {
+    setNewFolderName("");
+    setNewFolderOpen(true);
+  }
+  function handleCreateFolderSubmit(e) {
+    e.preventDefault();
+    const name = newFolderName.trim();
     if (!name) return;
     const created = createFolder(name);
     if (created) {
       setFolders(listFolders());
       toast(`Created client folder "${created}"`, { kind: "success", ttl: 2500 });
     }
+    setNewFolderOpen(false);
+    setNewFolderName("");
   }
   async function handleDeleteFolder(name) {
     const ok = await uiConfirm({
@@ -6682,6 +6338,27 @@ export default function WorkshopV2() {
       }
       case "generateFrameImage": {
         await regenerateOneFrame(effect.frameId);
+        return;
+      }
+      case "generateMoodImage": {
+        const item = (current.moodBoard || [])[Number(effect.index) - 1];
+        if (!item) return;
+        const aspect = current.meta?.aspect || "16:9";
+        markPending(`mood.${item.id}`);
+        dispatch({ type: "UPDATE_MOOD", id: item.id, field: "generationStatus", value: "generating" });
+        try {
+          const promptText = effect.promptOverride || item.caption || "Cinematic mood reference frame, atmospheric, on-brand";
+          log("info", `chat: generating mood image #${effect.index}`);
+          const url = await generateImage(promptText, { ratio: aspect });
+          dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: url });
+          dispatch({ type: "UPDATE_MOOD", id: item.id, field: "generationStatus", value: "complete" });
+        } catch (e) {
+          log("error", "chat mood gen failed", { error: String(e?.message || e) });
+          dispatch({ type: "UPDATE_MOOD", id: item.id, field: "generationStatus", value: "error" });
+          toast(`Couldn't generate mood image: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+        } finally {
+          markDone(`mood.${item.id}`);
+        }
         return;
       }
       default:
@@ -6952,6 +6629,7 @@ export default function WorkshopV2() {
   const selectFrame = useCallback((id) => {
     setSelectedFrameId(id);
     setProductionFrameId(id);
+    setChatAssetContext(null); // selecting a frame clears any asset focus
     if (!sidebarOpen) setSidebarOpen(true);
   }, [sidebarOpen]);
 
@@ -7037,16 +6715,11 @@ export default function WorkshopV2() {
       const newId = newProjectId();
       setActiveProjectId(newId);
       setActiveProjectIdState(newId);
-      // Auto-file under the client folder. If the user typed a new
-      // client name, create the folder first. The first save (debounce
-      // + ceiling auto-save) will include the folder via the
-      // project's stored metadata.
-      if (meta.client?.trim()) {
+      // Auto-file only when the user selected an existing folder. If
+      // they choose "No Folder", the new project stays at the sidebar
+      // root with the other unfiled projects.
+      if (meta.client?.trim() && listFolders().includes(meta.client.trim())) {
         const clientName = meta.client.trim();
-        const existing = listFolders();
-        if (!existing.includes(clientName)) {
-          createFolder(clientName);
-        }
         // saveProject merges this when it next runs; force a save now
         // so the sidebar updates immediately.
         setProjectFolder(newId, clientName);
@@ -7347,18 +7020,49 @@ export default function WorkshopV2() {
     // current camera settings), not image URLs or generationStatus.
     const stateSnap = {
       meta: currentData.meta,
-      talent: (currentData.talent || []).map(t => ({ id: t.id, name: t.name, handle: t.handle, role: t.role, note: t.note })),
-      locations: (currentData.locations || []).map(l => ({ id: l.id, name: l.name, handle: l.handle, type: l.type, note: l.note })),
-      products: (currentData.products || []).map(p => ({ id: p.id, name: p.name, handle: p.handle, category: p.category, note: p.note })),
+      talent: (currentData.talent || []).map(t => ({ id: t.id, name: t.name, handle: t.handle, role: t.role, note: t.note, hasImage: !!(t.headshot || t.headshots?.front), locked: !!t.locked })),
+      locations: (currentData.locations || []).map(l => ({ id: l.id, name: l.name, handle: l.handle, type: l.type, note: l.note, hasImage: !!(l.generatedImage || l.referenceImage), locked: !!l.locked })),
+      products: (currentData.products || []).map(p => ({ id: p.id, name: p.name, handle: p.handle, category: p.category, note: p.note, hasImage: !!p.referenceImage, locked: !!p.locked })),
+      moodBoard: (currentData.moodBoard || []).map((m, i) => ({ index: i + 1, caption: m.caption, hasImage: !!m.image })),
+      brand: currentData.brand ? { name: currentData.brand.name, url: currentData.brand.url, guidelines: currentData.brand.guidelines, hasLogo: !!currentData.brand.logo } : null,
+      locks: currentData.locks || {},
       frames: (currentData.frames || []).map(f => ({
         id: f.id, number: f.number, shotType: f.shotType, brief: f.brief,
         camera: f.camera, cameraAngle: f.cameraAngle, cameraHeight: f.cameraHeight,
-        lens: f.lens, movement: f.movement,
+        lens: f.lens, movement: f.movement, hasImage: !!f.uploadedImage,
         talentIds: f.talentIds, locationId: f.locationId, productIds: f.productIds,
       })),
     };
 
     const focusedFrame = frameId ? currentData.frames.find(f => f.id === frameId) : null;
+
+    // What the user has selected on the left — frame OR an asset (talent /
+    // product / location / mood / brand). This is what makes pronouns like
+    // "this", "her", "it" resolve to the thing the user clicked. The frame
+    // path keeps its existing wording; assets get a focus line + their full
+    // current fields so the model edits/regenerates the right one.
+    let focusLine = focusedFrame
+      ? `The user has frame ${focusedFrame.number} selected — "this"/"this frame" refers to it. Prefer edits/actions on that frame unless they say otherwise.`
+      : "No frame is selected — global / multi-frame edits are appropriate.";
+    if (chatAssetContext?.type) {
+      const c = chatAssetContext;
+      if (c.type === "talent") {
+        const a = (currentData.talent || []).find(t => t.id === c.id);
+        if (a) focusLine = `The user has the character "${a.name}" (${a.handle}) selected — "this", "her", "him", "they", "it" refer to this character. Prefer edits / regeneration on this character unless they clearly mean another. Current fields: ${JSON.stringify({ name: a.name, role: a.role, note: a.note, hasImage: !!(a.headshot || a.headshots?.front), locked: !!a.locked })}. When regenerating its image after an appearance change, the existing headshot is reused as an identity reference.`;
+      } else if (c.type === "product") {
+        const a = (currentData.products || []).find(p => p.id === c.id);
+        if (a) focusLine = `The user has the element "${a.name}" (${a.handle}) selected — "this"/"it" refers to it. Prefer edits / regeneration on this element. Current fields: ${JSON.stringify({ name: a.name, category: a.category, note: a.note, hasImage: !!a.referenceImage, locked: !!a.locked })}.`;
+      } else if (c.type === "location") {
+        const a = (currentData.locations || []).find(l => l.id === c.id);
+        if (a) focusLine = `The user has the location "${a.name}" (${a.handle}) selected — "this"/"it"/"here" refer to it. Prefer edits / regeneration on this location. Current fields: ${JSON.stringify({ name: a.name, note: a.note, hasImage: !!(a.generatedImage || a.referenceImage), locked: !!a.locked })}.`;
+      } else if (c.type === "mood") {
+        const idx = (currentData.moodBoard || []).findIndex(m => m.id === c.id);
+        if (idx >= 0) focusLine = `The user has mood-board item #${idx + 1} selected — "this"/"it" refers to it. Use index ${idx + 1} with the mood tools. Current caption: ${JSON.stringify((currentData.moodBoard || [])[idx]?.caption || "")}.`;
+      } else if (c.type === "brand") {
+        const b = currentData.brand || {};
+        focusLine = `The user has the Brand section selected — "this"/"it"/"the brand" refer to it. Use update_brand for name/url/guidelines. Current: ${JSON.stringify({ name: b.name, url: b.url, hasLogo: !!b.logo })}.`;
+      }
+    }
 
     const systemPrompt = [
       "You are a creative production assistant editing a storyboard.",
@@ -7370,15 +7074,21 @@ export default function WorkshopV2() {
       "- 'Talent' / 'Characters' / 'Cast' = `talent[]`. 'Locations' / 'Settings' = `locations[]`. 'Products' / 'Elements' / 'Hero items' = `products[]`.",
       "- 'Brand' = `brand` (singular): the client's logo, URL, guidelines.",
       "",
-      "Tool selection guide:",
-      "- 'Create a character / location / product' → use create_talent / create_location / create_product. These also generate the reference image by default.",
-      "- 'Make a new image / regenerate this' → use generate_asset_image or generate_frame_image.",
-      "- Editing existing fields → update_talent / update_location / update_product / update_frame_brief / update_frame_camera / update_meta.",
+      "Tool selection guide — you can drive EVERYTHING on the left from chat:",
+      "- Create: create_talent / create_location / create_product (these also generate the reference image by default); add_mood; add_frame.",
+      "- Edit fields: update_talent / update_location / update_product / update_frame_brief / update_frame_shot_type / update_frame_camera / update_meta / update_brand / update_mood.",
+      "- Images: generate_asset_image (talent/location/product), generate_frame_image, generate_mood_image.",
+      "- Remove: delete_frame / delete_talent / delete_location / delete_product / delete_mood. Reorder: reorder_frames.",
+      "- Protect from regeneration: toggle_section_lock / toggle_asset_lock.",
+      "- Mood-board items have no name — reference them by 1-based index (see moodBoard in the state).",
+      "",
+      "Deletions apply immediately (the user has undo), so only delete when the user clearly asks to remove something — don't infer a delete from an edit request.",
+      "You may emit MULTIPLE tool calls in one turn — e.g. 'make every shot a close-up' → one update_frame_shot_type per frame; 'remove all the extra characters' → multiple delete_talent.",
       "",
       "When creating a character: keep the `note` field to APPEARANCE only (age range, ethnicity, build, hair color/length, wardrobe). Do NOT put expression / pose / mood directions in the note — those bias every generated frame. The system will neutralize them but it's better not to add them.",
       "",
-      "Prefer specific, narrow edits — change one frame at a time when possible, change every frame when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
-      focusedFrame ? `The user has frame ${focusedFrame.number} selected — prefer edits to that frame unless they say otherwise.` : "No frame is selected — global / multi-frame edits are appropriate.",
+      "Prefer specific, narrow edits — change one item at a time when possible, change every item only when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
+      focusLine,
       "After making changes, briefly explain what you changed in 1-2 sentences. Don't restate every tool call.",
       "",
       "THE CURRENT BRIEF (meta.treatment):",
@@ -7418,7 +7128,7 @@ export default function WorkshopV2() {
         id: Date.now(),
         role: "ai",
         text: summary,
-        changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field })),
+        changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field, label: a.message })),
       }]);
 
       // Fire async side-effects (image generation for newly created
@@ -7442,7 +7152,7 @@ export default function WorkshopV2() {
     } finally {
       setChatBusy(false);
     }
-  }, [data, chatMessages]);
+  }, [data, chatMessages, chatAssetContext]);
 
   const handleDeleteFrame = useCallback((id) => {
     dispatch({ type: "DELETE_FRAME", frameId: id });
@@ -7454,12 +7164,23 @@ export default function WorkshopV2() {
     // Toggle the appropriate asset tab
     const typeMap = { talent: "talent", product: "products", location: "locations" };
     const tabKey = typeMap[asset._type] || "talent";
-    setAssetTabOpen(prev => prev === tabKey ? null : tabKey);
+    setAssetTabOpen(tabKey);
   }, []);
 
   const handleAssetAIAssist = useCallback((item, category) => {
     const type = { talent: "talent", products: "product", locations: "location" }[category];
     setChatAssetContext({ type, id: item.id });
+    setSidebarOpen(true);
+  }, []);
+
+  // Clicking any asset tile selects it for the chat (shows its thumbnail +
+  // context card on the right and opens the chat) AND still drills into the
+  // detail editor (the tile's own onClick handles that). `type` is the chat
+  // context type: "talent" | "product" | "location".
+  const handleFocusAsset = useCallback((type, id) => {
+    if (!type || !id) return;
+    setChatAssetContext({ type, id });
+    setSelectedFrameId(null); // focusing an asset clears any frame focus
     setSidebarOpen(true);
   }, []);
 
@@ -7488,7 +7209,7 @@ export default function WorkshopV2() {
 
   return (
     <UIProvider>
-    <div style={{
+    <div className={isDark ? "dark" : undefined} style={{
       ...getThemeVars(isDark),
       background: isDark
         ? "radial-gradient(ellipse 80% 60% at 50% 40%, #111112 0%, #0A0A0A 100%)"
@@ -7499,7 +7220,7 @@ export default function WorkshopV2() {
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
       <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; margin: 0; }
         ::selection { background: var(--warm-10); color: var(--warm); }
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -7561,7 +7282,147 @@ export default function WorkshopV2() {
         const { brief, images } = briefFromV2Data(data);
         return <OnePager brief={brief} images={images} onClose={() => setExportOpen(false)} />;
       })()}
+      {newFolderOpen && (
+        <div
+          onClick={() => setNewFolderOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 11000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            background: "rgba(0,0,0,0.72)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
+          }}
+        >
+          <form
+            onSubmit={handleCreateFolderSubmit}
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "min(100%, 420px)",
+              padding: 24,
+              borderRadius: 12,
+              background: "#1A1A1D",
+              border: "1px solid rgba(255,255,255,0.18)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,0,0,0.4)",
+              animation: "fadeIn 0.18s ease",
+            }}
+          >
+            <div style={{
+              fontFamily: "var(--f)",
+              fontSize: 17,
+              fontWeight: 600,
+              color: "#fff",
+              marginBottom: 8,
+            }}>
+              New client folder
+            </div>
+            <label style={{
+              display: "block",
+              fontFamily: "var(--f)",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.62)",
+              marginBottom: 8,
+            }}>
+              Client name
+            </label>
+            <input
+              autoFocus
+              value={newFolderName}
+              onChange={e => setNewFolderName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Escape") setNewFolderOpen(false);
+              }}
+              style={{
+                width: "100%",
+                height: 42,
+                padding: "0 12px",
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.07)",
+                border: "1px solid rgba(255,255,255,0.16)",
+                color: "#fff",
+                fontFamily: "var(--f)",
+                fontSize: 13,
+                fontWeight: 500,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
+              <button
+                type="button"
+                onClick={() => setNewFolderOpen(false)}
+                style={{
+                  fontFamily: "var(--f)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  padding: "9px 18px",
+                  borderRadius: 7,
+                  cursor: "pointer",
+                  background: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  color: "#fff",
+                  outline: "none",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!newFolderName.trim()}
+                style={{
+                  fontFamily: "var(--f)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: "9px 18px",
+                  borderRadius: 7,
+                  cursor: newFolderName.trim() ? "pointer" : "not-allowed",
+                  background: newFolderName.trim() ? "#fff" : "rgba(255,255,255,0.10)",
+                  border: newFolderName.trim() ? "1px solid #fff" : "1px solid rgba(255,255,255,0.16)",
+                  color: newFolderName.trim() ? "#111" : "rgba(255,255,255,0.42)",
+                  outline: "none",
+                }}
+              >
+                Create folder
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
+      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden" }}>
+        {/* Left: project sidebar (full-height multi-project nav) */}
+        <ProjectSidebar
+          mode={built && activeProjectId ? "project" : "root"}
+          projects={projects}
+          folders={folders}
+          activeProjectId={activeProjectId}
+          activeProjectTitle={data.meta?.title || "Untitled"}
+          activeAssetTab={assetTabOpen}
+          onAssetTabChange={handleToggleAssetTab}
+          onBackToProjects={handleBackToProjects}
+          assetCounts={{
+            brand: data.brand?.logo ? 1 : 0,
+            talent: data.talent.length,
+            products: data.products.length,
+            locations: data.locations.length,
+            mood: (data.moodBoard || []).length,
+          }}
+          onSwitch={switchToProject}
+          onNew={startNewProject}
+          onHome={handleBackToProjects}
+          onDelete={handleDeleteProject}
+          onRename={handleRenameProject}
+          onMoveToFolder={handleMoveToFolder}
+          onNewFolder={handleNewFolder}
+          onDeleteFolder={handleDeleteFolder}
+        />
+
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {/* Read-only banner — surfaces when the project was loaded from
           a #share=<base64> URL hash. Save-as-copy clones the data into
           a fresh local project, switches to it, and strips the hash. */}
@@ -7597,7 +7458,7 @@ export default function WorkshopV2() {
 
       {/* Nav */}
       <nav style={{
-        position: "sticky", top: 0, zIndex: 100, height: 48,
+        position: "relative", zIndex: 100, height: 64, flexShrink: 0,
         display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
         padding: "0 24px",
         borderBottom: "1px solid var(--warm-06)", background: "var(--surface)",
@@ -7605,15 +7466,7 @@ export default function WorkshopV2() {
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div onClick={() => { setBuilt(false); setProductionFrameId(null); setSelectedFrameId(null); }}
-            style={{ cursor: "pointer", display: "flex", alignItems: "center", opacity: 0.9, transition: "opacity 0.15s ease" }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "0.9"}
-            title="Back to home"
-          ><WLogo color="var(--warm)" size={16} /></div>
           {built && <>
-            <div style={{ width: 1, height: 16, background: "var(--warm-08)" }} />
-            <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 500, color: "var(--warm)" }}>{data.meta.title}</span>
             <AspectRatioControl
               value={data.meta.aspect}
               onChange={(newRatio) => handleAspectChange(newRatio)}
@@ -7644,9 +7497,9 @@ export default function WorkshopV2() {
 
             <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
 
-            <PremiumButton variant="secondary" onClick={() => setExportOpen(true)} style={{ padding: "5px 14px", fontSize: 11, gap: 5 }}>
-              <SectionIcon name="download" size={12} color="var(--warm-50)" /> Export
-            </PremiumButton>
+            <Button variant="outline" onClick={() => setExportOpen(true)}>
+              <SectionIcon name="download" color="currentColor" /> Export
+            </Button>
 
             <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
 
@@ -7673,20 +7526,7 @@ export default function WorkshopV2() {
       </nav>
 
       {/* Content area */}
-      <div style={{ display: "flex", height: "calc(100vh - 48px)" }}>
-        {/* Left: project sidebar (always visible — multi-project nav) */}
-        <ProjectSidebar
-          projects={projects}
-          folders={folders}
-          activeProjectId={activeProjectId}
-          onSwitch={switchToProject}
-          onNew={startNewProject}
-          onDelete={handleDeleteProject}
-          onRename={handleRenameProject}
-          onMoveToFolder={handleMoveToFolder}
-          onNewFolder={handleNewFolder}
-          onDeleteFolder={handleDeleteFolder}
-        />
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* Main */}
         <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
           {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} folders={folders} />}
@@ -7697,6 +7537,7 @@ export default function WorkshopV2() {
               dispatch={dispatch}
               assetTabOpen={assetTabOpen} onToggleAssetTab={handleToggleAssetTab}
               onAIAssist={handleAssetAIAssist}
+              onFocusAsset={handleFocusAsset}
               onRetryFrame={regenerateOneFrame}
               onRunRegeneration={handleRunRegeneration} />
           )}
@@ -7741,6 +7582,8 @@ export default function WorkshopV2() {
 
         {/* Floating AI Chat tab — right edge when sidebar closed */}
         {built && <AIChatTab sidebarOpen={sidebarOpen} onClick={() => setSidebarOpen(true)} />}
+      </div>
+        </div>
       </div>
     </div>
     </UIProvider>
