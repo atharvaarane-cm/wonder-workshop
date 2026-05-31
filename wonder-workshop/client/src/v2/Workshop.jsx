@@ -258,26 +258,23 @@ function requestReconcile(detail) {
   window.dispatchEvent(new CustomEvent("ww-reconcile", { detail }));
 }
 
-// Small amber "Reconcile" pill overlaid on an asset tile that isn't yet
-// in the brief / storyboard.
+// Small amber status dot overlaid on the top-left of an asset tile that
+// isn't yet in the brief / storyboard. Clicking it reconciles just that
+// item; clicking elsewhere on the tile still opens its detail view.
 function ReconcileChip({ onClick }) {
   return (
     <button
       onClick={onClick}
-      title="This isn't in the brief or storyboard yet — reconcile it"
+      aria-label="Reconcile this item"
+      title="This isn't in the brief or storyboard yet — click to reconcile it"
       style={{
-        position: "absolute", top: 6, left: 6, zIndex: 6,
-        display: "flex", alignItems: "center", gap: 4,
-        padding: "3px 7px", borderRadius: 999, cursor: "pointer",
-        background: RECONCILE_AMBER, border: "none", outline: "none",
-        color: "#1A1206", fontFamily: "var(--f)", fontSize: 9, fontWeight: 700,
-        letterSpacing: "0.04em", textTransform: "uppercase",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+        position: "absolute", top: 8, left: 8, zIndex: 6,
+        width: 11, height: 11, borderRadius: "50%", padding: 0, cursor: "pointer",
+        background: RECONCILE_AMBER, outline: "none",
+        border: "1.5px solid rgba(0,0,0,0.45)",
+        boxShadow: "0 0 0 3px rgba(245,166,35,0.22), 0 1px 3px rgba(0,0,0,0.4)",
       }}
-    >
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#1A1206" }} />
-      Reconcile
-    </button>
+    />
   );
 }
 
