@@ -141,6 +141,11 @@ function neutralizeCharacterNote(note) {
 // to repetition. We never use "no smile / not laughing" — that
 // actively summons smiles in most diffusion models.
 const NEUTRAL_FACE = "calm composed expression, mouth closed, lips relaxed and neutral, eyes open looking directly at camera, deadpan stoic face, passport-style neutral pose";
+// Force a consistent TIGHT headshot crop. Without this the model frames
+// wardrobe-heavy characters (a dress, a patterned shirt) as full- or
+// three-quarter-body and you "see too much of them" — the crop should be
+// the same head-and-shoulders distance for every character.
+const HEADSHOT_FRAMING = "tight head-and-shoulders headshot crop, framed from the upper chest up, close portrait distance so the head and shoulders fill the frame, NOT a full-body or three-quarter or knee-up shot — do not show the waist, legs, or the full outfit";
 // IMPORTANT: never say "casting reference" / "reference card" in the
 // prompt — image models render that literally as a white photo frame
 // with a "NAME · CASTING REFERENCE" caption (looks like an actor's
@@ -150,7 +155,7 @@ const REFERENCE_STYLE = "photorealistic studio portrait photograph, neutral seam
 
 export function talentPrompt(t) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
-  return `Photorealistic studio portrait headshot of ${t.name}${note}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
+  return `Photorealistic studio portrait headshot of ${t.name}${note}. ${HEADSHOT_FRAMING}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
 }
 
 // View-specific prompts for the 4-up Headshots and Full Body grids in
@@ -174,7 +179,7 @@ const FULLBODY_VIEW_PHRASES = {
 export function talentHeadshotPrompt(t, view) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = HEADSHOT_VIEW_PHRASES[view] || HEADSHOT_VIEW_PHRASES.front;
-  return `Photorealistic studio portrait of ${t.name}${note}, ${phrase}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
+  return `Photorealistic studio portrait of ${t.name}${note}, ${phrase}. ${HEADSHOT_FRAMING}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
 }
 
 export function talentFullBodyPrompt(t, view) {
