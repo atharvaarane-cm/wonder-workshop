@@ -27,6 +27,7 @@ import {
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
 import { EditBriefDialog } from "./components/BriefPanel.jsx";
+import { GenerateStoryboardButton } from "./components/GenerateStoryboardButton.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import iconAspectUrl from "../assets/icon-aspect.svg";
@@ -1420,14 +1421,19 @@ function LocationThumb({ loc, size = 32, borderRadius = 6, style = {} }) {
 
 // -- PRIMITIVES -----------------------------------------------
 
-function Reveal({ children, delay = 0, y = 24 }) {
-  const [on, set] = useState(false);
-  useEffect(() => { const t = setTimeout(() => set(true), delay); return () => clearTimeout(t); }, []);
+function Reveal({ children, delay = 0, y = 20, duration = 540, direction = "down" }) {
+  const revealY = direction === "down" ? -Math.abs(y) : Math.abs(y);
   return (
-    <div style={{
-      opacity: on ? 1 : 0, transform: on ? "translateY(0)" : `translateY(${y}px)`,
-      filter: on ? "blur(0px)" : "blur(4px)", transition: "all 0.9s cubic-bezier(0.22, 1, 0.36, 1)",
-    }}>{children}</div>
+    <div
+      className="ww-reveal"
+      style={{
+        "--ww-reveal-y": `${revealY}px`,
+        animationDelay: `${delay}ms`,
+        animationDuration: `${duration}ms`,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -5570,81 +5576,6 @@ function SidebarPanel({ onClose, children }) {
   );
 }
 
-// -- LIQUID GLASS BUTTON --------------------------------------
-
-function LiquidGlassButton({ onClick, children }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div style={{ position: "relative", width: "100%", padding: "6px 0" }}>
-      {/* Primary glow — tight, bright at edges */}
-      <div style={{
-        position: "absolute", inset: "2px -2px", borderRadius: 16, zIndex: 0,
-        backgroundImage: "linear-gradient(135deg, #8855f0, #5577f4, #9960f0, #6070f8, #7755ee, #4a68f0)",
-        backgroundSize: "300% 300%",
-        animation: "liquidGradient 18s ease infinite",
-        filter: "blur(6px)",
-        opacity: hovered ? 0.9 : 0.6,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Secondary glow — offset, different timing for organic feel */}
-      <div style={{
-        position: "absolute", inset: "4px 2px", borderRadius: 16, zIndex: 0,
-        backgroundImage: "linear-gradient(225deg, #6644dd, #3b62e8, #8050e4, #5060ec, #6644dd)",
-        backgroundSize: "350% 350%",
-        animation: "liquidGradient 24s ease-in-out infinite reverse",
-        filter: "blur(10px)",
-        opacity: hovered ? 0.6 : 0.3,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Third glow — larger, softer ambient */}
-      <div style={{
-        position: "absolute", inset: "-2px -4px", borderRadius: 20, zIndex: 0,
-        backgroundImage: "radial-gradient(ellipse at 30% 50%, rgba(120,60,230,0.5), transparent 70%), radial-gradient(ellipse at 70% 50%, rgba(60,100,240,0.4), transparent 70%)",
-        backgroundSize: "200% 200%",
-        animation: "liquidGradient 20s ease infinite",
-        filter: "blur(14px)",
-        opacity: hovered ? 0.5 : 0.25,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Button */}
-      <button onClick={onClick}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          position: "relative", zIndex: 1, width: "100%", padding: "16px 0",
-          fontFamily: "var(--f)", fontSize: 17, fontWeight: 500, letterSpacing: "-0.01em",
-          border: "1px solid rgba(255,255,255,0.18)",
-          borderRadius: 14, cursor: "pointer", outline: "none",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-          color: hovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.85)",
-          backgroundImage: hovered
-            ? "linear-gradient(135deg, rgba(0,0,0,0.97), rgba(4,4,8,0.98), rgba(0,0,0,0.97))"
-            : "linear-gradient(135deg, rgba(6,6,10,0.97), rgba(10,10,14,0.98))",
-          backgroundSize: "100% 100%",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          boxShadow: hovered
-            ? "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(255,255,255,0.035), 0 1px 2px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.06)"
-            : "inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 2px rgba(0,0,0,0.42)",
-          transition: "all 0.4s cubic-bezier(0.22,1,0.36,1)",
-          overflow: "hidden",
-        }}
-      >
-        {/* Grain overlay inside button */}
-        <div style={{
-          position: "absolute", inset: 0, borderRadius: 14, pointerEvents: "none",
-          opacity: 0.04,
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'g\'%3E%3CfeTurbulence baseFrequency=\'0.7\' numOctaves=\'4\' type=\'fractalNoise\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23g)\'/%3E%3C/svg%3E")',
-          backgroundSize: "128px",
-          animation: "grainShift 8s steps(10) infinite",
-          mixBlendMode: "overlay",
-        }} />
-        {children}
-      </button>
-    </div>
-  );
-}
-
 // -- BRIEF FORM (with file upload) ----------------------------
 
 
@@ -5955,23 +5886,21 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
         background: "linear-gradient(180deg, rgba(10,10,10,0.4) 0%, rgba(10,10,10,0.7) 60%, rgba(10,10,10,0.95) 100%)",
       }} />
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "5vh 5% 4vh", position: "relative", zIndex: 1 }}>
-      <Reveal>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "3%" }}>
-          <WLogo color="rgba(224,224,224,0.25)" size={28} />
+      <Reveal delay={30}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "3%" }}>
+            <WLogo color="rgba(224,224,224,0.25)" size={28} />
+          </div>
+          <h1 style={{ fontFamily: "var(--f)", fontSize: 48, fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)", whiteSpace: "nowrap" }}>
+            Welcome to the Workshop.
+          </h1>
+          <p style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, marginBottom: "5%", whiteSpace: "nowrap" }}>
+            Write a brief, a script, or a sentence. Add reference files for more context. AI builds the boards.
+          </p>
         </div>
       </Reveal>
-      <Reveal delay={60}>
-        <h1 style={{ fontFamily: "var(--f)", fontSize: 48, fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)", whiteSpace: "nowrap" }}>
-          Welcome to the Workshop.
-        </h1>
-      </Reveal>
-      <Reveal delay={120}>
-        <p style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, marginBottom: "5%", whiteSpace: "nowrap" }}>
-          Write a brief, a script, or a sentence. Add reference files for more context. AI builds the boards.
-        </p>
-      </Reveal>
 
-      <Reveal delay={200}>
+      <Reveal delay={520}>
         {/* Form card sits over the W backdrop, so it needs near-solid
             opacity + a backdrop blur to keep inputs and labels readable.
             Subtle inner highlight + soft shadow lift it off the bg. */}
@@ -6134,12 +6063,12 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
         </div>
       </Reveal>
 
-      <Reveal delay={320}>
-        <div className="mt-4">
-          <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
-            <DropdownAssetIcon src={iconStoryboardTitleUrl} size={17} />
-            {generating ? "Generating brief…" : "Generate Storyboard"}
-          </LiquidGlassButton>
+      <Reveal delay={680}>
+        <div style={{ marginTop: 28 }}>
+          <GenerateStoryboardButton
+            generating={generating}
+            onClick={() => !generating && onGenerate(meta)}
+          />
           {error ? (
             <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
               {error}
@@ -7390,6 +7319,18 @@ export default function WorkshopV2() {
           from { opacity: 0 }
           to { opacity: 1 }
         }
+        @keyframes workshopRevealDown {
+          from {
+            opacity: 0;
+            filter: blur(5px);
+            transform: translate3d(0, var(--ww-reveal-y, -14px), 0);
+          }
+          to {
+            opacity: 1;
+            filter: blur(0);
+            transform: translate3d(0, 0, 0);
+          }
+        }
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
@@ -7408,6 +7349,21 @@ export default function WorkshopV2() {
           50% { transform: translate(-3%, 1%); }
           70% { transform: translate(2%, -1%); }
           90% { transform: translate(-1%, 2%); }
+        }
+        .ww-reveal {
+          opacity: 0;
+          will-change: opacity, transform, filter;
+          animation-name: workshopRevealDown;
+          animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+          animation-fill-mode: both;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ww-reveal {
+            opacity: 1;
+            filter: none;
+            transform: none;
+            animation: none;
+          }
         }
         button { font-family: var(--f); }
         button:focus-visible { outline: 1.5px solid rgba(255,255,255,0.4); outline-offset: 2px; }
