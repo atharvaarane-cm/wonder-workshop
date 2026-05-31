@@ -404,6 +404,10 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
             required: ['brief'],
           },
         },
+        plan: {
+          type: 'string',
+          description: 'One short line summarizing how you integrated each asset (e.g. "Mary (supporting) → added to the 2 group shots + frame 5; Parking Lot → new arrival shot at frame 1").',
+        },
       },
       required: ['newBrief'],
     },
@@ -413,19 +417,34 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
     const missing = [!a.inBrief && 'the brief', !a.inStoryboard && 'the storyboard'].filter(Boolean).join(' and ')
     const ref = a.handle ? `reference it as ${a.handle}` : `it has no @handle, so reference it by name "${a.name}"`
     const kind = a.type === 'talent' ? 'Character' : a.type === 'products' ? 'Element' : 'Location'
-    return `- ${kind} "${a.name}" (${ref})${a.note ? ` — ${a.note}` : ''}. Missing from: ${missing}.`
+    const weight = a.type === 'talent' ? `, ROLE: ${a.role || 'Supporting'}` : a.type === 'products' ? `, FOCUS: ${a.focus || 'Medium'}` : ''
+    return `- ${kind} "${a.name}" (${ref})${weight}${a.note ? ` — ${a.note}` : ''}. Missing from: ${missing}.`
   }).join('\n')
 
-  const frameLines = (frames || []).map(f => `  ${f.number}: ${f.brief}`).join('\n')
+  // Rich per-frame context so the model can stage logically (act position,
+  // shot type, who's already in each frame, which frames are group shots).
+  const frameLines = (frames || []).map(f => {
+    const pos = f.position ? `${f.position}` : ''
+    const meta = [pos, f.shotType, f.isGroup ? 'GROUP SHOT' : null].filter(Boolean).join(', ')
+    const who = (f.characters && f.characters.length) ? `cast: ${f.characters.join(', ')}` : 'cast: none'
+    const loc = f.location ? `at ${f.location}` : 'no location set'
+    return `  ${f.number} [${meta}] — ${who}; ${loc} — ${f.brief}`
+  }).join('\n')
 
   const system = [
     'You reconcile a commercial storyboard so every generated asset is reflected in BOTH the brief and the shots.',
     'You will be given the current brief, the storyboard frames, and one or more assets that are missing from the brief and/or the storyboard.',
     'CRITICAL: include EVERY asset in the "ASSETS TO RECONCILE" list — do not omit a single one (it is easy to forget the location; do not). Each listed asset must end up in BOTH the rewritten brief AND woven into at least one frame\'s text.',
     'Produce a rewritten brief that includes ALL the asset(s) naturally — preserve the existing creative, voice, and structure; weave each new asset in where it fits. Do NOT drop anything already in the brief.',
-    'For EACH asset missing from the STORYBOARD, edit 1-2 of the most fitting existing frames so their brief text references that asset (by @handle, or by exact Name when the handle is empty).',
-    'LOCATIONS need special care: a location should be the actual SETTING of shots, not just name-dropped. Make it feel integrated — REWRITE 1-2 existing frames so the action takes place AT that location (set the scene there by name), AND/OR add a short establishing WIDE shot of the location via newFrames. Prefer reworking existing frames so it reads as a real part of the spot; add a frame only when an establishing shot genuinely helps. It is OK to restructure or re-set existing frames to make the new location belong.',
-    'Before finishing, double-check: is every listed asset — including the location — present in newBrief, AND is each one actually depicted in the storyboard (a frameEdit or a newFrame), with the location used as a setting (not just mentioned)? If not, fix it.',
+    'Integrate each asset with REAL PRODUCTION LOGIC — like an art director staging the spot, NOT by name-dropping it into one shot. Do not cap yourself at 1-2 frames; touch as many frames (and add/restructure frames) as the asset\'s weight and the story require. Each frame line shows its act position (opening/middle/closing third), shot type, who is already in it, and whether it is a GROUP SHOT.',
+    'CHARACTERS — weave in PROPORTIONAL TO ROLE, matching how the existing cast is used:',
+    '  • Lead → appears across most frames, the focal subject.',
+    '  • Supporting → appears in a similar number of frames as the OTHER supporting characters, and MUST appear in the GROUP SHOTS (any frame already showing 2+ people — a "group of friends" group shot must include them). Spread their presence across the spot, not one isolated frame.',
+    '  • Extra → incidental/background only, a frame or two.',
+    'LOCATIONS — place by NARRATIVE LOGIC using act position. A location must be the actual SETTING of shots (set the scene there), not just mentioned. A secondary/auxiliary location (e.g. a parking lot for a beach spot) typically BOOKENDS the story — arrival in the OPENING or departure in the CLOSING third — so add or re-set a frame there at the start and/or end. A hero location carries the middle. Use newFrames for an establishing shot when it helps, and re-set existing frames\' location when that reads better.',
+    'ELEMENTS — weight by FOCUS: High = feature it prominently (hero/close-up, possibly its own shot); Medium = clearly present across a few relevant shots; Low = a supporting background detail.',
+    'Before finishing, double-check: is every listed asset in newBrief AND depicted in the storyboard with the RIGHT amount of presence for its role/focus (a Supporting character should NOT end up in just one frame while peers are in several; a Supporting character must be in the group shots; a location must be a setting placed where it makes sense)? If not, fix it.',
+    'Also fill `plan` with one short line describing how you staged each asset.',
     'Call propose_reconciliation exactly once with your result.',
   ].join('\n')
 
@@ -451,6 +470,7 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
     newBrief: call.args.newBrief || brief || '',
     frameEdits: Array.isArray(call.args.frameEdits) ? call.args.frameEdits : [],
     newFrames: Array.isArray(call.args.newFrames) ? call.args.newFrames : [],
+    plan: (call.args.plan || '').trim(),
   }
 }
 
