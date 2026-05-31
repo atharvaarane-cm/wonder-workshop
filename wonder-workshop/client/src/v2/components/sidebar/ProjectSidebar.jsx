@@ -389,6 +389,9 @@ function ProjectSectionRow({ tab, count, isActive, onClick }) {
 // onto a FolderDropZone or an Unfiled zone reassigns p.folder via
 // onMoveToFolder.
 function ProjectRow({ project: p, isNested = false, isActive, isRenaming, renameValue, renameInputRef, setRenameValue, setRenamingId, commitRename, menuOpenId, setMenuOpenId, folders, onSwitch, onDelete, onMoveToFolder }) {
+  const [hovered, setHovered] = useState(false);
+  const moreVisible = hovered || menuOpenId === p.id;
+
   return (
     <div
       draggable={!isRenaming}
@@ -405,8 +408,10 @@ function ProjectRow({ project: p, isNested = false, isActive, isRenaming, rename
         position: "relative",
       }}
     onClick={() => !isRenaming && onSwitch(p.id)}
-    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--warm-06)"; }}
-    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+    onMouseEnter={e => { setHovered(true); if (!isActive) e.currentTarget.style.background = "var(--warm-06)"; }}
+    onMouseLeave={e => { setHovered(false); if (!isActive) e.currentTarget.style.background = "transparent"; }}
+    onFocusCapture={() => setHovered(true)}
+    onBlurCapture={e => { if (!e.currentTarget.contains(e.relatedTarget)) setHovered(false); }}
     >
       <div style={{
         width: 6, height: 6, borderRadius: "50%",
@@ -454,6 +459,9 @@ function ProjectRow({ project: p, isNested = false, isActive, isRenaming, rename
             cursor: "pointer", outline: "none",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 16, lineHeight: 1, flexShrink: 0,
+            opacity: moreVisible ? 1 : 0,
+            pointerEvents: moreVisible ? "auto" : "none",
+            transition: "opacity 0.12s ease",
           }}
         >⋯</button>
       )}
