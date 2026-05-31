@@ -6726,19 +6726,34 @@ export default function WorkshopV2() {
     }
   }, []);
 
-  const applyReconcile = useCallback(({ newBrief, frameEdits }) => {
+  const applyReconcile = useCallback(async ({ newBrief, frameEdits }) => {
     if (typeof newBrief === "string") dispatch({ type: "UPDATE_META", field: "treatment", value: newBrief });
     const d = dataRef.current;
+    const touchedFrameIds = [];
     for (const fe of (frameEdits || [])) {
       const norm = String(fe.frameNumber || "").padStart(2, "0");
       const frame = (d.frames || []).find(f => f.number === norm);
-      if (frame && fe.newBrief) dispatch({ type: "UPDATE_FRAME", frameId: frame.id, field: "brief", value: fe.newBrief });
+      if (frame && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: frame.id, field: "brief", value: fe.newBrief }); touchedFrameIds.push(frame.id); }
     }
-    // Relink @mentions so frame talent/product refs pick up the new text.
-    setTimeout(() => dispatch({ type: "AUTO_DETECT_MENTIONS" }), 0);
-    const n = (frameEdits || []).length;
+    // Relink @mentions so frame talent/product/location refs pick up the new text.
+    dispatch({ type: "AUTO_DETECT_MENTIONS" });
+    const n = touchedFrameIds.length;
     toast(`Brief reconciled${n ? ` + ${n} frame${n === 1 ? "" : "s"} updated` : ""}.`, { kind: "success" });
     setReconcile(null);
+    // Close the loop: regenerate the touched frames so the IMAGES actually
+    // show the newly-woven-in asset (text alone left the pictures stale).
+    // Gated by the generation confirm — respects "don't ask again".
+    if (touchedFrameIds.length) {
+      const ok = await confirmGeneration({
+        count: touchedFrameIds.length,
+        label: `Regenerate ${touchedFrameIds.length} storyboard frame${touchedFrameIds.length === 1 ? "" : "s"} so the reconciled item${touchedFrameIds.length === 1 ? "" : "s"} actually appear in the artwork.`,
+      });
+      if (ok) {
+        // Let the dispatches above flush so AUTO_DETECT has linked refs before regen.
+        await new Promise(r => setTimeout(r, 60));
+        for (const fid of touchedFrameIds) regenerateOneFrame(fid).catch(e => console.error("[reconcile regen]", e));
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -7086,14 +7101,24 @@ export default function WorkshopV2() {
           return;
         }
         dispatch({ type: "UPDATE_META", field: "treatment", value: suggestion.newBrief });
-        let n = 0;
+        const reconciledFrameIds = [];
         for (const fe of (suggestion.frameEdits || [])) {
           const norm = String(fe.frameNumber || "").padStart(2, "0");
           const fr = (current.frames || []).find(f => f.number === norm);
-          if (fr && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: fr.id, field: "brief", value: fe.newBrief }); n++; }
+          if (fr && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: fr.id, field: "brief", value: fe.newBrief }); reconciledFrameIds.push(fr.id); }
         }
-        setTimeout(() => dispatch({ type: "AUTO_DETECT_MENTIONS" }), 0);
-        setChatMessages(prev => [...prev, { id: Date.now(), role: "ai", text: `Reconciled ${assets.map(a => a.name).join(", ")} into the brief${n ? ` and ${n} frame${n === 1 ? "" : "s"}` : ""}.`, changes: [] }]);
+        const n = reconciledFrameIds.length;
+        dispatch({ type: "AUTO_DETECT_MENTIONS" });
+        setChatMessages(prev => [...prev, { id: Date.now(), role: "ai", text: `Reconciled ${assets.map(a => a.name).join(", ")} into the brief${n ? ` and ${n} frame${n === 1 ? "" : "s"}` : ""}.${n ? " Regenerating the updated frame" + (n === 1 ? "" : "s") + "…" : ""}`, changes: [] }]);
+        // Close the loop: regenerate the touched frames so the artwork shows the
+        // reconciled asset (gated by the generation confirm / "don't ask again").
+        if (n) {
+          const ok = await confirmGeneration({ count: n, label: `Regenerate ${n} storyboard frame${n === 1 ? "" : "s"} so the reconciled item${n === 1 ? "" : "s"} appear in the artwork.` });
+          if (ok) {
+            await new Promise(r => setTimeout(r, 60));
+            for (const fid of reconciledFrameIds) regenerateOneFrame(fid).catch(e => console.error("[reconcile regen]", e));
+          }
+        }
         return;
       }
       default:
