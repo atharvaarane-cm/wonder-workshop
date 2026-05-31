@@ -3614,6 +3614,36 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         </button>
       </div>
 
+      {/* Role — Lead / Supporting / Extra. Drives how much weight the brief
+          and storyboard give this character (leads = focal/foreground,
+          extras = background). */}
+      <div>
+        <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
+          Role
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["Lead", "Supporting", "Extra"].map(r => {
+            const active = (character.role || "Supporting").toLowerCase() === r.toLowerCase();
+            return (
+              <button
+                key={r}
+                onClick={() => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "role", value: r })}
+                style={{
+                  padding: "6px 14px", borderRadius: 999, cursor: "pointer", outline: "none",
+                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
+                  background: active ? "var(--warm-12)" : "transparent",
+                  border: `1px solid ${active ? "var(--warm-30)" : "var(--warm-10)"}`,
+                  color: active ? "var(--warm)" : "var(--warm-40)",
+                  transition: "all 0.12s ease",
+                }}
+              >
+                {r}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Description */}
       <div>
         <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
@@ -6866,7 +6896,7 @@ export default function WorkshopV2() {
     dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId, status: "generating" });
     try {
       log("info", `retrying frame ${frame.number}`);
-      const url = await generateImage(framePrompt(frame), { ratio: aspect, referenceImages: refs });
+      const url = await generateImage(framePrompt(frame, current.talent), { ratio: aspect, referenceImages: refs });
       dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId, dataUrl: url });
       log("info", `frame ${frame.number} retry done`);
     } catch (err) {
@@ -7440,7 +7470,7 @@ export default function WorkshopV2() {
       if (locationId) { const u = generated.locations.get(locationId); if (u) refs.push(u); }
       for (const pid of productIds) { const u = generated.products.get(pid); if (u) refs.push(u); }
       try {
-        const url = await withRetry(() => generateImage(framePrompt(f), { ratio: aspect, referenceImages: refs }));
+        const url = await withRetry(() => generateImage(framePrompt(f, initialData.talent), { ratio: aspect, referenceImages: refs }));
         dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
         frameSuccess++;
         log("info", `frame done: ${f.number}`);
@@ -7562,6 +7592,7 @@ export default function WorkshopV2() {
       "You may emit MULTIPLE tool calls in one turn — e.g. 'make every shot a close-up' → one update_frame_shot_type per frame; 'remove all the extra characters' → multiple delete_talent.",
       "",
       "When creating a character: keep the `note` field to APPEARANCE only (age range, ethnicity, build, hair color/length, wardrobe). Do NOT put expression / pose / mood directions in the note — those bias every generated frame. The system will neutralize them but it's better not to add them.",
+      "Each character has a ROLE: 'Lead' (hero — most screen time, appears across the storyboard, the focal/foreground subject when in a shot), 'Supporting' (secondary presence), or 'Extra' (background / incidental, rarely the focus). Respect roles when building or rebalancing the storyboard and the brief: give Leads prominence and frequency, keep Extras in the background. To change a character's importance, set its role via update_talent (field 'role', value 'Lead' | 'Supporting' | 'Extra').",
       "",
       "Prefer specific, narrow edits — change one item at a time when possible, change every item only when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
       focusLine,

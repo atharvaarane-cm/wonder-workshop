@@ -181,9 +181,23 @@ export function moodPrompt(text) {
   return `${text}. Cinematic mood reference, evocative atmosphere, photorealistic, no text or watermarks, tone-setting visual.`;
 }
 
-export function framePrompt(frame) {
+export function framePrompt(frame, talent = []) {
   const description = frame.brief || "";
   const shotType = frame.shotType ? `, ${frame.shotType} framing` : "";
   const camera = frame.camera ? `, ${frame.camera}` : "";
-  return `${description}${shotType}${camera}. Cinematic film still, photorealistic, narrative production photography.`;
+  // Weight referenced characters by role so the composition reflects who
+  // matters: Leads get focal prominence, Extras stay background. Supporting
+  // characters get no special clause (neutral). Only added when the frame
+  // actually references talent we can resolve a role for.
+  let weighting = "";
+  const refd = (frame.talentIds || []).map(id => (talent || []).find(t => t.id === id)).filter(Boolean);
+  if (refd.length) {
+    const leads = refd.filter(t => /lead/i.test(t.role || "")).map(t => t.name);
+    const extras = refd.filter(t => /extra/i.test(t.role || "")).map(t => t.name);
+    const parts = [];
+    if (leads.length) parts.push(`${leads.join(" and ")} ${leads.length === 1 ? "is the lead — primary focus" : "are the leads — primary focus"}, foreground, sharp and well-lit`);
+    if (extras.length) parts.push(`${extras.join(" and ")} ${extras.length === 1 ? "is an extra" : "are extras"} — incidental background presence, not a focal point`);
+    if (parts.length) weighting = ` Character emphasis: ${parts.join("; ")}.`;
+  }
+  return `${description}${shotType}${camera}.${weighting} Cinematic film still, photorealistic, narrative production photography.`;
 }
