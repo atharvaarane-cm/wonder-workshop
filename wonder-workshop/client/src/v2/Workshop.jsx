@@ -6542,6 +6542,41 @@ export default function WorkshopV2() {
     renameProject(projectId, newName);
     setProjects(listProjects());
   }
+
+  // Clean up duplicate-name projects (fork-orphans from the old "Regenerate
+  // All" bug). Groups by name, keeps the most-recently-updated of each, and
+  // deletes the older same-name copies. Skips the active project if it's the
+  // newest so the user isn't yanked out of what they're viewing.
+  async function handleCleanupDuplicates() {
+    const list = listProjects();
+    const byName = new Map();
+    for (const p of list) {
+      const key = (p.name || "").trim().toLowerCase();
+      if (!key) continue;
+      if (!byName.has(key)) byName.set(key, []);
+      byName.get(key).push(p);
+    }
+    const toDelete = [];
+    for (const group of byName.values()) {
+      if (group.length < 2) continue;
+      // Keep the most-recently-updated; delete the rest.
+      const sorted = [...group].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      toDelete.push(...sorted.slice(1));
+    }
+    if (toDelete.length === 0) return;
+    const names = [...new Set(toDelete.map(p => p.name))].join(", ");
+    const ok = await uiConfirm({
+      title: `Remove ${toDelete.length} duplicate project${toDelete.length === 1 ? "" : "s"}?`,
+      message: `This keeps the most recently edited copy of "${names}" and deletes the older duplicate${toDelete.length === 1 ? "" : "s"}. This can't be undone.`,
+      confirmLabel: "Remove duplicates",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
+    for (const p of toDelete) deleteProject(p.id);
+    setProjects(listProjects());
+    toast(`Removed ${toDelete.length} duplicate project${toDelete.length === 1 ? "" : "s"}.`, { kind: "success" });
+  }
   function handleMoveToFolder(projectId, folder) {
     setProjectFolder(projectId, folder || null);
     setProjects(listProjects());
@@ -7889,6 +7924,7 @@ export default function WorkshopV2() {
           onMoveToFolder={handleMoveToFolder}
           onNewFolder={handleNewFolder}
           onDeleteFolder={handleDeleteFolder}
+          onCleanupDuplicates={handleCleanupDuplicates}
         />
 
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
