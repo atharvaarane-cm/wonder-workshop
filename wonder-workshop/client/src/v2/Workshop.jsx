@@ -305,6 +305,7 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
     : `Reconcile ${state.assets.length} items`;
   const frameByNum = Object.fromEntries((frames || []).map(f => [f.number, f]));
   const edits = state.suggestion?.frameEdits || [];
+  const adds = state.suggestion?.newFrames || [];
 
   return (
     <div onClick={onClose} style={{
@@ -370,6 +371,22 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
                   </div>
                 </div>
               )}
+              {adds.length > 0 && (
+                <div style={{ marginTop: 18 }}>
+                  <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 8 }}>New shots to add</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {adds.map((nf, i) => (
+                      <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", borderRadius: 10, background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.30)" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: RECONCILE_AMBER, marginTop: 6, flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: RECONCILE_AMBER, letterSpacing: "0.06em", marginBottom: 3 }}>+ NEW {nf.shotType || "WIDE"} SHOT{nf.afterFrameNumber ? ` (after ${nf.afterFrameNumber})` : ""}</div>
+                          <div style={{ fontFamily: "var(--f)", fontSize: 12, color: "var(--warm-50)", lineHeight: 1.5 }}>{nf.brief}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -382,7 +399,7 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
           }}>Dismiss</button>
           <button
             disabled={state.loading || !!state.error || !state.suggestion}
-            onClick={() => onApply({ newBrief: brief, frameEdits: edits.filter(fe => chosen[fe.frameNumber]) })}
+            onClick={() => onApply({ newBrief: brief, frameEdits: edits.filter(fe => chosen[fe.frameNumber]), newFrames: adds })}
             style={{
               padding: "9px 18px", borderRadius: 8,
               cursor: state.loading || state.error ? "default" : "pointer",
@@ -551,6 +568,10 @@ function applyAction(state, action) {
         locationId: state.locations[0]?.id || null, productIds: [],
         cameraAngle: "front", cameraHeight: "eye", lens: "normal", movement: "static",
         imageStatus: "placeholder", uploadedImage: null, duration: "3s",
+        // Optional initial fields (used by reconcile to add an establishing
+        // shot with a real brief/shotType). action.data.id wins so the caller
+        // can track the new frame for regeneration.
+        ...(action.data || {}),
       };
       const idx = action.afterFrameId
         ? state.frames.findIndex(f => f.id === action.afterFrameId) + 1
@@ -6772,7 +6793,7 @@ export default function WorkshopV2() {
     }
   }, []);
 
-  const applyReconcile = useCallback(async ({ newBrief, frameEdits }) => {
+  const applyReconcile = useCallback(async ({ newBrief, frameEdits, newFrames }) => {
     if (typeof newBrief === "string") dispatch({ type: "UPDATE_META", field: "treatment", value: newBrief });
     const d = dataRef.current;
     const touchedFrameIds = [];
@@ -6781,10 +6802,24 @@ export default function WorkshopV2() {
       const frame = (d.frames || []).find(f => f.number === norm);
       if (frame && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: frame.id, field: "brief", value: fe.newBrief }); touchedFrameIds.push(frame.id); }
     }
+    // Add any NEW frames (e.g. an establishing shot for a new location). Assign
+    // explicit sequential ids so we can track them for regeneration.
+    let base = Math.max(0, ...(d.frames || []).map(f => parseInt(String(f.id).slice(1)) || 0));
+    for (const nf of (newFrames || [])) {
+      if (!nf?.brief) continue;
+      base += 1;
+      const id = "f" + base;
+      const afterFrameId = nf.afterFrameNumber
+        ? ((d.frames || []).find(f => f.number === String(nf.afterFrameNumber).padStart(2, "0"))?.id || null)
+        : null;
+      dispatch({ type: "ADD_FRAME", afterFrameId, data: { id, brief: nf.brief, shotType: nf.shotType || "WIDE", imageStatus: "idle" } });
+      touchedFrameIds.push(id);
+    }
     // Relink @mentions so frame talent/product/location refs pick up the new text.
     dispatch({ type: "AUTO_DETECT_MENTIONS" });
     const n = touchedFrameIds.length;
-    toast(`Brief reconciled${n ? ` + ${n} frame${n === 1 ? "" : "s"} updated` : ""}.`, { kind: "success" });
+    const added = (newFrames || []).filter(nf => nf?.brief).length;
+    toast(`Brief reconciled${n ? ` + ${n} frame${n === 1 ? "" : "s"} updated${added ? ` (${added} new)` : ""}` : ""}.`, { kind: "success" });
     setReconcile(null);
     // Close the loop: regenerate the touched frames so the IMAGES actually
     // show the newly-woven-in asset (text alone left the pictures stale).
@@ -7152,6 +7187,18 @@ export default function WorkshopV2() {
           const norm = String(fe.frameNumber || "").padStart(2, "0");
           const fr = (current.frames || []).find(f => f.number === norm);
           if (fr && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: fr.id, field: "brief", value: fe.newBrief }); reconciledFrameIds.push(fr.id); }
+        }
+        // Add new frames (e.g. an establishing shot for a location).
+        let fbase = Math.max(0, ...(current.frames || []).map(f => parseInt(String(f.id).slice(1)) || 0));
+        for (const nfr of (suggestion.newFrames || [])) {
+          if (!nfr?.brief) continue;
+          fbase += 1;
+          const id = "f" + fbase;
+          const afterFrameId = nfr.afterFrameNumber
+            ? ((current.frames || []).find(f => f.number === String(nfr.afterFrameNumber).padStart(2, "0"))?.id || null)
+            : null;
+          dispatch({ type: "ADD_FRAME", afterFrameId, data: { id, brief: nfr.brief, shotType: nfr.shotType || "WIDE", imageStatus: "idle" } });
+          reconciledFrameIds.push(id);
         }
         const n = reconciledFrameIds.length;
         dispatch({ type: "AUTO_DETECT_MENTIONS" });
