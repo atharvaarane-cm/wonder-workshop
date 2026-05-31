@@ -6254,24 +6254,54 @@ export default function WorkshopV2() {
       case "generateTalentPrimary": {
         const t = findByName(current.talent || [], effect.talentName);
         if (!t) return;
+        const VIEWS = ["front", "side", "threeQuarter", "back"];
         markPending(`talent.${t.id}.primary`);
         markPending(`talent.${t.id}.headshots.front`);
         dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
+        let newPrimary = t.headshot;
         try {
           log("info", `chat: generating primary headshot for ${t.name}`);
-          const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
-          dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
-          dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
+          newPrimary = await generateImage(talentPrompt(t), { ratio: "1:1" });
+          dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: newPrimary });
+          dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url: newPrimary });
           dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
-          log("info", `chat: ${t.name} done`);
+          log("info", `chat: ${t.name} primary done`);
         } catch (e) {
           log("error", `chat talent gen failed: ${t.name}`, { error: String(e?.message || e) });
           dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
           toast(`Couldn't generate headshot for ${t.name}: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+          markDone(`talent.${t.id}.primary`);
+          markDone(`talent.${t.id}.headshots.front`);
+          return;
         } finally {
           markDone(`talent.${t.id}.primary`);
           markDone(`talent.${t.id}.headshots.front`);
         }
+        // Refresh the OTHER already-populated angle + full-body slots so the
+        // whole character reflects the new appearance — not just the front.
+        // Each uses the freshly-regenerated primary as the identity reference
+        // so the person stays consistent across angles. Only regenerate slots
+        // that already exist (don't conjure new ones).
+        const refs = newPrimary ? [newPrimary] : [];
+        for (const view of VIEWS) {
+          if (view === "front" || !t.headshots?.[view]) continue;
+          markPending(`talent.${t.id}.headshots.${view}`);
+          try {
+            const url = await generateImage(talentHeadshotPrompt(t, view), { ratio: "1:1", referenceImages: refs });
+            dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: view, url });
+          } catch (e) { log("error", `chat headshot ${view} failed: ${t.name}`, { error: String(e?.message || e) }); }
+          finally { markDone(`talent.${t.id}.headshots.${view}`); }
+        }
+        for (const view of VIEWS) {
+          if (!t.fullBody?.[view]) continue;
+          markPending(`talent.${t.id}.fullBody.${view}`);
+          try {
+            const url = await generateImage(talentFullBodyPrompt(t, view), { ratio: "3:4", referenceImages: refs });
+            dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: t.id, slot: view, url });
+          } catch (e) { log("error", `chat fullbody ${view} failed: ${t.name}`, { error: String(e?.message || e) }); }
+          finally { markDone(`talent.${t.id}.fullBody.${view}`); }
+        }
+        log("info", `chat: ${t.name} all populated angles refreshed`);
         return;
       }
       case "generateLocationImage": {
