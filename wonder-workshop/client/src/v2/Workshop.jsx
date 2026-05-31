@@ -3547,6 +3547,10 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
     return url;
   }
   async function regenerateHeadshot(view, opts) {
+    // No primary reference yet → refuse: angle headshots NEED it as the
+    // identity anchor, else every view is a different person. (The UI also
+    // hides these sections until the reference exists; this is the backstop.)
+    if (!character.headshot) { toast("Generate the reference image first — the angles need it to stay the same person.", { kind: "info" }); return; }
     // Mark the slot pending so it shimmers + shows "Generating…" — covers
     // both single-slot regen and the "Populate all" loop, which both route
     // through here (previously neither lit the slot up).
@@ -3562,6 +3566,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
     }
   }
   async function regenerateFullBody(view, opts) {
+    if (!character.headshot) { toast("Generate the reference image first — the full-body shots need it to stay the same person.", { kind: "info" }); return; }
     const key = `talent.${character.id}.fullBody.${view}`;
     markPending(key);
     try {
@@ -3680,45 +3685,64 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         </div>
       </div>
 
-      {/* Headshots grid (4 views) */}
-      <SlotGrid
-        label="Headshots"
-        views={VIEWS}
-        viewLabel={VIEW_LABEL}
-        slots={character.headshots || {}}
-        ratio="1:1"
-        locked={effLocked}
-        basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentHeadshotPrompt(character, v)]))}
-        pendingKeyByView={Object.fromEntries(VIEWS.map(v => [v, `talent.${character.id}.headshots.${v}`]))}
-        versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.headshots.${v}`] || []]))}
-        onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: src })}
-        onRegenerate={regenerateHeadshot}
-        onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `headshots:${view}` })}
-        onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: dataUrl })}
-        onPopulateAll={async () => {
-          for (const v of VIEWS) { try { await regenerateHeadshot(v); } catch (e) { console.error(e); } }
-        }}
-      />
+      {/* Angle headshots + full body use the PRIMARY reference above as
+          their identity anchor — generating them before it exists produces a
+          different person per angle. So gate the whole block on the reference
+          being made (Court's call), and show a hint in its place until then. */}
+      {character.headshot ? (
+        <>
+          {/* Headshots grid (4 views) */}
+          <SlotGrid
+            label="Headshots"
+            views={VIEWS}
+            viewLabel={VIEW_LABEL}
+            slots={character.headshots || {}}
+            ratio="1:1"
+            locked={effLocked}
+            basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentHeadshotPrompt(character, v)]))}
+            pendingKeyByView={Object.fromEntries(VIEWS.map(v => [v, `talent.${character.id}.headshots.${v}`]))}
+            versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.headshots.${v}`] || []]))}
+            onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: src })}
+            onRegenerate={regenerateHeadshot}
+            onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `headshots:${view}` })}
+            onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: dataUrl })}
+            onPopulateAll={async () => {
+              for (const v of VIEWS) { try { await regenerateHeadshot(v); } catch (e) { console.error(e); } }
+            }}
+          />
 
-      {/* Full Body grid (4 views) */}
-      <SlotGrid
-        label="Full Body"
-        views={VIEWS}
-        viewLabel={VIEW_LABEL}
-        slots={character.fullBody || {}}
-        ratio="3:4"
-        locked={effLocked}
-        basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentFullBodyPrompt(character, v)]))}
-        pendingKeyByView={Object.fromEntries(VIEWS.map(v => [v, `talent.${character.id}.fullBody.${v}`]))}
-        versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.fullBody.${v}`] || []]))}
-        onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: src })}
-        onRegenerate={regenerateFullBody}
-        onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `fullBody:${view}` })}
-        onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: dataUrl })}
-        onPopulateAll={async () => {
-          for (const v of VIEWS) { try { await regenerateFullBody(v); } catch (e) { console.error(e); } }
-        }}
-      />
+          {/* Full Body grid (4 views) */}
+          <SlotGrid
+            label="Full Body"
+            views={VIEWS}
+            viewLabel={VIEW_LABEL}
+            slots={character.fullBody || {}}
+            ratio="3:4"
+            locked={effLocked}
+            basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentFullBodyPrompt(character, v)]))}
+            pendingKeyByView={Object.fromEntries(VIEWS.map(v => [v, `talent.${character.id}.fullBody.${v}`]))}
+            versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.fullBody.${v}`] || []]))}
+            onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: src })}
+            onRegenerate={regenerateFullBody}
+            onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `fullBody:${view}` })}
+            onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: dataUrl })}
+            onPopulateAll={async () => {
+              for (const v of VIEWS) { try { await regenerateFullBody(v); } catch (e) { console.error(e); } }
+            }}
+          />
+        </>
+      ) : (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "14px 16px", borderRadius: 10,
+          background: "var(--warm-04)", border: "1px dashed var(--warm-10)",
+        }}>
+          <SectionIcon name="sparkle" size={14} color="var(--warm-30)" />
+          <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, lineHeight: 1.5, color: "var(--warm-40)" }}>
+            Generate the reference image above first — the headshot angles and full-body shots use it to keep the same face across every view.
+          </span>
+        </div>
+      )}
 
       {/* Delete character (bottom danger zone) */}
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--warm-06)" }}>
