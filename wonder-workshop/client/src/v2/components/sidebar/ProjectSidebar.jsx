@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronDownIcon, FilmIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, FilmIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Group, GroupSeparator } from "@/components/ui/group";
 import {
@@ -67,6 +67,7 @@ export function ProjectSidebar({
   onMoveToFolder,
   onNewFolder,
   onDeleteFolder,
+  onRenameFolder,
   mode = "root",
   activeProjectTitle = "",
   activeAssetTab = "brand",
@@ -349,6 +350,7 @@ export function ProjectSidebar({
                     projects={fprojects}
                     renderRow={renderRow}
                     onDeleteFolder={onDeleteFolder}
+                    onRenameFolder={onRenameFolder}
                     onDropProject={pid => onMoveToFolder?.(pid, fname)}
                   />
                 ))}
@@ -561,11 +563,49 @@ function UnfiledDropZone({ children, onDropProject }) {
 // Collapsible folder group in the project sidebar. Acts as a drop
 // target for project rows — dragging a project onto the header (or
 // the body) assigns the project to this folder.
-function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject }) {
+function FolderGroup({ name, projects, renderRow, onDeleteFolder, onRenameFolder, onDropProject }) {
   const [collapsed, setCollapsed] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(name);
   const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef(null);
   const acceptsDrop = e => e.dataTransfer.types.includes("application/x-ww-project-id");
+  const actionVisible = hovered || menuOpen || renaming;
+
+  useEffect(() => {
+    if (!renaming) setRenameValue(name);
+  }, [name, renaming]);
+
+  useEffect(() => {
+    if (renaming) setTimeout(() => inputRef.current?.select(), 0);
+  }, [renaming]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDoc(e) {
+      if (!e.target.closest?.(".ww-folder-menu") && !e.target.closest?.(".ww-folder-more")) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuOpen]);
+
+  function startRename() {
+    setMenuOpen(false);
+    setRenameValue(name);
+    setRenaming(true);
+  }
+
+  function commitRename() {
+    const next = renameValue.trim();
+    if (next && next !== name) onRenameFolder?.(name, next);
+    setRenaming(false);
+    setRenameValue(next || name);
+  }
+
   return (
     <div
       onDragOver={e => { if (!acceptsDrop(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOver(true); }}
@@ -590,12 +630,13 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
       }}
     >
       <div
-        onClick={() => setCollapsed(c => !c)}
+        onClick={() => !renaming && setCollapsed(c => !c)}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
           display: "flex", alignItems: "center", gap: 9,
-          padding: "8px 8px", borderRadius: 8, cursor: "pointer",
+          padding: "8px 8px", borderRadius: 8, cursor: renaming ? "default" : "pointer",
+          position: "relative",
         }}
       >
         {collapsed ? (
@@ -603,13 +644,52 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
         ) : (
           <FolderOpenIcon aria-hidden="true" size={20} strokeWidth={1.7} style={{ flexShrink: 0 }} />
         )}
-        <span className="text-white/90" style={{ flex: 1, minWidth: 0, fontFamily: "var(--f)", fontSize: 14, fontWeight: 500, letterSpacing: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {name}
-        </span>
-        {onDeleteFolder && (
+        {renaming ? (
+          <input
+            ref={inputRef}
+            value={renameValue}
+            onChange={e => setRenameValue(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={e => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") {
+                setRenaming(false);
+                setRenameValue(name);
+              }
+            }}
+            onClick={e => e.stopPropagation()}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontFamily: "var(--f)",
+              fontSize: 14,
+              fontWeight: 500,
+              background: "var(--warm-04)",
+              border: "1px solid var(--warm-12)",
+              borderRadius: 4,
+              padding: "3px 6px",
+              color: "var(--warm)",
+              outline: "none",
+            }}
+          />
+        ) : (
+          <span
+            className="text-white/90"
+            title="Double-click to rename"
+            onDoubleClick={e => {
+              e.stopPropagation();
+              startRename();
+            }}
+            style={{ flex: 1, minWidth: 0, fontFamily: "var(--f)", fontSize: 14, fontWeight: 500, letterSpacing: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
+            {name}
+          </span>
+        )}
+        {(onRenameFolder || onDeleteFolder) && !renaming && (
           <button
             type="button"
-            aria-label={`Delete folder ${name}`}
+            className="ww-folder-more"
+            aria-label={`Folder actions for ${name}`}
             onPointerDown={e => e.stopPropagation()}
             onMouseDown={e => {
               e.preventDefault();
@@ -618,9 +698,9 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
             onClick={e => {
               e.preventDefault();
               e.stopPropagation();
-              void onDeleteFolder(name);
+              setMenuOpen(open => !open);
             }}
-            title={`Delete folder ${name}`}
+            title={`Folder actions`}
             style={{
               width: 24,
               height: 24,
@@ -635,13 +715,59 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
               cursor: "pointer",
               padding: 0,
               outline: "none",
-              opacity: hovered ? 1 : 0,
-              pointerEvents: hovered ? "auto" : "none",
+              fontSize: 16,
+              lineHeight: 1,
+              opacity: actionVisible ? 1 : 0,
+              pointerEvents: actionVisible ? "auto" : "none",
               transition: "opacity 0.12s ease",
             }}
           >
-            <Trash2Icon aria-hidden="true" size={14} strokeWidth={1.8} />
+            ⋯
           </button>
+        )}
+        {menuOpen && (
+          <div
+            className="ww-folder-menu"
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              right: 4,
+              top: "100%",
+              zIndex: 30,
+              background: "var(--surface-solid)",
+              border: "1px solid var(--warm-10)",
+              borderRadius: 8,
+              boxShadow: "0 8px 28px rgba(0,0,0,0.32)",
+              padding: 4,
+              minWidth: 150,
+              marginTop: 2,
+            }}
+          >
+            {onRenameFolder && (
+              <button
+                type="button"
+                onClick={startRename}
+                style={projMenuItemStyle()}
+              >
+                Rename
+              </button>
+            )}
+            {onDeleteFolder && (
+              <>
+                {onRenameFolder && <div style={{ height: 1, background: "var(--warm-08)", margin: "4px 6px" }} />}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    void onDeleteFolder(name);
+                  }}
+                  style={{ ...projMenuItemStyle(), color: "#FF8A80" }}
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
       {!collapsed && (

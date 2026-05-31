@@ -98,6 +98,19 @@ function writeProjectsList(list) {
   try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(list)); } catch {}
 }
 
+function applyProjectListName(id, data) {
+  if (!id || !data) return data;
+  const meta = listProjects().find(p => p.id === id);
+  if (!meta?.name || data?.meta?.title === meta.name) return data;
+  return {
+    ...data,
+    meta: {
+      ...(data.meta || {}),
+      title: meta.name,
+    },
+  };
+}
+
 // Save project — full data goes to IndexedDB (no quota worry), only
 // the lightweight metadata list goes to localStorage. We also kick a
 // best-effort localStorage fallback write with the stripped (no
@@ -174,7 +187,7 @@ export function saveProjectSync(id, data, opts = {}) {
 export async function loadProjectAsync(id) {
   if (!id) return null;
   const fromIdb = await blobGet(id);
-  if (fromIdb) return fromIdb;
+  if (fromIdb) return applyProjectListName(id, fromIdb);
   // Legacy fallback — read the lightweight localStorage copy.
   return loadProject(id);
 }
@@ -189,7 +202,7 @@ export function loadProject(id) {
     const raw = localStorage.getItem(projectKey(id));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.data || null;
+    return applyProjectListName(id, parsed?.data || null);
   } catch { return null; }
 }
 
@@ -206,11 +219,47 @@ export function deleteProject(id) {
 
 export function renameProject(id, newName) {
   if (!storageAvailable() || !id) return;
+  const cleaned = (newName || "").trim() || "Untitled";
   const list = listProjects();
   const idx = list.findIndex(p => p.id === id);
   if (idx < 0) return;
-  list[idx] = { ...list[idx], name: newName || "Untitled", updatedAt: Date.now() };
+  list[idx] = { ...list[idx], name: cleaned, updatedAt: Date.now() };
   writeProjectsList(list);
+
+  try {
+    const raw = localStorage.getItem(projectKey(id));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.data) {
+        const data = {
+          ...parsed.data,
+          meta: {
+            ...(parsed.data.meta || {}),
+            title: cleaned,
+          },
+        };
+        localStorage.setItem(projectKey(id), JSON.stringify({
+          ...parsed,
+          data,
+          savedAt: Date.now(),
+          version: 2,
+        }));
+      }
+    }
+  } catch {}
+
+  blobGet(id)
+    .then(data => {
+      if (!data) return null;
+      return blobSet(id, {
+        ...data,
+        meta: {
+          ...(data.meta || {}),
+          title: cleaned,
+        },
+      });
+    })
+    .catch(() => {});
 }
 
 export function setProjectFolder(id, folder) {
@@ -287,6 +336,33 @@ export function deleteFolder(name) {
   }
   // Drop from extras.
   saveExtraFolders(loadExtraFolders().filter(n => n !== cleaned));
+}
+
+export function renameFolder(oldName, newName) {
+  const from = (oldName || "").trim();
+  const to = (newName || "").trim();
+  if (!storageAvailable() || !from || !to) return false;
+  if (from === to) return true;
+
+  const list = listProjects();
+  let changed = false;
+  const nextProjects = list.map(p => {
+    if (p.folder !== from) return p;
+    changed = true;
+    return { ...p, folder: to, updatedAt: Date.now() };
+  });
+  if (changed) writeProjectsList(nextProjects);
+
+  const extras = loadExtraFolders();
+  const nextExtras = [];
+  for (const folder of extras) {
+    const nextName = folder === from ? to : folder;
+    if (!nextExtras.includes(nextName)) nextExtras.push(nextName);
+  }
+  if (!nextExtras.includes(to) && !changed) nextExtras.push(to);
+  saveExtraFolders(nextExtras.filter(n => n !== from));
+
+  return true;
 }
 
 // One-time migration: the previous version saved to a single

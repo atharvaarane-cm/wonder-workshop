@@ -58,6 +58,7 @@ import {
   listFolders,
   createFolder,
   deleteFolder,
+  renameFolder,
 } from "./persistence.js";
 
 /*
@@ -6423,6 +6424,21 @@ export default function WorkshopV2() {
     setFolders(listFolders());
     toast(`Deleted folder "${name}"`, { kind: "info", ttl: 2500 });
   }
+  function handleRenameFolder(oldName, newName) {
+    const cleaned = (newName || "").trim();
+    if (!cleaned || cleaned === oldName) return;
+    if (folders.includes(cleaned)) {
+      toast(`A folder named "${cleaned}" already exists`, { kind: "warning", ttl: 2500 });
+      return;
+    }
+    if (!renameFolder(oldName, cleaned)) return;
+    setProjects(listProjects());
+    setFolders(listFolders());
+    if (data.meta?.client === oldName) {
+      dispatch({ type: "SET_META", meta: { client: cleaned } });
+    }
+    toast(`Renamed folder to "${cleaned}"`, { kind: "success", ttl: 2500 });
+  }
 
   // Run a chat-driven side-effect. The chat tool handlers return
   // descriptors like { type: "generateTalentPrimary", talentName }
@@ -7558,6 +7574,7 @@ export default function WorkshopV2() {
           onMoveToFolder={handleMoveToFolder}
           onNewFolder={handleNewFolder}
           onDeleteFolder={handleDeleteFolder}
+          onRenameFolder={handleRenameFolder}
         />
 
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
