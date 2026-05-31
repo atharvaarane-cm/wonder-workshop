@@ -737,6 +737,17 @@ function usePending(key) {
   return _pending.has(key);
 }
 
+// True whenever ANY generation/regeneration is in flight (any pending key).
+// Drives the chat's "working" spinner so people know the tool is busy.
+function useAnyPending() {
+  const [, force] = useReducer(x => x + 1, 0);
+  useEffect(() => {
+    _pendingListeners.add(force);
+    return () => { _pendingListeners.delete(force); };
+  }, []);
+  return _pending.size > 0;
+}
+
 // -- DEBUG LOG BUS --------------------------------------------
 // Tiny in-app logger. Calls log("info", msg, meta?) push entries
 // into a ring buffer + notify the debug panel. Cap at 500 entries.
@@ -2583,11 +2594,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
             {!frame.uploadedImage && (
               <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
             )}
-            {frame.imageStatus === "generating" && (
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontFamily: "var(--f)", fontSize: 14, color: "var(--warm-25)", animation: "pulse 1.5s ease infinite" }}>Generating...</span>
-              </div>
-            )}
+            {frame.imageStatus === "generating" && <ShimmerOverlay label="Generating…" />}
             {frame.imageStatus === "generated" && !heroHovered && (
               <div style={{ position: "absolute", top: 10, right: 10, fontFamily: "var(--f)", fontSize: 10, color: "#6c6", background: "rgba(0,0,0,0.5)", padding: "3px 8px", borderRadius: 4 }}>{"✓"} Generated</div>
             )}
@@ -7250,6 +7257,9 @@ export default function WorkshopV2() {
     if (fid) regenerateOneFrame(fid).catch(e => console.error("[regen pending edits]", e));
   }, [productionFrameId]);
 
+  // Any image generation in flight → drives the chat's "working" spinner.
+  const anyRegenerating = useAnyPending();
+
   // Left-rail nav — clicking a tab selects it; clicking the ALREADY
   // active tab fires a "ww-asset-tab-reset" event so any drilled-in
   // detail view (CharacterDetailView, LocationDetailView, etc.) can
@@ -7298,6 +7308,7 @@ export default function WorkshopV2() {
         ::-webkit-scrollbar-thumb { background: var(--warm-08); border-radius: 3px; }
         @keyframes sheetUp { from { opacity:0; transform:translateY(24px) } to { opacity:1; transform:translateY(0) } }
         @keyframes pulse { 0%,100% { opacity:0.2 } 50% { opacity:1 } }
+        @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes highlightPulse {
           0% { box-shadow: 0 0 0 rgba(255,255,255,0) }
           30% { box-shadow: 0 0 24px rgba(255,255,255,0.1) }
@@ -7648,6 +7659,7 @@ export default function WorkshopV2() {
                   chatFocusTrigger={chatFocusTrigger}
                   pendingFrameEdits={pendingFrameEdits}
                   onRegeneratePending={handleRegenerateFrameEdits}
+                  regenerating={anyRegenerating}
                 />
               </SidebarPanel>
             </div>

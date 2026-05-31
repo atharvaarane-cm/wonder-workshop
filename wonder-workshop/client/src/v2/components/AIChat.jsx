@@ -201,7 +201,7 @@ function ChatIconButton({ onClick, disabled, title, active, muted, pulsing, chil
 
 // -- AI CHAT PANEL (with @ mentions + asset context + improve button) --
 
-export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending }) {
+export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending, regenerating }) {
   const [val, setVal] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
@@ -424,6 +424,13 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
             }}>
               <SectionIcon name="sparkle" size={12} color="#fff" /> Regenerate
             </button>
+          </div>
+        )}
+        {/* Working spinner — visible whenever any image is generating. */}
+        {regenerating && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "8px 12px", borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)" }}>
+            <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid var(--warm-12)", borderTopColor: "var(--warm-50)", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+            <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-40)" }}>Generating…</span>
           </div>
         )}
         <div style={{ position: "relative" }}>
