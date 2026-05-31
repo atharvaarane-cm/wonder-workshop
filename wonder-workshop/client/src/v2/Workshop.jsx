@@ -7081,7 +7081,7 @@ export default function WorkshopV2() {
       "- Mood-board items have no name — reference them by 1-based index (see moodBoard in the state).",
       "",
       "What's IN a shot vs. a subject's permanent identity — IMPORTANT (most common mistake):",
-      "- A request about what a FRAME depicts — who is where, their pose / action / expression, 'swap the two people', 'move X to the left', 'have her stand up', 'put the can in his other hand' — is a FRAME edit. Rewrite THAT frame's description with update_frame_brief to reflect it, then call generate_frame_image in the SAME turn so the picture actually updates. The user is looking at the frame image and expects it to change.",
+      "- A request about what a FRAME depicts — who is where, their pose / action / expression, 'swap the two people', 'move X to the left', 'have her stand up', 'put the can in his other hand' — is a FRAME edit. Use update_frame_brief to rewrite THAT frame's description so it reflects the change. ACTUALLY change the wording — for a swap, exchange the two people's names / positions in the sentence (e.g. '@A leans back as @B gestures beside him' → '@B leans back as @A gestures beside her'); NEVER resubmit the brief unchanged. The system automatically regenerates the frame image after a content edit, so your job is to get the new brief text right — you don't need to call generate_frame_image yourself for frame edits.",
       "- update_talent / update_location / update_product change a subject's PERMANENT identity across the ENTIRE project (name, role, appearance note). NEVER use them for per-shot composition. e.g. 'swap the woman and the man' in a frame = rewrite that frame's brief so their positions/actions swap + regenerate the frame — it is NOT a talent edit.",
       "- Rule of thumb: whenever you change what something should LOOK like, regenerate the matching image (generate_frame_image / generate_asset_image) in the same turn. An edit with no regenerate looks to the user like nothing happened.",
       "",
@@ -7124,13 +7124,28 @@ export default function WorkshopV2() {
       }
       if (highlights.size > 0) setHighlightedFrames(highlights);
 
+      // Auto-regenerate any frame whose CONTENT changed (brief / shot type /
+      // camera) so the image actually updates. The model is unreliable at
+      // chaining generate_frame_image itself, so an applied frame edit with no
+      // regenerate looks to the user like nothing happened. Skip frames the
+      // model already queued for regeneration.
+      const regenIds = new Set(effects.filter(e => e.type === "generateFrameImage").map(e => e.frameId));
+      for (const a of applied) {
+        if (a.kind === "frame" && a.frameId && !regenIds.has(a.frameId)
+            && !["added", "deleted", "reordered", "regenerating"].includes(a.field)) {
+          effects.push({ type: "generateFrameImage", frameId: a.frameId, promptOverride: null });
+          regenIds.add(a.frameId);
+        }
+      }
+
       const summary = replyText
         || (applied.length > 0 ? `Applied ${applied.length} change${applied.length === 1 ? "" : "s"}.` : "I'm not sure what to change here — try being more specific.");
+      const regenNote = regenIds.size > 0 ? " Regenerating the frame image…" : "";
 
       setChatMessages(prev => [...prev, {
         id: Date.now(),
         role: "ai",
-        text: summary,
+        text: summary + regenNote,
         changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field, label: a.message })),
       }]);
 
