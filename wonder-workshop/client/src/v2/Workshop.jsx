@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
 const HOVER_SCALE = 1.012;
 const TAP_SCALE = 0.985;
-import { generateBrief, chatWithTools, regenerateShotList, suggestReconciliation } from "../hooks/useBrief.js";
+import { generateBrief, chatWithTools, regenerateShotList, suggestReconciliation, suggestOrphanCleanup } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
 import { Input } from "@/components/ui/input";
@@ -212,6 +212,41 @@ const RECONCILE_AMBER = "#F5A623";
 const RECONCILE_LABEL = { talent: "Character", products: "Element", locations: "Location" };
 const RECONCILE_SECTION_NAME = { talent: "characters", products: "elements", locations: "locations" };
 
+// Record a deleted asset's name+handle so we can later detect references to it
+// still lingering in the brief / frame text (the "reverse reconcile").
+function addTombstone(list, asset, type) {
+  const arr = list || [];
+  if (!asset) return arr;
+  const name = String(asset.name || "").trim();
+  const handle = String(asset.handle || "").trim();
+  if (!name && !handle) return arr;
+  const key = (name + "|" + handle).toLowerCase();
+  return [...arr.filter(r => ((r.name || "") + "|" + (r.handle || "")).toLowerCase() !== key), { type, name, handle }];
+}
+
+// Orphans = deleted assets whose name or @handle still appears in the brief or a
+// frame, and which haven't been re-created as a current asset.
+function computeOrphans(data) {
+  const refs = data?.deletedRefs || [];
+  if (!refs.length) return { items: [], handles: [], count: 0 };
+  const brief = String(data?.meta?.treatment || "").toLowerCase();
+  const frames = data?.frames || [];
+  const liveNames = new Set([...(data?.talent || []), ...(data?.products || []), ...(data?.locations || [])].map(a => String(a.name || "").toLowerCase().trim()).filter(Boolean));
+  const liveHandles = new Set([...(data?.talent || []), ...(data?.products || []), ...(data?.locations || [])].map(a => String(a.handle || "").toLowerCase().trim()).filter(Boolean));
+  const items = [];
+  for (const r of refs) {
+    const name = String(r.name || "").toLowerCase().trim();
+    const handle = String(r.handle || "").toLowerCase().trim();
+    // Re-created? then it's a live asset again, not an orphan.
+    if ((name && liveNames.has(name)) || (handle && liveHandles.has(handle))) continue;
+    const hit = (s) => (handle && s.includes(handle)) || (name && s.includes(name));
+    const inBrief = hit(brief);
+    const frameNumbers = frames.filter(f => hit(String(f.brief || "").toLowerCase())).map(f => f.number);
+    if (inBrief || frameNumbers.length) items.push({ type: r.type, name: r.name, handle: r.handle, inBrief, frameNumbers });
+  }
+  return { items, handles: items.map(i => i.handle || i.name), count: items.length };
+}
+
 function assetReconcileStatus(asset, type, data) {
   const brief = String(data?.meta?.treatment || "").toLowerCase();
   const name = String(asset?.name || "").toLowerCase().trim();
@@ -299,10 +334,15 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
   }, [state?.suggestion]);
 
   if (!state) return null;
-  const names = state.assets.map(a => a.name).join(", ");
-  const heading = state.assets.length === 1
-    ? `Reconcile "${state.assets[0].name}"`
-    : `Reconcile ${state.assets.length} items`;
+  const cleanup = state.mode === "cleanup";
+  const targets = cleanup ? (state.orphans || []) : (state.assets || []);
+  const names = targets.map(a => a.name).join(", ");
+  const heading = cleanup
+    ? (targets.length === 1 ? `Clean up "${targets[0].name}"` : `Clean up ${targets.length} deleted references`)
+    : (targets.length === 1 ? `Reconcile "${targets[0]?.name}"` : `Reconcile ${targets.length} items`);
+  const subtitle = cleanup
+    ? `${names} ${targets.length === 1 ? "was" : "were"} deleted but ${targets.length === 1 ? "is" : "are"} still referenced in the brief / storyboard. Review the cleanup — it removes the dangling reference${targets.length === 1 ? "" : "s"} and regenerates affected frames.`
+    : `${names} ${targets.length === 1 ? "isn't" : "aren't"} fully reflected in the brief / storyboard yet. Review the proposed update — edit the brief inline if you like, then apply.`;
   const frameByNum = Object.fromEntries((frames || []).map(f => [f.number, f]));
   const edits = state.suggestion?.frameEdits || [];
   const adds = state.suggestion?.newFrames || [];
@@ -325,7 +365,7 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
             <span style={{ fontFamily: "var(--f)", fontSize: 17, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em" }}>{heading}</span>
           </div>
           <div style={{ fontFamily: "var(--f)", fontSize: 13, color: "var(--warm-40)", lineHeight: 1.5 }}>
-            {names} {state.assets.length === 1 ? "isn't" : "aren't"} fully reflected in the brief / storyboard yet. Review the proposed update — edit the brief inline if you like, then apply.
+            {subtitle}
           </div>
         </div>
 
@@ -406,7 +446,7 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
               background: state.loading || state.error ? "var(--warm-08)" : RECONCILE_AMBER,
               border: "none", color: state.loading || state.error ? "var(--warm-25)" : "#1A1206",
               outline: "none", fontFamily: "var(--f)", fontSize: 13, fontWeight: 700,
-            }}>Use this brief</button>
+            }}>{cleanup ? "Remove references" : "Use this brief"}</button>
         </div>
       </div>
     </div>
@@ -661,7 +701,8 @@ function applyAction(state, action) {
     }
     case "DELETE_TALENT": {
       const id = action.id;
-      return { ...state, talent: state.talent.filter(t => t.id !== id), frames: state.frames.map(f => ({ ...f, talentIds: f.talentIds.filter(tid => tid !== id) })) };
+      const gone = state.talent.find(t => t.id === id);
+      return { ...state, talent: state.talent.filter(t => t.id !== id), frames: state.frames.map(f => ({ ...f, talentIds: f.talentIds.filter(tid => tid !== id) })), deletedRefs: addTombstone(state.deletedRefs, gone, "talent") };
     }
     case "UPDATE_PRODUCT": {
       return { ...state, products: state.products.map(p => {
@@ -691,7 +732,8 @@ function applyAction(state, action) {
     }
     case "DELETE_PRODUCT": {
       const id = action.id;
-      return { ...state, products: state.products.filter(p => p.id !== id), frames: state.frames.map(f => ({ ...f, productIds: f.productIds.filter(pid => pid !== id) })) };
+      const gone = state.products.find(p => p.id === id);
+      return { ...state, products: state.products.filter(p => p.id !== id), frames: state.frames.map(f => ({ ...f, productIds: f.productIds.filter(pid => pid !== id) })), deletedRefs: addTombstone(state.deletedRefs, gone, "products") };
     }
     case "UPDATE_LOCATION": {
       return { ...state, locations: state.locations.map(l => {
@@ -721,8 +763,11 @@ function applyAction(state, action) {
     }
     case "DELETE_LOCATION": {
       const id = action.id;
-      return { ...state, locations: state.locations.filter(l => l.id !== id), frames: state.frames.map(f => ({ ...f, locationId: f.locationId === id ? null : f.locationId })) };
+      const gone = state.locations.find(l => l.id === id);
+      return { ...state, locations: state.locations.filter(l => l.id !== id), frames: state.frames.map(f => ({ ...f, locationId: f.locationId === id ? null : f.locationId })), deletedRefs: addTombstone(state.deletedRefs, gone, "locations") };
     }
+    case "PRUNE_DELETED_REFS":
+      return { ...state, deletedRefs: action.refs || [] };
     case "UPDATE_BRAND":
       return { ...state, brand: { ...(state.brand || {}), [action.field]: action.value } };
     case "UPLOAD_BRAND_LOGO":
@@ -6637,6 +6682,8 @@ export default function WorkshopV2() {
   // Cheap to recompute (a handful of assets × frames); drives the sidebar
   // dots, section buttons, tile chips, and the chat notice.
   const reconciliation = computeReconciliation(data);
+  // Orphaned references — deleted assets still mentioned in the brief/storyboard.
+  const orphans = computeOrphans(data);
   const [reconcile, setReconcile] = useState(null); // modal state
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
@@ -6771,6 +6818,23 @@ export default function WorkshopV2() {
   // section buttons, the chat notice (window "ww-reconcile"), or chat tools.
   const handleReconcile = useCallback(async (detail) => {
     const d = dataRef.current;
+    // Reverse reconcile: clean up references to DELETED items.
+    if (detail.mode === "cleanup") {
+      const orph = computeOrphans(d);
+      if (!orph.count) { toast("No leftover references to deleted items.", { kind: "info" }); return; }
+      setReconcile({ mode: "cleanup", orphans: orph.items, loading: true, error: null, suggestion: null });
+      try {
+        const suggestion = await suggestOrphanCleanup({
+          brief: d.meta?.treatment || "",
+          frames: (d.frames || []).map(f => ({ number: f.number, brief: f.brief })),
+          orphans: orph.items,
+        });
+        setReconcile(s => s ? { ...s, loading: false, suggestion } : s);
+      } catch (e) {
+        setReconcile(s => s ? { ...s, loading: false, error: e?.message?.slice(0, 200) || "Couldn't generate a cleanup. Try again." } : s);
+      }
+      return;
+    }
     const rec = computeReconciliation(d);
     let assets;
     if (detail.scope === "object") assets = rec.items.filter(i => i.type === detail.type && i.id === detail.id);
@@ -6821,6 +6885,17 @@ export default function WorkshopV2() {
     const added = (newFrames || []).filter(nf => nf?.brief).length;
     toast(`Brief reconciled${n ? ` + ${n} frame${n === 1 ? "" : "s"} updated${added ? ` (${added} new)` : ""}` : ""}.`, { kind: "success" });
     setReconcile(null);
+    // Prune tombstones whose references are now gone (so a cleanup actually
+    // clears the orphan flag once the deleted item is no longer mentioned).
+    setTimeout(() => {
+      const d2 = dataRef.current;
+      const refs = d2.deletedRefs || [];
+      if (refs.length) {
+        const stillRef = new Set(computeOrphans(d2).items.map(i => (i.name || "") + "|" + (i.handle || "")));
+        const kept = refs.filter(r => stillRef.has((r.name || "") + "|" + (r.handle || "")));
+        if (kept.length !== refs.length) dispatch({ type: "PRUNE_DELETED_REFS", refs: kept });
+      }
+    }, 140);
     // Close the loop: regenerate the touched frames so the IMAGES actually
     // show the newly-woven-in asset (text alone left the pictures stale).
     // Gated by the generation confirm — respects "don't ask again".
@@ -8523,6 +8598,8 @@ export default function WorkshopV2() {
                   regenerating={anyRegenerating}
                   reconcileCount={reconciliation.count}
                   onReconcileAll={() => requestReconcile({ scope: "all" })}
+                  orphanCount={orphans.count}
+                  onCleanupOrphans={() => requestReconcile({ mode: "cleanup" })}
                 />
               </SidebarPanel>
             </div>

@@ -454,6 +454,55 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
   }
 }
 
+/**
+ * Reverse reconcile: some assets were DELETED but the brief / storyboard still
+ * reference them. Ask the model to rewrite the brief + affected frames so every
+ * dangling reference to a deleted item is removed (or naturally replaced).
+ * Returns { newBrief, frameEdits }.
+ */
+export async function suggestOrphanCleanup({ brief, frames, orphans, signal }) {
+  const TOOL = {
+    name: 'propose_cleanup',
+    description: 'Return the brief and frame edits with all references to the deleted items removed.',
+    parameters: {
+      type: 'object',
+      properties: {
+        newBrief: { type: 'string', description: 'The brief rewritten so it no longer references ANY deleted item — drop each mention or replace it with fitting phrasing. Keep everything else and the voice.' },
+        frameEdits: {
+          type: 'array',
+          description: 'Edits for frames that referenced a deleted item — rewrite each so the dangling reference is gone and the shot still makes narrative sense. Only include frames you changed.',
+          items: {
+            type: 'object',
+            properties: {
+              frameNumber: { type: 'string' },
+              newBrief: { type: 'string' },
+            },
+            required: ['frameNumber', 'newBrief'],
+          },
+        },
+      },
+      required: ['newBrief'],
+    },
+  }
+  const list = (orphans || []).map(o => `- ${o.type === 'talent' ? 'Character' : o.type === 'products' ? 'Element' : 'Location'} "${o.name}"${o.handle ? ` (${o.handle})` : ''}`).join('\n')
+  const frameLines = (frames || []).map(f => `  ${f.number}: ${f.brief}`).join('\n')
+  const system = [
+    'Some assets were DELETED, but the brief and/or storyboard still reference them. Remove every dangling reference so the creative reads cleanly again.',
+    'BRIEF: rewrite so it no longer mentions any deleted item — drop the reference, or replace it with something that fits (a remaining asset, or generic phrasing). Preserve everything else and the voice.',
+    'FRAMES: for any frame mentioning a deleted item, rewrite it so the reference is gone and the shot still makes sense. If a frame existed ONLY for the deleted item, repurpose it rather than leaving it broken.',
+    'Do NOT introduce new named assets — only remove/clean the deleted ones. Remove the @handles for deleted items entirely.',
+    'Call propose_cleanup exactly once.',
+  ].join('\n')
+  const user = ['CURRENT BRIEF:', brief || '(empty)', '', 'STORYBOARD FRAMES:', frameLines || '(none)', '', 'DELETED ITEMS STILL REFERENCED (remove ALL references to these):', list].join('\n')
+  const { actions } = await chatWithTools([{ role: 'system', content: system }, { role: 'user', content: user }], [TOOL], signal)
+  const call = (actions || []).find(a => a.name === 'propose_cleanup')
+  if (!call) throw new Error('The model did not return a cleanup suggestion. Try again.')
+  return {
+    newBrief: call.args.newBrief || brief || '',
+    frameEdits: Array.isArray(call.args.frameEdits) ? call.args.frameEdits : [],
+  }
+}
+
 // Rewrites just the shot list (storyboard) at a new total duration —
 // preserves the rest of the brief (creative direction, characters,
 // locations, products). Used by the editable duration in the Creative
