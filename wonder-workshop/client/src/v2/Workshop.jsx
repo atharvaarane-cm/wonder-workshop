@@ -3649,7 +3649,7 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
           background: "var(--warm-04)",
           border: "1px solid var(--warm-08)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          cursor: "pointer", overflow: "hidden",
+          cursor: "pointer", overflow: "visible",
         }}
         onClick={() => {
           // Clicking an image opens the AI chat to edit it (the lightbox was
@@ -3674,7 +3674,7 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
               position: "absolute", inset: 0,
               width: "100%", height: "100%",
               objectFit: "cover",
-              display: "block",
+              display: "block", borderRadius: 8,
             }}
           />
         )}
@@ -3717,11 +3717,11 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
         {/* Blue v1-style hover bar — visible when image exists and user hovers */}
         {hovered && src && !generating && (
           <div style={{
-            position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 0,
             display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 20,
             background: "#006dd4", border: "1px solid #43a3fd",
             boxShadow: "0 4px 14px rgba(0,0,0,0.32)",
-            zIndex: 5,
+            zIndex: 50,
           }} onClick={e => e.stopPropagation()}>
             <HoverBarBtn title="Download" onClick={handleDownload}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -3772,7 +3772,7 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
         {/* Improve with AI popover */}
         {improveOpen && hovered && src && !generating && (
           <div onClick={e => e.stopPropagation()} style={{
-            position: "absolute", bottom: 56, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)",
             zIndex: 6, width: "min(90%, 320px)",
             background: "var(--surface-solid)", border: "1px solid var(--warm-10)",
             borderRadius: 10, padding: 10,
@@ -4873,7 +4873,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 function ShimmerOverlay({ label = "Generating…" }) {
   return (
     <div style={{
-      position: "absolute", inset: 0, zIndex: 3,
+      position: "absolute", inset: 0, zIndex: 3, borderRadius: "inherit",
       background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%)",
       backgroundSize: "200% 100%",
       animation: "shimmer 1.5s infinite linear",
