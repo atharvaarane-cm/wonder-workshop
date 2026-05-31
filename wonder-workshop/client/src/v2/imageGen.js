@@ -181,7 +181,7 @@ export function moodPrompt(text) {
   return `${text}. Cinematic mood reference, evocative atmosphere, photorealistic, no text or watermarks, tone-setting visual.`;
 }
 
-export function framePrompt(frame, talent = []) {
+export function framePrompt(frame, talent = [], products = []) {
   const description = frame.brief || "";
   const shotType = frame.shotType ? `, ${frame.shotType} framing` : "";
   const camera = frame.camera ? `, ${frame.camera}` : "";
@@ -199,5 +199,17 @@ export function framePrompt(frame, talent = []) {
     if (extras.length) parts.push(`${extras.join(" and ")} ${extras.length === 1 ? "is an extra" : "are extras"} — incidental background presence, not a focal point`);
     if (parts.length) weighting = ` Character emphasis: ${parts.join("; ")}.`;
   }
-  return `${description}${shotType}${camera}.${weighting} Cinematic film still, photorealistic, narrative production photography.`;
+  // Weight referenced elements/props by FOCUS level (High = feature it,
+  // Low = supporting; Medium = neutral). Same idea as character roles.
+  let elemWeight = "";
+  const refdP = (frame.productIds || []).map(id => (products || []).find(p => p.id === id)).filter(Boolean);
+  if (refdP.length) {
+    const high = refdP.filter(p => /high/i.test(p.focus || "")).map(p => p.name);
+    const low = refdP.filter(p => /low/i.test(p.focus || "")).map(p => p.name);
+    const parts = [];
+    if (high.length) parts.push(`${high.join(" and ")} ${high.length === 1 ? "is the hero element — feature it prominently, very visible, sharp and well-lit (a close-up that showcases it is welcome)" : "are the hero elements — feature them prominently and very visibly"}`);
+    if (low.length) parts.push(`${low.join(" and ")} ${low.length === 1 ? "is a supporting element — present in the scene but not featured" : "are supporting elements — present but not featured"}`);
+    if (parts.length) elemWeight = ` Element emphasis: ${parts.join("; ")}.`;
+  }
+  return `${description}${shotType}${camera}.${weighting}${elemWeight} Cinematic film still, photorealistic, narrative production photography.`;
 }
