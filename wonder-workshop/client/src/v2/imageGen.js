@@ -23,6 +23,30 @@ const RATIO_DIMS = {
 // which is exactly the bug that stranded Maya during kickoff.
 const GENERATE_IMAGE_TIMEOUT_MS = 90_000;
 
+// Turn a raw server status + body into a short, human message. The
+// backend surfaces Gemini's raw JSON (safety blocks, quota errors, 5xx)
+// which is useless and scary in a toast — map the common cases to plain
+// language so callers can show e.message directly.
+function friendlyImageError(status, body = "") {
+  const b = String(body).toLowerCase();
+  if (status === 429 || /quota|rate.?limit|exceeded|too many|resource.?exhausted/.test(b)) {
+    return "Image generation is rate-limited right now (quota reached). Wait a moment and try again.";
+  }
+  if (/image_safety|safety|blocked|prohibited|policy/.test(b)) {
+    return "That image was blocked by the content safety filter. Try rephrasing the description.";
+  }
+  if (status === 504 || /timed out|timeout|deadline/.test(b)) {
+    return "The image service timed out. Try again in a moment.";
+  }
+  if (/no image/.test(b)) {
+    return "The image service returned no image (often a safety block). Try rephrasing or generate again.";
+  }
+  if (status >= 500) {
+    return "The image service hit a problem. Try again in a moment.";
+  }
+  return "Couldn't generate the image. Try again.";
+}
+
 export async function generateImage(prompt, opts = {}) {
   const { ratio = "16:9", referenceImages = [], provider = getImageProvider() } = opts;
   const dims = RATIO_DIMS[ratio] || RATIO_DIMS["16:9"];
@@ -53,8 +77,9 @@ export async function generateImage(prompt, opts = {}) {
     } catch (err) {
       clearTimeout(timeoutId);
       if (err?.name === "AbortError") {
-        const e = new Error(`Image gen timed out after ${GENERATE_IMAGE_TIMEOUT_MS / 1000}s`);
+        const e = new Error("The image service timed out. Try again in a moment.");
         e.status = 504;
+        e.raw = `timeout after ${GENERATE_IMAGE_TIMEOUT_MS / 1000}s`;
         throw e;
       }
       throw err;
@@ -63,13 +88,14 @@ export async function generateImage(prompt, opts = {}) {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      const e = new Error(`Image gen failed (${res.status})${body ? `: ${body.slice(0, 120)}` : ""}`);
+      const e = new Error(friendlyImageError(res.status, body));
       e.status = res.status;
+      e.raw = body;
       throw e;
     }
 
     const data = await res.json();
-    if (!data.image) throw new Error("Image gen returned no image URL");
+    if (!data.image) throw new Error(friendlyImageError(200, "No image in response"));
     return data.image;
   }
 

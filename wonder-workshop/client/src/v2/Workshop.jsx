@@ -3142,16 +3142,22 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
   // brand's official assets.
   async function refetchBrand() {
     if (sectionLocked || refetching) return;
-    const input = (brand?.url || brand?.name || "").trim();
+    // Prefer the NAME — it's the field the user edits to switch brands.
+    // (Previously the URL won, so changing the name to "Coca Cola" while the
+    // old "pepsi.com" URL lingered just re-fetched Pepsi.)
+    const input = (brand?.name || brand?.url || "").trim();
     if (!input) return;
     setRefetching(true);
     try {
-      let brandKey = input;
+      let brandKey = input.toLowerCase();
       try {
-        const normalized = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+        const normalized = /^https?:\/\//i.test(brandKey) ? brandKey : `https://${brandKey}`;
         const url = new URL(normalized);
-        brandKey = url.hostname.replace(/^www\./, "").split(".")[0];
+        const host = url.hostname.replace(/^www\./, "");
+        if (host.includes(".")) brandKey = host.split(".")[0];
       } catch {}
+      brandKey = brandKey.replace(/[^a-z0-9]/g, "");
+      if (!brandKey) { setRefetching(false); return; }
       const res = await fetch("/api/brand", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
