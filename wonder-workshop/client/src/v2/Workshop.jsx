@@ -6508,7 +6508,7 @@ export default function WorkshopV2() {
     dispatch({ type: "UPDATE_META", field: "aspect", value: newRatio });
     const wantsRegen = await uiConfirm({
       title: `Change aspect ratio to ${newRatio}?`,
-      message: "Existing images keep their original ratio and will look cropped/letterboxed. Regenerate updates everything to the new ratio (talent / locations / products / frames). Mood and brand stay 1:1.",
+      message: "Existing images keep their original ratio and will look cropped/letterboxed. Regenerate reshapes the things that use the project ratio — locations and storyboard frames — to the new shape, preserving each character's identity. Characters and products keep their own fixed reference ratios and are left untouched.",
       confirmLabel: "Regenerate all",
       cancelLabel: "Keep current images",
       danger: false,
@@ -6518,42 +6518,30 @@ export default function WorkshopV2() {
     // Re-fire generation for every non-locked image in every section.
     // Sequenced through Promise.allSettled so a single failure doesn't
     // tank the whole sweep.
+    // Only regenerate what actually depends on the project aspect ratio:
+    // LOCATIONS and FRAMES. Character + product reference images are fixed
+    // ratios (1:1 / 3:4) that don't change with the project aspect, so we
+    // leave them untouched — regenerating them needlessly re-rolls identity
+    // (this is what scrambled characters on a simple aspect change).
     const tasks = [];
-    for (const t of (data.talent || [])) {
-      if (t.locked || data.locks?.talent) continue;
-      tasks.push((async () => {
-        try {
-          const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
-          dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
-          dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
-        } catch (e) { console.error("[aspect-regen talent]", e); }
-      })());
-    }
     for (const l of (data.locations || [])) {
       if (l.locked || data.locks?.locations) continue;
       tasks.push((async () => {
         try {
-          const url = await generateImage(locationPrompt(l), { ratio: newRatio });
+          // Condition on the existing location image so the reshaped version
+          // keeps the same look, just at the new aspect.
+          const ref = l.generatedImage || l.referenceImage;
+          const url = await generateImage(locationPrompt(l), { ratio: newRatio, referenceImages: ref ? [ref] : [] });
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
         } catch (e) { console.error("[aspect-regen location]", e); }
       })());
     }
-    for (const p of (data.products || [])) {
-      if (p.locked || data.locks?.products) continue;
-      tasks.push((async () => {
-        try {
-          const url = await generateImage(productPrompt(p), { ratio: "1:1" });
-          dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
-        } catch (e) { console.error("[aspect-regen product]", e); }
-      })());
-    }
+    // Frames go through regenerateOneFrame so they're conditioned on the
+    // character + location reference images (identity preserved) at the new
+    // aspect — the old bare framePrompt path passed NO refs and produced
+    // different-looking people.
     for (const f of (data.frames || [])) {
-      tasks.push((async () => {
-        try {
-          const url = await generateImage(framePrompt(f), { ratio: newRatio });
-          dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
-        } catch (e) { console.error("[aspect-regen frame]", e); }
-      })());
+      tasks.push(regenerateOneFrame(f.id).catch(e => console.error("[aspect-regen frame]", e)));
     }
     await Promise.allSettled(tasks);
     toast("Aspect-ratio regeneration complete", { kind: "success" });
