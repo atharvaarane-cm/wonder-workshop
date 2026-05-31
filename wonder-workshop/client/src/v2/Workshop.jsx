@@ -3780,6 +3780,11 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         onChange={v => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "note", value: v })}
         placeholder="Describe this character — age, look, energy, wardrobe…"
         improveContext={{ kind: "character", name: character.name, brand: data.brand?.name }}
+        currentName={character.name}
+        onName={(nm) => {
+          dispatch({ type: "UPDATE_TALENT", id: character.id, field: "name", value: nm });
+          if (!character.handle || /^@new/i.test(character.handle)) dispatch({ type: "UPDATE_TALENT", id: character.id, field: "handle", value: deriveHandle(nm) });
+        }}
       />
 
       {/* Reference (primary headshot — also serves as the tile thumbnail) */}
@@ -4548,6 +4553,11 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         onChange={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "note", value: v })}
         placeholder="Describe this location — time of day, weather, architecture, atmosphere…"
         improveContext={{ kind: "location", name: location.name, brand: data.brand?.name }}
+        currentName={location.name}
+        onName={(nm) => {
+          dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "name", value: nm });
+          if (!location.handle || /^@new/i.test(location.handle)) dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "handle", value: deriveHandle(nm) });
+        }}
       />
       <div>
         <SectionLabel>Reference</SectionLabel>
@@ -4773,6 +4783,11 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
         onChange={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "note", value: v })}
         placeholder="Describe this element — color, material, shape, key details for product photography…"
         improveContext={{ kind: "element", name: product.name, category: product.category, brand: data.brand?.name }}
+        currentName={product.name}
+        onName={(nm) => {
+          dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "name", value: nm });
+          if (!product.handle || /^@new/i.test(product.handle)) dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "handle", value: deriveHandle(nm) });
+        }}
       />
       <div>
         <SectionLabel>Reference</SectionLabel>
@@ -4855,8 +4870,14 @@ function SectionLabel({ children }) {
   );
 }
 
-// Write/expand an asset's description with the model. Mirrors improveBrief's
-// /api/chat pattern. Rules differ by kind so the output is fit for the image
+// Derive an @handle from a name: first word, lowercased, alphanumerics only.
+function deriveHandle(name) {
+  const w = String(name || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+  return w ? "@" + w : "";
+}
+
+// Write/expand an asset's description AND propose a short name for it. Returns
+// { name, description }. Rules differ by kind so the output suits the image
 // pipeline (character = appearance only; location = place; element = prop).
 async function improveDescription({ kind, name, category, brand, current }) {
   const kindLabel = kind === "character" ? "character" : kind === "location" ? "location" : "element / hero prop";
@@ -4865,33 +4886,58 @@ async function improveDescription({ kind, name, category, brand, current }) {
     : kind === "location"
     ? "Describe the place for an establishing shot: setting, architecture, time of day, lighting, weather, key environmental textures and signage. No people."
     : "Describe this hero prop/product for a clean product shot: material, color, shape, finish, branding, distinctive details.";
+  const nameHint = kind === "character"
+    ? "a short proper first name (e.g. 'Marcus', 'Maya')"
+    : kind === "location"
+    ? "a short proper-noun place label (e.g. 'Brooklyn Rooftop', 'Sunny Beach')"
+    : "a short product/prop name (1-3 words, e.g. 'Volleyball', 'Pepsi Can')";
+  const TOOL = {
+    name: "propose_asset_details",
+    description: "Return a short name and a concrete description for this asset.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: `A concise name — ${nameHint}. If a specific name is already provided, keep/refine it.` },
+        description: { type: "string", description: "1-2 tight concrete sentences. No labels, no quotes, no filler adjectives." },
+      },
+      required: ["name", "description"],
+    },
+  };
   const messages = [
     { role: "system", content: [
-      `You write a concise, concrete ${kindLabel} description for an AI image pipeline that generates a reference image from it.`,
+      `You name and describe a ${kindLabel} for an AI image pipeline that generates a reference image from it.`,
       rules,
-      "1-2 tight sentences. Return ONLY the description text — no labels, no quotes, no preamble. Avoid filler adjectives like 'vibrant' or 'beautiful'; use specific concrete detail.",
+      `Also propose ${nameHint}.`,
+      "Return via propose_asset_details.",
     ].join("\n") },
     { role: "user", content: [
-      name ? `Name: ${name}` : null,
+      name ? `Current name (may be a placeholder like "New Product"): ${name}` : null,
       category ? `Category: ${category}` : null,
       brand ? `Brand context: ${brand}` : null,
       current?.trim() ? `Improve/expand this existing description: ${current.trim()}` : "There's no description yet — write one from the name/category above.",
     ].filter(Boolean).join("\n") },
   ];
-  const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages, stream: false }) });
-  if (!res.ok) throw new Error(`Server error: ${res.status}`);
-  const payload = await res.json();
-  return (payload?.message?.content || "").trim().replace(/^["'`]+|["'`]+$/g, "");
+  const { actions } = await chatWithTools(messages, [TOOL]);
+  const call = (actions || []).find(a => a.name === "propose_asset_details");
+  return {
+    name: (call?.args?.name || "").trim().replace(/^["'`]+|["'`]+$/g, ""),
+    description: (call?.args?.description || "").trim().replace(/^["'`]+|["'`]+$/g, ""),
+  };
 }
 
-function DescriptionField({ label, value, onChange, placeholder, improveContext }) {
+function DescriptionField({ label, value, onChange, placeholder, improveContext, onName, currentName }) {
   const [improving, setImproving] = useState(false);
   async function handleImprove() {
     if (improving) return;
     setImproving(true);
     try {
       const out = await improveDescription({ ...improveContext, current: value });
-      if (out) onChange(out);
+      if (out?.description) onChange(out.description);
+      // Also name a still-unnamed item (placeholder "New Product/Talent/Location"
+      // or empty) — never overwrite a name the user already chose.
+      const cur = String(currentName || "").trim();
+      const isPlaceholder = !cur || /^new (product|talent|location|element)$/i.test(cur);
+      if (out?.name && onName && isPlaceholder) onName(out.name);
     } catch (e) {
       console.error("[improve description]", e);
       toast(`Couldn't improve the description: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
