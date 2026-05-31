@@ -358,6 +358,83 @@ export async function chatWithTools(messages, tools, signal) {
   return { text, actions }
 }
 
+/**
+ * Reconciliation suggestion. Given the current brief, the storyboard frames,
+ * and one or more assets (characters / elements / locations) that aren't yet
+ * represented in the brief and/or storyboard, ask the model to propose:
+ *   - a rewritten brief that weaves the asset(s) in naturally, and
+ *   - a few frame brief touch-ups (@mentioning the asset's handle) for any
+ *     asset missing from the storyboard.
+ * Returns { newBrief, frameEdits: [{ frameNumber, newBrief }] }.
+ * Reuses the /api/chat tool-calling path so it shares the same model + auth.
+ */
+export async function suggestReconciliation({ brief, frames, assets, signal }) {
+  const PROPOSE_TOOL = {
+    name: 'propose_reconciliation',
+    description: 'Return the reconciled brief and any frame brief edits.',
+    parameters: {
+      type: 'object',
+      properties: {
+        newBrief: {
+          type: 'string',
+          description: 'The full rewritten project brief, weaving in the asset(s) naturally. Keep the existing content and voice; ADD the asset(s) where they fit.',
+        },
+        frameEdits: {
+          type: 'array',
+          description: 'Frame brief touch-ups for assets missing from the storyboard. Only include frames you actually changed. Use the asset\'s @handle in the new brief text.',
+          items: {
+            type: 'object',
+            properties: {
+              frameNumber: { type: 'string', description: 'The frame number, e.g. "02".' },
+              newBrief: { type: 'string', description: 'The rewritten brief for that frame.' },
+            },
+            required: ['frameNumber', 'newBrief'],
+          },
+        },
+      },
+      required: ['newBrief'],
+    },
+  }
+
+  const assetLines = assets.map(a => {
+    const missing = [!a.inBrief && 'the brief', !a.inStoryboard && 'the storyboard'].filter(Boolean).join(' and ')
+    return `- ${a.type === 'talent' ? 'Character' : a.type === 'products' ? 'Element' : 'Location'} "${a.name}" (${a.handle})${a.note ? ` — ${a.note}` : ''}. Missing from: ${missing}.`
+  }).join('\n')
+
+  const frameLines = (frames || []).map(f => `  ${f.number}: ${f.brief}`).join('\n')
+
+  const system = [
+    'You reconcile a commercial storyboard so every generated asset is reflected in BOTH the brief and the shots.',
+    'You will be given the current brief, the storyboard frames, and one or more assets that are missing from the brief and/or the storyboard.',
+    'Produce a rewritten brief that includes the asset(s) naturally — preserve the existing creative, voice, and structure; weave the new asset(s) in where they fit. Do NOT drop anything already in the brief.',
+    'For any asset missing from the STORYBOARD, also edit 1-2 of the most fitting existing frames so their brief text references the asset by its @handle. Do not invent new frames.',
+    'Call propose_reconciliation exactly once with your result.',
+  ].join('\n')
+
+  const user = [
+    'CURRENT BRIEF:',
+    brief || '(empty)',
+    '',
+    'STORYBOARD FRAMES:',
+    frameLines || '(none)',
+    '',
+    'ASSETS TO RECONCILE:',
+    assetLines,
+  ].join('\n')
+
+  const { actions } = await chatWithTools(
+    [{ role: 'system', content: system }, { role: 'user', content: user }],
+    [PROPOSE_TOOL],
+    signal,
+  )
+  const call = (actions || []).find(a => a.name === 'propose_reconciliation')
+  if (!call) throw new Error('The model did not return a reconciliation suggestion. Try again.')
+  return {
+    newBrief: call.args.newBrief || brief || '',
+    frameEdits: Array.isArray(call.args.frameEdits) ? call.args.frameEdits : [],
+  }
+}
+
 // Rewrites just the shot list (storyboard) at a new total duration —
 // preserves the rest of the brief (creative direction, characters,
 // locations, products). Used by the editable duration in the Creative

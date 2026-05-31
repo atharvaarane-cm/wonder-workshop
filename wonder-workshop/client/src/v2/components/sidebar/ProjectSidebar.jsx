@@ -42,6 +42,7 @@ export function ProjectSidebar({
   onAssetTabChange,
   onBackToProjects,
   assetCounts = {},
+  reconcileFlags = {},
 }) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
@@ -138,6 +139,7 @@ export function ProjectSidebar({
               key={tab.key}
               tab={tab}
               count={assetCounts[tab.key] ?? 0}
+              needsReconcile={!!reconcileFlags[tab.key]}
               isActive={activeAssetTab === tab.key}
               onClick={() => onAssetTabChange?.(tab.key)}
             />
@@ -330,7 +332,7 @@ export function ProjectSidebar({
   );
 }
 
-function ProjectSectionRow({ tab, count, isActive, onClick }) {
+function ProjectSectionRow({ tab, count, isActive, onClick, needsReconcile = false }) {
   const [hovered, setHovered] = useState(false);
   const bg = isActive ? "var(--warm-08)" : hovered ? "var(--warm-04)" : "transparent";
   const accent = isActive ? "var(--warm)" : hovered ? "var(--warm-50)" : "var(--warm-30)";
@@ -364,6 +366,12 @@ function ProjectSectionRow({ tab, count, isActive, onClick }) {
     >
       <SectionIcon name={tab.icon} size={18} color={iconColor} />
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tab.label}</span>
+      {needsReconcile && (
+        <span
+          title="Some items here aren't in the brief or storyboard yet"
+          style={{ width: 7, height: 7, borderRadius: "50%", background: "#F5A623", flexShrink: 0, boxShadow: "0 0 0 3px rgba(245,166,35,0.18)" }}
+        />
+      )}
       <span style={{
         display: "inline-flex",
         alignItems: "center",
