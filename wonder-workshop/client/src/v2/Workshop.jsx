@@ -4635,7 +4635,7 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
 // right. Brand Info opens by default. Clicking a tab switches the
 // right pane (no toggle-to-close — something is always selected).
 
-function AssetTabBar({ data, dispatch, activeTab, onAIAssist }) {
+function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onFocusAsset }) {
   const [expanded, setExpanded] = useState(null);
   const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
 
@@ -4655,6 +4655,7 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist }) {
           setExpanded={setExpanded}
           typeKey={typeKey}
           onAIAssist={onAIAssist}
+          onFocusAsset={onFocusAsset}
         />
       </Card>
     </div>
@@ -4780,7 +4781,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 
           {/* Asset Tab Bar */}
           <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
-            onAIAssist={onAIAssist} />
+            onAIAssist={onAIAssist} onFocusAsset={onFocusAsset} />
 
           {/* Frame Grid */}
           {(() => {
