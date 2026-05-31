@@ -323,7 +323,7 @@ export function ProjectSidebar({
                 key={p.id}
                 project={p}
                 isNested={isNested}
-                isActive={p.id === activeProjectId}
+                isActive={false}
                 isRenaming={renamingId === p.id}
                 renameValue={renameValue}
                 renameInputRef={renameInputRef}

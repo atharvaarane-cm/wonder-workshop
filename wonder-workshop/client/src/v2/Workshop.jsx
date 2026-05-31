@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { LockIcon, LockOpenIcon, MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
 
 // Shared spring config — used across press/hover feedback so the whole
 // app feels physically coherent. Tuned to feel snappy on click without
@@ -28,6 +29,7 @@ import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
 import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { GenerateStoryboardButton } from "./components/GenerateStoryboardButton.jsx";
+import { StoryboardFrameCard } from "./components/storyboard/StoryboardFrameCard.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import iconAspectUrl from "../assets/icon-aspect.svg";
@@ -36,6 +38,9 @@ import iconDropfilesUrl from "../assets/icon-dropfiles.svg";
 import iconFolderUrl from "../assets/icon-folder.svg";
 import iconSparkleUrl from "../assets/icon-sparkle.svg";
 import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
+import iconNavCharSvg from "../assets/icon-nav-char.svg?raw";
+import iconNavElementsSvg from "../assets/icon-nav-elements.svg?raw";
+import iconNavLocationSvg from "../assets/icon-nav-location.svg?raw";
 import ratioIcon169Svg from "../assets/ratio-icon-16-9.svg?raw";
 import ratioIcon916Svg from "../assets/ratio-icon-9-16.svg?raw";
 import ratioIcon11Svg from "../assets/ratio-icon-1-1.svg?raw";
@@ -188,9 +193,9 @@ function getThemeVars(isDark) {
 }
 
 const CHAT_SUGGESTIONS = [
-  { label: "Create a character.", icon: "users" },
-  { label: "Add new location", icon: "map" },
-  { label: "Add a hero product or element", icon: "camera" },
+  { label: "Create a character.", icon: "characters" },
+  { label: "Add new location", icon: "locations" },
+  { label: "Add a hero product or element", icon: "elements" },
 ];
 
 function isCameraDefault(frame) {
@@ -1701,20 +1706,40 @@ function RatioIcon({ ratio, size = 18, color = "currentColor" }) {
   );
 }
 
-function RootMenuDropdown({ label, value, options, onChange, renderIcon, triggerIcon, triggerLabel, popupClassName }) {
+const CHAT_SUGGESTION_ICON_SVGS = {
+  characters: iconNavCharSvg,
+  locations: iconNavLocationSvg,
+  elements: iconNavElementsSvg,
+};
+
+function ChatSuggestionIcon({ name, size = 16 }) {
+  const svg = CHAT_SUGGESTION_ICON_SVGS[name]
+    ?.replace("<svg ", `<svg style="width:${size}px;height:${size}px;min-width:${size}px;min-height:${size}px;" `)
+    ?.replace('width="24" height="24"', `width="${size}" height="${size}"`);
+
+  return (
+    <span
+      aria-hidden="true"
+      style={{ color: "currentColor", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 0 }}
+      dangerouslySetInnerHTML={{ __html: svg || "" }}
+    />
+  );
+}
+
+function RootMenuDropdown({ label, value, options, onChange, renderIcon, triggerIcon, triggerLabel, popupClassName, style, triggerSize = "lg", sideOffset = 4 }) {
   const selected = options.find(o => !o.type && o.value === value);
   const selectedLabel = triggerLabel || selected?.triggerLabel || selected?.label || value;
   const menuClassName = popupClassName || "w-[var(--anchor-width)] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]";
 
   return (
-    <div style={{ marginBottom: 14 }}>
+    <div style={{ marginBottom: 14, ...style }}>
       {label && <label style={lbl}>{label}</label>}
       <Menu>
         <MenuTrigger
           render={
             <Button
               variant="outline"
-              size="lg"
+              size={triggerSize}
               className="w-full justify-between dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_1px_2px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.045)] dark:hover:bg-[#181818] dark:data-pressed:bg-[#181818]"
             />
           }
@@ -1727,6 +1752,7 @@ function RootMenuDropdown({ label, value, options, onChange, renderIcon, trigger
         </MenuTrigger>
         <MenuPopup
           align="start"
+          sideOffset={sideOffset}
           className={menuClassName}
         >
           <MenuRadioGroup value={value} onValueChange={onChange}>
@@ -2009,56 +2035,6 @@ function AssetUploadZone({ label, hasImage, onUpload }) {
   );
 }
 
-// -- SHEET FRAME (Hollywood storyboard style) -----------------
-
-// Editable per-shot duration pill — sits in the SheetFrame footer.
-// Click-bubble stopped so editing doesn't trigger the frame onClick
-// (which would open ProductionView).
-function FrameDuration({ duration, onChange }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(duration || "");
-  useEffect(() => { setValue(duration || ""); }, [duration]);
-  function commit() {
-    setEditing(false);
-    const v = (value || "").trim();
-    if (!v) { onChange?.("3s"); return; }
-    // Normalize — ensure trailing "s" so "3" becomes "3s"
-    const normalized = /^\d/.test(v) && !/s$/i.test(v) ? `${v}s` : v;
-    if (normalized !== duration) onChange?.(normalized);
-  }
-  return editing ? (
-    <input
-      autoFocus
-      value={value}
-      onChange={e => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => {
-        if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
-        if (e.key === "Escape") { e.preventDefault(); setEditing(false); setValue(duration || ""); }
-      }}
-      onClick={e => e.stopPropagation()}
-      style={{
-        width: 42, fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
-        color: "var(--warm-40)", textAlign: "center",
-        background: "var(--warm-08)", border: "1px solid var(--warm-12)",
-        borderRadius: 4, padding: "2px 4px", outline: "none",
-        letterSpacing: "0.04em",
-      }}
-    />
-  ) : (
-    <span
-      onClick={e => { e.stopPropagation(); setEditing(true); }}
-      title="Click to edit shot duration"
-      style={{
-        fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
-        color: "var(--warm-30)", letterSpacing: "0.06em",
-        padding: "2px 6px", borderRadius: 4, cursor: "pointer",
-        background: "var(--warm-04)", border: "1px solid var(--warm-06)",
-      }}
-    >{duration || "—"}</span>
-  );
-}
-
 // Sum per-shot durations to a single "Xs" string. Used by the topbar
 // to show the project's total runtime as a derived value (not from
 // meta.format, which is the user's target).
@@ -2070,120 +2046,6 @@ function totalDuration(frames) {
     if (!isNaN(n)) sum += n;
   }
   return sum > 0 ? `${sum % 1 === 0 ? sum : sum.toFixed(1)}s` : null;
-}
-
-function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highlighted, isDragSrc, dispatch, onRetry, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  const loc = data.locations.find(l => l.id === frame.locationId);
-  const prods = data.products.filter(p => frame.productIds.includes(p.id));
-  const talents = data.talent.filter(t => frame.talentIds.includes(t.id));
-  const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
-  const handleImageError = () => {
-    dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
-  };
-
-  const frameCardClassName = [
-    "overflow-hidden rounded-lg transition-colors",
-    selected ? "ring-1 ring-ring/50" : "",
-    highlighted ? "ring-1 ring-ring/30" : "",
-    hovered ? "border-ring/40" : "",
-  ].filter(Boolean).join(" ");
-
-  return (
-    <Card
-      render={<motion.div />}
-      className={frameCardClassName}
-      layout
-      layoutId={`frame-${frame.id}`}
-      draggable onDragStart={e => onDragStart(e, frame.id)}
-      onDragOver={e => onDragOver(e, index)}
-      onDragLeave={onDragLeave}
-      onDragEnd={onDragEnd} onDrop={onDrop} onClick={onClick}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      whileHover={isDragSrc ? undefined : { y: -2, scale: HOVER_SCALE }}
-      whileTap={isDragSrc ? undefined : { scale: TAP_SCALE }}
-      transition={TAP_SPRING}
-      style={{
-        cursor: isDragSrc ? "grabbing" : "pointer",
-        opacity: isDragSrc ? 0.15 : 1,
-        animation: highlighted ? "highlightPulse 1.5s ease" : "none",
-      }}
-    >
-      {/* Header bar */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "6px 10px",
-        borderBottom: "1px solid var(--warm-04)",
-      }}>
-        <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-35)", letterSpacing: "0.04em" }}>{frame.number}</span>
-        <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-20)", letterSpacing: "0.04em" }}>
-          {frame.shotType} {"\xB7"} {MOVEMENT_TYPES.find(m => m.value === frame.movement)?.label || "Static"}
-        </span>
-      </div>
-
-      {/* Clean thumbnail. Vignette darkens the empty-state gradient
-          for empty frames so the placeholder doesn't look flat. When
-          an image IS loaded, only the image shows — no overlay, no
-          film-strip bars (Logan asked to remove them). */}
-      <div style={{ aspectRatio: aspectCSS, background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length], position: "relative", overflow: "hidden" }}>
-        {frame.uploadedImage && <img src={frame.uploadedImage} alt="" onError={handleImageError} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
-        {!frame.uploadedImage && (
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
-        )}
-        {frame.imageStatus === "generating" && <ShimmerOverlay />}
-        {/* Error state — frame failed during bulk auto-gen (usually
-            a Gemini rate limit). Show a Retry pill so the user doesn't
-            have to leave the storyboard to recover the missing frame. */}
-        {frame.imageStatus === "error" && !frame.uploadedImage && (
-          <div style={{
-            position: "absolute", inset: 0, zIndex: 3,
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            gap: 8, padding: 10,
-            background: "rgba(0,0,0,0.42)",
-          }}>
-            <div style={{
-              fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-              color: "rgba(255,255,255,0.92)", letterSpacing: "0.06em", textTransform: "uppercase",
-            }}>Generation failed</div>
-            {onRetry && (
-              <button
-                onClick={e => { e.stopPropagation(); onRetry(frame.id); }}
-                style={{
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-                  color: "#fff", background: "rgba(255,255,255,0.12)",
-                  border: "1px solid rgba(255,255,255,0.4)", borderRadius: 999,
-                  padding: "4px 12px", cursor: "pointer", letterSpacing: "0.04em",
-                }}
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer bar — location name on the left, editable duration on
-          the right. Duration commits on blur via UPDATE_FRAME. */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "5px 10px",
-        borderTop: "1px solid var(--warm-04)",
-      }}>
-        <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-20)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{loc?.name || "—"}</span>
-        <FrameDuration
-          duration={frame.duration}
-          onChange={v => dispatch?.({ type: "UPDATE_FRAME", frameId: frame.id, field: "duration", value: v })}
-        />
-      </div>
-
-      {/* Brief — @-handles render as colored chips by entity type */}
-      <div style={{ padding: "8px 10px 10px" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-          {renderMentions(frame.brief, data)}
-        </div>
-      </div>
-    </Card>
-  );
 }
 
 // -- COMPASS WIDGET (SVG camera angle selector) ---------------
@@ -4180,27 +4042,26 @@ function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, gen
       </div>
       <div style={{ display: "flex", gap: 6 }}>
         {onAutoGenerate && (
-          <PremiumButton
-            variant="secondary"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={onAutoGenerate}
             disabled={locked || generating}
-            style={{ fontSize: 10, padding: "5px 10px" }}
             title={locked ? "Unlock section to regenerate" : "Regenerate every item in this section"}
           >
-            <SectionIcon name="sparkle" size={11} color="var(--warm-40)" />
+            <SparklesIcon aria-hidden="true" className="size-3.5" />
             {generating ? "Generating…" : autoGenerateLabel}
-          </PremiumButton>
+          </Button>
         )}
-        <PremiumButton
-          variant="secondary"
+        <Button
+          variant="outline"
+          size="xs"
           onClick={onToggleLock}
-          style={{
-            fontSize: 10, padding: "5px 10px",
-            background: locked ? "var(--warm-12)" : undefined,
-          }}
+          aria-pressed={locked}
         >
-          {locked ? "🔒 Locked" : "Lock section"}
-        </PremiumButton>
+          {locked ? <LockIcon aria-hidden="true" className="size-3.5" /> : <LockOpenIcon aria-hidden="true" className="size-3.5" />}
+          {locked ? "Locked" : "Lock section"}
+        </Button>
       </div>
     </div>
   );
@@ -4597,12 +4458,13 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 
                 if (!showPlaceholder) {
                   return data.frames.map((f, i) => (
-                    <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={i} data={data} aspectCSS={aspCSS}
+                    <StoryboardFrameCard key={f.id} dispatch={dispatch} frame={f} index={i} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={dragId === f.id}
                       onRetry={onRetryFrame}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
-                      onClick={() => clickF(f.id)} />
+                      onClick={() => clickF(f.id)}
+                      renderMentions={renderMentions} />
                   ));
                 }
 
@@ -4615,12 +4477,13 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                   if (i === insertAt) items.push(dropPreview);
                   const origIdx = data.frames.indexOf(f);
                   items.push(
-                    <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={origIdx} data={data} aspectCSS={aspCSS}
+                    <StoryboardFrameCard key={f.id} dispatch={dispatch} frame={f} index={origIdx} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={false}
                       onRetry={onRetryFrame}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
-                      onClick={() => clickF(f.id)} />
+                      onClick={() => clickF(f.id)}
+                      renderMentions={renderMentions} />
                   );
                 });
                 if (insertAt >= remaining.length) items.push(dropPreview);
@@ -5086,27 +4949,16 @@ function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, 
             )}
           </>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "0 16px", flex: 1, justifyContent: "center" }}>
-            <div style={{ fontFamily: "var(--f)", fontSize: 20, fontWeight: 300, color: "var(--warm-35)", letterSpacing: "-0.02em" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "0 16px", flex: 1, justifyContent: "center" }}>
+            <div style={{ fontFamily: "var(--f)", fontSize: 18, fontWeight: 300, color: "var(--warm-35)", letterSpacing: "-0.02em" }}>
               What should we do?
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
               {CHAT_SUGGESTIONS.map(s => (
-                <button key={s.label} onClick={() => handleSuggestion(s.label)}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 8,
-                    padding: "8px 16px", borderRadius: 8,
-                    background: "var(--warm-04)", border: "1px solid var(--warm-06)",
-                    fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-35)",
-                    cursor: "pointer", transition: "all 0.2s ease", outline: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "var(--warm-06)"; e.currentTarget.style.borderColor = "var(--warm-10)"; e.currentTarget.style.color = "var(--warm-50)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "var(--warm-04)"; e.currentTarget.style.borderColor = "var(--warm-06)"; e.currentTarget.style.color = "var(--warm-35)"; }}
-                >
-                  <SectionIcon name={s.icon} size={12} color="currentColor" />
+                <Button key={s.label} variant="outline" size="sm" className="w-[min(330px,100%)] justify-center text-sm sm:text-sm" onClick={() => handleSuggestion(s.label)}>
+                  <ChatSuggestionIcon name={s.icon} size={18} />
                   {s.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -5630,52 +5482,22 @@ export function timeAgo(ts) {
 // immediately, then prompts whether to re-pace the storyboard so the
 // shot list sums to the new total.
 function TargetDurationControl({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-  // Match v1's LENGTHS (6 / 15 / 30 / 60 / 90 / 120 seconds).
   const FORMATS = ["6", "15", "30", "60", "90", "120"];
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e) { if (!e.target.closest?.(".ww-format-control")) setOpen(false); }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  const selectedValue = value || "30";
+
   return (
-    <div className="ww-format-control" style={{ position: "relative" }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        display: "flex", alignItems: "center", gap: 4,
-        padding: "4px 9px", borderRadius: 6,
-        background: "var(--warm-04)", border: "1px solid var(--warm-08)",
-        color: "var(--warm-40)", cursor: "pointer", outline: "none",
-        fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-        letterSpacing: "0.04em",
-      }} title="Change target runtime (re-paces the storyboard)">
-        :{value || "30"}
-        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        </svg>
-      </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 8,
-          display: "flex", flexDirection: "column", gap: 2, padding: 4,
-          minWidth: 70, borderRadius: 6,
-          background: "var(--surface-solid)",
-          border: "1px solid var(--warm-12)",
-          boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        }}>
-          {FORMATS.map(f => (
-            <button key={f} onClick={() => { setOpen(false); onChange?.(f); }}
-              style={{
-                padding: "5px 10px", textAlign: "left",
-                background: f === value ? "var(--warm-08)" : "transparent",
-                border: "none", borderRadius: 4, cursor: "pointer", outline: "none",
-                fontFamily: "var(--f)", fontSize: 11, fontWeight: f === value ? 700 : 500,
-                color: f === value ? "var(--warm)" : "var(--warm-40)",
-              }}
-            >:{f}</button>
-          ))}
-        </div>
-      )}
+    <div className="ww-format-control" style={{ minWidth: 170 }}>
+      <RootMenuDropdown
+        value={selectedValue}
+        options={FORMATS.map(f => ({ value: f, label: `${f} sec` }))}
+        onChange={onChange}
+        triggerIcon={<DropdownAssetIcon src={iconClockUrl} size={18} />}
+        triggerLabel={`Length: ${selectedValue} sec`}
+        renderIcon={() => <DropdownAssetIcon src={iconClockUrl} size={18} />}
+        style={{ marginBottom: 0 }}
+        triggerSize="sm"
+        popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(360px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+      />
     </div>
   );
 }
@@ -5685,56 +5507,21 @@ function TargetDurationControl({ value, onChange }) {
 // supplied onChange, which the App routes through handleAspectChange
 // (saves new ratio + asks whether to regenerate all images).
 function AspectRatioControl({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-  // Match v1's RATIOS (16:9 / 9:16 / 1:1 / 4:5 / 4:3 / 2:1).
-  const RATIOS = BRIEF_RATIOS;
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e) { if (!e.target.closest?.(".ww-aspect-control")) setOpen(false); }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  const selectedValue = value || "16:9";
+
   return (
-    <div className="ww-aspect-control" style={{ position: "relative" }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        display: "flex", alignItems: "center", gap: 4,
-        padding: "4px 9px", borderRadius: 6,
-        background: "var(--warm-04)", border: "1px solid var(--warm-08)",
-        color: "var(--warm-40)", cursor: "pointer", outline: "none",
-        fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-        letterSpacing: "0.04em",
-      }} title="Change aspect ratio (regenerates images)">
-        {value || "16:9"}
-        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        </svg>
-      </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 8,
-          display: "flex", flexDirection: "column", gap: 2, padding: 4,
-          minWidth: 100, borderRadius: 6,
-          background: "var(--surface-solid)",
-          border: "1px solid var(--warm-12)",
-          boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        }}>
-          {RATIOS.map(r => (
-            <button key={r.id} onClick={() => { setOpen(false); onChange?.(r.id); }}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "5px 10px", textAlign: "left",
-                background: r.id === value ? "var(--warm-08)" : "transparent",
-                border: "none", borderRadius: 4, cursor: "pointer", outline: "none",
-                fontFamily: "var(--f)", fontSize: 11, fontWeight: r.id === value ? 700 : 500,
-                color: r.id === value ? "var(--warm)" : "var(--warm-40)",
-              }}
-            >
-              <RatioIcon ratio={r.id} size={18} />
-              <span>{r.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="ww-aspect-control" style={{ minWidth: 170 }}>
+      <RootMenuDropdown
+        value={selectedValue}
+        options={BRIEF_RATIOS.map(r => ({ value: r.id, label: r.label }))}
+        onChange={onChange}
+        triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={18} />}
+        triggerLabel={`Aspect: ${selectedValue}`}
+        renderIcon={(ratio) => <RatioIcon ratio={ratio} size={18} />}
+        style={{ marginBottom: 0 }}
+        triggerSize="sm"
+        popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+      />
     </div>
   );
 }
@@ -7614,13 +7401,13 @@ export default function WorkshopV2() {
       {/* Nav */}
       <nav style={{
         position: "relative", zIndex: 100, height: 64, flexShrink: 0,
-        display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
+        display: "grid", gridTemplateColumns: "minmax(0, 1fr) max-content", columnGap: 16, alignItems: "center",
         padding: "0 24px",
         borderBottom: "1px solid var(--warm-06)", background: "var(--surface)",
         backdropFilter: "blur(24px) saturate(1.3)", WebkitBackdropFilter: "blur(24px) saturate(1.3)",
         transition: "background 0.4s ease",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           {built && <>
             <AspectRatioControl
               value={data.meta.aspect}
@@ -7642,11 +7429,8 @@ export default function WorkshopV2() {
           </>}
         </div>
 
-        {/* Center spacer */}
-        <div />
-
         {built && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end", justifySelf: "end" }}>
             <PremiumButton variant="ghost" onClick={() => dispatch({ type: "UNDO" })} disabled={past.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Undo (Ctrl+Z)">{"↩"}</PremiumButton>
             <PremiumButton variant="ghost" onClick={() => dispatch({ type: "REDO" })} disabled={future.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Redo (Ctrl+Shift+Z)">{"↪"}</PremiumButton>
 
@@ -7658,24 +7442,30 @@ export default function WorkshopV2() {
 
             <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
 
-            <PremiumButton variant="ghost" onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-              style={{ padding: "5px 8px" }}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
               title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
-              <SectionIcon name={isDark ? "sun" : "moon"} size={14} color="var(--warm-30)" />
-            </PremiumButton>
+              {isDark ? <SunIcon aria-hidden="true" className="size-4" /> : <MoonIcon aria-hidden="true" className="size-4" />}
+            </Button>
           </div>
         )}
 
         {/* Theme toggle when not built (landing page) */}
         {!built && (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <PremiumButton variant="ghost" onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-              style={{ padding: "5px 8px" }}
+          <div style={{ display: "flex", justifyContent: "flex-end", justifySelf: "end" }}>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
               title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
-              <SectionIcon name={isDark ? "sun" : "moon"} size={14} color="var(--warm-30)" />
-            </PremiumButton>
+              {isDark ? <SunIcon aria-hidden="true" className="size-4" /> : <MoonIcon aria-hidden="true" className="size-4" />}
+            </Button>
           </div>
         )}
       </nav>
