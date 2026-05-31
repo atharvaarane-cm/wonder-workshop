@@ -1489,6 +1489,21 @@ const V2_CHAT_TOOLS = [
     description: "Reconcile ALL characters, elements, and locations that aren't yet in the brief and/or storyboard.",
     parameters: { type: "object", properties: {} },
   },
+  {
+    name: "suggest_followups",
+    description: "Offer 1-3 short, specific next-step suggestions the user can tap to continue (like a creative collaborator proposing what to do next). Call this at the END of a turn, in addition to any edits you made. ALSO use it when you ask a clarifying question — pass the likely answers as the suggestions so the user can just tap one. Each suggestion is the exact prompt that will be sent if tapped, so phrase them as first-person user requests (e.g. 'Add a wide establishing shot', 'Make Chloe the lead', 'Put her in the Pepsi sweatshirt').",
+    parameters: {
+      type: "object",
+      properties: {
+        suggestions: {
+          type: "array",
+          items: { type: "string" },
+          description: "1-3 concise tappable next-step prompts (max ~6 words each).",
+        },
+      },
+      required: ["suggestions"],
+    },
+  },
 ];
 
 // Apply a single chat tool call to the v2 reducer. Returns metadata
@@ -1756,6 +1771,11 @@ function applyChatToolCall(action, data, dispatch) {
     case "reconcile_all": {
       return { applied: true, kind: "reconcile", field: "reconcile", message: "Reconciling everything",
         effect: { type: "reconcile", scope: "all" } };
+    }
+    case "suggest_followups": {
+      const suggestions = (args.suggestions || []).filter(s => typeof s === "string" && s.trim()).slice(0, 3);
+      if (!suggestions.length) return null;
+      return { suggestions };
     }
     default:
       return null;
@@ -7618,6 +7638,12 @@ export default function WorkshopV2() {
       "When creating a character: keep the `note` field to APPEARANCE only (age range, ethnicity, build, hair color/length, wardrobe). Do NOT put expression / pose / mood directions in the note — those bias every generated frame. The system will neutralize them but it's better not to add them.",
       "Each character has a ROLE: 'Lead' (hero — most screen time, appears across the storyboard, the focal/foreground subject when in a shot), 'Supporting' (secondary presence), or 'Extra' (background / incidental, rarely the focus). Respect roles when building or rebalancing the storyboard and the brief: give Leads prominence and frequency, keep Extras in the background. To change a character's importance, set its role via update_talent (field 'role', value 'Lead' | 'Supporting' | 'Extra').",
       "",
+      "BE A COLLABORATOR, NOT JUST A COMMAND RUNNER (this matters):",
+      "- Clear request → just do it (the user has undo), then briefly say what you changed.",
+      "- AMBIGUOUS or under-specified request (you'd have to guess which frame/character, or key info is missing) → DON'T guess. Ask ONE short clarifying question in your reply, and call suggest_followups with the 2-3 likely answers as tappable options. Don't make edits in that turn.",
+      "- HUGE or hard-to-undo request ('regenerate everything', 'delete all frames', 'start over') → confirm intent first in your reply + offer the confirm via suggest_followups (e.g. 'Yes, regenerate all 8 frames'); don't fire it until they confirm.",
+      "- ALWAYS finish a turn by calling suggest_followups with 1-3 specific next steps that build on what just happened — proactively propose what a creative director might do next (add a complementary shot, set a lead, reconcile a new element, vary an angle). Phrase each as the exact first-person prompt that runs if tapped. This is the single most important habit: every reply should leave the user with tappable next moves.",
+      "",
       "Prefer specific, narrow edits — change one item at a time when possible, change every item only when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
       focusLine,
       "After making changes, briefly explain what you changed in 1-2 sentences. Don't restate every tool call.",
@@ -7645,11 +7671,13 @@ export default function WorkshopV2() {
       const applied = [];
       const highlights = new Set();
       const effects = [];
+      const suggestions = [];
       for (const action of (actions || [])) {
         const result = applyChatToolCall(action, currentData, dispatch);
         if (result?.applied) applied.push(result);
         if (result?.frameId) highlights.add(result.frameId);
         if (result?.effect) effects.push(result.effect);
+        if (result?.suggestions) suggestions.push(...result.suggestions);
       }
       if (highlights.size > 0) setHighlightedFrames(highlights);
 
@@ -7676,6 +7704,7 @@ export default function WorkshopV2() {
         role: "ai",
         text: summary + regenNote,
         changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field, label: a.message })),
+        suggestions: suggestions.slice(0, 3),
       }]);
 
       // Fire async side-effects (image generation for newly created

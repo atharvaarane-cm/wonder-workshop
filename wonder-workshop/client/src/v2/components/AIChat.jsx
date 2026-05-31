@@ -33,7 +33,7 @@ const MotionWrap = ({ children }) => (
   >{children}</motion.div>
 );
 
-function ChatMessage({ message: m, data, onMentionClick }) {
+function ChatMessage({ message: m, data, onMentionClick, onSuggestion }) {
   if (m.role === "system") {
     return <MotionWrap><div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)", lineHeight: 1.65, padding: "4px 0" }}>{m.text}</div></MotionWrap>;
   }
@@ -85,6 +85,31 @@ function ChatMessage({ message: m, data, onMentionClick }) {
               || (fr ? `Frame ${fr.number} \xB7 ${c.type === "camera" ? "camera" : c.field}` : `${c.type}${c.field ? " \xB7 " + c.field : ""}`);
             return <div key={j} style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-20)", marginBottom: 2 }}>{label}</div>;
           })}
+        </div>
+      )}
+      {/* Suggested next steps — the agent proposing what to do next (or the
+          options for a clarifying question). Tapping one sends it as a prompt. */}
+      {m.suggestions && m.suggestions.length > 0 && onSuggestion && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+          {m.suggestions.map((s, k) => (
+            <button
+              key={k}
+              onClick={() => onSuggestion(s)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "6px 11px", borderRadius: 999, cursor: "pointer",
+                background: "var(--warm-04)", border: "1px solid var(--warm-12)",
+                color: "var(--warm-50)", outline: "none",
+                fontFamily: "var(--f)", fontSize: 11.5, fontWeight: 400, lineHeight: 1.2,
+                transition: "all 0.12s ease", textAlign: "left",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "var(--warm-08)"; e.currentTarget.style.color = "var(--warm)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "var(--warm-04)"; e.currentTarget.style.color = "var(--warm-50)"; }}
+            >
+              <SectionIcon name="sparkle" size={10} color="var(--warm-30)" />
+              {s}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -353,7 +378,7 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px", display: "flex", flexDirection: "column", gap: 12, justifyContent: hasUserMessages ? "flex-end" : "center" }}>
         {hasUserMessages ? (
           <>
-            {chatMessages.map((m, i) => <ChatMessage key={m.id || i} message={m} data={data} onMentionClick={onMentionClick} />)}
+            {chatMessages.map((m, i) => <ChatMessage key={m.id || i} message={m} data={data} onMentionClick={onMentionClick} onSuggestion={handleSuggestion} />)}
             {chatBusy && (
               <div style={{ display: "flex", gap: 5, padding: "8px 0" }}>
                 {[0, 1, 2].map(i => <div key={i} style={{ width: 4, height: 4, borderRadius: 1, background: "var(--warm)", animation: `pulse 1.2s ease ${i * 0.15}s infinite` }} />)}
