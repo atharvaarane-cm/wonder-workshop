@@ -171,6 +171,12 @@ function getThemeVars(isDark) {
     "--hover-text": isDark ? "#111" : "#fff",
     "--select-bg": isDark ? "#111112" : "#F6F5F3",
     "--card-bg": isDark ? "rgba(224,224,224,0.015)" : "rgba(26,26,24,0.03)",
+    // Asset hero panel + popovers: a solid surface that flips with the
+    // theme. Previously hardcoded dark (#141414), which left the panel's
+    // theme-colored labels invisible (dark-on-dark) in light mode.
+    "--panel-bg": isDark ? "#141414" : "#FFFFFF",
+    "--panel-border": isDark ? "rgba(255,255,255,0.05)" : "rgba(17,17,16,0.08)",
+    "--popover-bg": isDark ? "#151517" : "#FFFFFF",
     "--page-gradient": isDark
       ? "radial-gradient(ellipse 80% 60% at 50% 40%, #111112 0%, #0A0A0A 100%)"
       : "radial-gradient(ellipse 80% 60% at 50% 40%, #FFFFFF 0%, #F0EFED 100%)",
@@ -2030,7 +2036,7 @@ function LocationDropdown({ label, value, locations, onChange }) {
         {open && (
           <div style={{
             position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-            background: "#151517", border: "1px solid var(--warm-10)", borderRadius: 10,
+            background: "var(--popover-bg)", border: "1px solid var(--warm-10)", borderRadius: 10,
             boxShadow: "0 8px 32px rgba(0,0,0,0.5)", overflow: "hidden",
             animation: "fadeIn 0.15s ease", maxHeight: 240, overflowY: "auto",
           }}>
@@ -4628,7 +4634,8 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onFocusAsset }) {
   return (
     <div id="ww-asset-rail" style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16, scrollMarginTop: 12 }}>
       <Card className="rounded-xl p-5" style={{
-        background: "#141414",
+        background: "var(--panel-bg)",
+        border: "1px solid var(--panel-border)",
         minHeight: 220,
         maxHeight: 800,
         overflowY: "auto",
