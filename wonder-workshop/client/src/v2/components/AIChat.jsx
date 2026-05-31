@@ -226,7 +226,7 @@ function ChatIconButton({ onClick, disabled, title, active, muted, pulsing, chil
 
 // -- AI CHAT PANEL (with @ mentions + asset context + improve button) --
 
-export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending, regenerating, reconcileCount = 0, onReconcileAll }) {
+export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending, regenerating, reconcileCount = 0, onReconcileAll, orphanCount = 0, onCleanupOrphans }) {
   const [val, setVal] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
@@ -432,6 +432,24 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
               background: "#F5A623", border: "none", color: "#1A1206", outline: "none",
               fontFamily: "var(--f)", fontSize: 11, fontWeight: 700,
             }}>Reconcile all</button>
+          </div>
+        )}
+        {/* Orphan notice — references to DELETED items still in the brief/storyboard. */}
+        {orphanCount > 0 && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+            padding: "8px 10px 8px 12px", borderRadius: 10,
+            background: "rgba(255,107,107,0.10)", border: "1px solid rgba(255,107,107,0.45)",
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FF6B6B", flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--f)", fontSize: 11.5, fontWeight: 400, color: "var(--warm-50)", lineHeight: 1.4 }}>
+              {orphanCount} deleted item{orphanCount === 1 ? " is" : "s are"} still referenced in the brief / storyboard.
+            </span>
+            <button onClick={onCleanupOrphans} style={{
+              flexShrink: 0, padding: "5px 10px", borderRadius: 7, cursor: "pointer",
+              background: "#FF6B6B", border: "none", color: "#2A0A0A", outline: "none",
+              fontFamily: "var(--f)", fontSize: 11, fontWeight: 700,
+            }}>Clean up</button>
           </div>
         )}
         {!hasUserMessages && (
