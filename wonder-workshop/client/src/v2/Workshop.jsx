@@ -21,6 +21,7 @@ import {
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuSeparator,
   MenuTrigger,
 } from "@/components/ui/menu";
 import OnePager from "../components/OnePager.jsx";
@@ -29,6 +30,11 @@ import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { AIChatPanel, AIChatTab } from "./components/AIChat.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
+import iconAspectUrl from "../assets/icon-aspect.svg";
+import iconClockUrl from "../assets/icon-clock.svg";
+import iconDropfilesUrl from "../assets/icon-dropfiles.svg";
+import iconFolderUrl from "../assets/icon-folder.svg";
+import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
 import {
   newProjectId,
   listProjects,
@@ -1902,39 +1908,22 @@ function ChevronDropdown({ label, value, options, onChange, style: extraStyle = 
   );
 }
 
-// -- ASPECT RATIO DROPDOWN (visual icons) -----------------------
-
-function AspectIcon({ ratio, size = 18, color = "var(--warm-30)" }) {
-  // Each entry = the actual width/height of the rectangle drawn for
-  // that ratio. Missing entries (the previous bug) fell back to 16:9
-  // so 4:5, 4:3, 2:1 all looked identical. Fixed: every supported
-  // ratio has its own dims.
-  const dims = {
-    "16:9": [16, 9],
-    "9:16": [9, 16],
-    "1:1":  [12, 12],
-    "4:5":  [12, 15],
-    "5:4":  [15, 12],
-    "4:3":  [16, 12],
-    "3:4":  [12, 16],
-    "2:1":  [18, 9],
-    "2.39": [21, 9],
-  };
-  const [w, h] = dims[ratio] || [16, 9];
-  const scale = size / Math.max(w, h);
-  const rw = Math.round(w * scale);
-  const rh = Math.round(h * scale);
+function DropdownAssetIcon({ src, size = 18, alt = "" }) {
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}>
-      <rect x={(size - rw) / 2} y={(size - rh) / 2} width={rw} height={rh} rx={1.5} ry={1.5}
-        fill="none" stroke={color} strokeWidth={1.2} />
-    </svg>
+    <img
+      src={src}
+      alt={alt}
+      width={size}
+      height={size}
+      style={{ display: "block", width: size, height: size, flexShrink: 0, objectFit: "contain" }}
+    />
   );
 }
 
-function RootMenuDropdown({ label, value, options, onChange, renderIcon }) {
-  const selected = options.find(o => o.value === value);
-  const selectedLabel = selected?.label || value;
+function RootMenuDropdown({ label, value, options, onChange, renderIcon, triggerIcon, triggerLabel, popupClassName }) {
+  const selected = options.find(o => !o.type && o.value === value);
+  const selectedLabel = triggerLabel || selected?.triggerLabel || selected?.label || value;
+  const menuClassName = popupClassName || "w-[var(--anchor-width)] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]";
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -1950,17 +1939,19 @@ function RootMenuDropdown({ label, value, options, onChange, renderIcon }) {
           }
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            {renderIcon?.(value, "currentColor", 18)}
+            {triggerIcon || renderIcon?.(value, "currentColor", 18)}
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedLabel}</span>
           </span>
           <SectionIcon name="chevron-down" size={14} color="currentColor" />
         </MenuTrigger>
         <MenuPopup
           align="start"
-          className="w-[var(--anchor-width)] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+          className={menuClassName}
         >
           <MenuRadioGroup value={value} onValueChange={onChange}>
-            {options.map(o => (
+            {options.map((o, idx) => o.type === "separator" ? (
+              <MenuSeparator key={`separator-${idx}`} className="dark:bg-white/10" />
+            ) : (
               <MenuRadioItem
                 key={o.value}
                 value={o.value}
@@ -1969,137 +1960,13 @@ function RootMenuDropdown({ label, value, options, onChange, renderIcon }) {
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
                   {renderIcon?.(o.value, "currentColor", 20)}
-                  <span>{o.label}</span>
+                  <span style={{ whiteSpace: "nowrap" }}>{o.label}</span>
                 </span>
               </MenuRadioItem>
             ))}
           </MenuRadioGroup>
         </MenuPopup>
       </Menu>
-    </div>
-  );
-}
-
-function ClientFolderInput({ value, folders, onChange }) {
-  const inputRef = useRef(null);
-  const rootRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const query = value.trim().toLowerCase();
-  const visibleFolders = query
-    ? folders.filter(folder => folder.toLowerCase().includes(query))
-    : folders;
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event) => {
-      if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
-
-  return (
-    <div ref={rootRef} style={{ position: "relative" }}>
-      <Input
-        ref={inputRef}
-        type="text"
-        size="lg"
-        value={value}
-        onFocus={() => setOpen(true)}
-        onChange={e => {
-          onChange(e.target.value);
-          setOpen(true);
-        }}
-        className="[&_[data-slot=input]]:pr-9"
-        placeholder="Pick or type — auto-creates a folder"
-      />
-      <button
-        type="button"
-        aria-label="Open client folder list"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          inputRef.current?.focus();
-          setOpen(current => !current);
-        }}
-        style={{
-          position: "absolute",
-          right: 8,
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: 22,
-          height: 22,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: 0,
-          borderRadius: 6,
-          background: "transparent",
-          color: "var(--warm-35)",
-          cursor: "pointer",
-        }}
-      >
-        <SectionIcon name="chevron-down" size={14} color="currentColor" />
-      </button>
-      {open && (
-        <div
-          role="listbox"
-          aria-label="Client folders"
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "calc(100% + 6px)",
-            zIndex: 300,
-            maxHeight: 190,
-            overflowY: "auto",
-            padding: 4,
-            background: "#151517",
-            border: "1px solid var(--warm-08)",
-            borderRadius: 8,
-            boxShadow: "0 12px 28px rgba(0,0,0,0.55)",
-          }}
-        >
-          {visibleFolders.length ? visibleFolders.map(folder => (
-            <button
-              key={folder}
-              type="button"
-              role="option"
-              aria-selected={folder === value}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onChange(folder);
-                setOpen(false);
-              }}
-              style={{
-                width: "100%",
-                display: "block",
-                border: 0,
-                borderRadius: 6,
-                background: folder === value ? "rgba(255,255,255,0.08)" : "transparent",
-                color: "var(--warm)",
-                cursor: "pointer",
-                fontFamily: "var(--f)",
-                fontSize: 12,
-                fontWeight: 500,
-                lineHeight: 1.2,
-                padding: "9px 10px",
-                textAlign: "left",
-              }}
-            >
-              {folder}
-            </button>
-          )) : (
-            <div style={{
-              color: "var(--warm-35)",
-              fontFamily: "var(--f)",
-              fontSize: 12,
-              padding: "9px 10px",
-            }}>
-              No matching client folders
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -5519,10 +5386,10 @@ function LiquidGlassButton({ onClick, children }) {
         onMouseLeave={() => setHovered(false)}
         style={{
           position: "relative", zIndex: 1, width: "100%", padding: "16px 0",
-          fontFamily: "var(--f)", fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em",
-          border: "none",
+          fontFamily: "var(--f)", fontSize: 17, fontWeight: 500, letterSpacing: "-0.01em",
+          border: "1px solid rgba(255,255,255,0.18)",
           borderRadius: 14, cursor: "pointer", outline: "none",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
           color: hovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.85)",
           backgroundImage: hovered
             ? "linear-gradient(135deg, rgba(0,0,0,0.97), rgba(4,4,8,0.98), rgba(0,0,0,0.97))"
@@ -5531,8 +5398,8 @@ function LiquidGlassButton({ onClick, children }) {
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           boxShadow: hovered
-            ? "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.03), 0 0 0 1px rgba(255,255,255,0.06)"
-            : "inset 0 1px 0 rgba(255,255,255,0.05)",
+            ? "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(255,255,255,0.035), 0 1px 2px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.06)"
+            : "inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 2px rgba(0,0,0,0.42)",
           transition: "all 0.4s cubic-bezier(0.22,1,0.36,1)",
           overflow: "hidden",
         }}
@@ -5888,45 +5755,72 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
           WebkitBackdropFilter: "blur(20px)",
           border: "1px solid rgba(255, 255, 255, 0.08)",
           boxShadow: "0 24px 64px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
-          borderRadius: 14, padding: "3% 5%", marginBottom: "2%",
+          borderRadius: 14, padding: "3%", marginBottom: "2%",
         }}>
-          <div style={{ marginBottom: 20 }}>
-            <label style={lbl}>Storyboard Title</label>
-            <Input type="text" size="lg" value={meta.title} onChange={e => setMeta(m => ({ ...m, title: e.target.value }))} />
+          <div style={{ marginBottom: 20, position: "relative" }}>
+            <span aria-hidden="true" style={{
+              position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)",
+              zIndex: 2, pointerEvents: "none", display: "inline-flex", alignItems: "center",
+            }}>
+              <DropdownAssetIcon src={iconStoryboardTitleUrl} size={17} />
+            </span>
+            <Input
+              type="text"
+              size="lg"
+              value={meta.title}
+              onChange={e => setMeta(m => ({ ...m, title: e.target.value }))}
+              placeholder="Enter storyboard title..."
+              className="[&_[data-slot=input]]:pl-11"
+            />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
-            <div>
-              <label style={lbl}>Client Folder</label>
-              <ClientFolderInput
-                value={meta.client}
-                folders={folders}
-                onChange={client => setMeta(m => ({ ...m, client }))}
-              />
-            </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 5 }}>
             <RootMenuDropdown
-              label="Length"
-              value={meta.format}
-              options={BRIEF_LENGTHS.map(s => ({ value: s.replace(/s$/, ""), label: `:${s.replace(/s$/, "")}` }))}
-              onChange={v => setMeta(m => ({ ...m, format: v }))}
+              value={meta.client}
+              options={[
+                { value: "", label: "No Folder" },
+                ...(folders.length ? [{ type: "separator" }] : []),
+                ...folders.map(folder => ({ value: folder, label: folder })),
+              ]}
+              onChange={client => setMeta(m => ({ ...m, client }))}
+              triggerIcon={<DropdownAssetIcon src={iconFolderUrl} size={18} />}
+              triggerLabel={meta.client || "Select Folder"}
+              renderIcon={() => <DropdownAssetIcon src={iconFolderUrl} size={18} />}
+              popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
             />
             <RootMenuDropdown
-              label="Aspect Ratio"
+              value={meta.format}
+              options={BRIEF_LENGTHS.map(s => {
+                const seconds = s.replace(/s$/, "");
+                return { value: seconds, label: `${seconds} sec` };
+              })}
+              onChange={v => setMeta(m => ({ ...m, format: v }))}
+              triggerIcon={<DropdownAssetIcon src={iconClockUrl} size={18} />}
+              triggerLabel={`Length: ${meta.format || "30"} sec`}
+              renderIcon={() => <DropdownAssetIcon src={iconClockUrl} size={18} />}
+            />
+            <RootMenuDropdown
               value={meta.aspect}
               options={BRIEF_RATIOS.map(r => ({ value: r.id, label: r.label }))}
               onChange={v => setMeta(m => ({ ...m, aspect: v }))}
-              renderIcon={(ratio, color, size) => <AspectIcon ratio={ratio} color={color} size={size} />}
+              triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={18} />}
+              triggerLabel={`Aspect: ${meta.aspect || "16:9"}`}
+              renderIcon={() => <DropdownAssetIcon src={iconAspectUrl} size={18} />}
             />
           </div>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
-              <label style={{ ...lbl, marginBottom: 0 }}>Brief</label>
+          <div style={{ marginBottom: 20, position: "relative" }}>
+            <Textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
+              size="lg"
+              disabled={improving}
+              placeholder="Storyboard Brief..."
+              className="[&_[data-slot=textarea]]:pt-2 [&_[data-slot=textarea]]:pb-16"
+              style={{ minHeight: 160, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
               <button
                 onClick={improveBrief}
                 disabled={!meta.treatment?.trim() || improving || generating}
                 type="button"
                 title="Use Gemini to expand a rough idea into a 100-180 word grounded brief"
                 style={{
-                  position: "relative", overflow: "hidden",
+                  position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 12px", borderRadius: 18,
                   background: "rgba(255,200,87,0.10)",
@@ -5958,16 +5852,10 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
                   {improving ? "Improving…" : "Improve with AI"}
                 </span>
               </button>
-            </div>
-            <Textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
-              size="lg"
-              disabled={improving}
-              style={{ minHeight: 120, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
           </div>
 
           {/* File upload zone */}
           <div>
-            <label style={lbl}>Reference Files</label>
             <div
               onDragOver={e => { e.preventDefault(); setFileDragOver(true); }}
               onDragLeave={() => setFileDragOver(false)}
@@ -5975,16 +5863,21 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
               onClick={() => fileRef.current.click()}
               style={{
                 border: `1.5px dashed ${fileDragOver ? "rgba(255,255,255,0.3)" : "var(--warm-10)"}`,
-                borderRadius: 10, padding: "18px 16px", textAlign: "center",
+                borderRadius: 10, padding: "26px 16px 24px", textAlign: "center",
                 cursor: "pointer", transition: "all 0.2s ease",
-                background: fileDragOver ? "rgba(255,255,255,0.02)" : "transparent",
+                background: fileDragOver ? "rgba(255,255,255,0.02)" : "#1b1b1b",
               }}
             >
-              <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, color: "var(--warm-25)", marginBottom: 3 }}>
-                Drop files here or click to browse
+              <div style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
+                fontFamily: "var(--f)", fontSize: 15, fontWeight: 500, color: "var(--warm)",
+                marginBottom: 10, letterSpacing: "-0.01em",
+              }}>
+                <DropdownAssetIcon src={iconDropfilesUrl} size={18} />
+                <span>Add Reference Files</span>
               </div>
-              <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-15)" }}>
-                Treatments, scripts, product images, mood boards
+              <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, color: "var(--warm-25)" }}>
+                Drop treatments, scripts, images, or mood boards here or click to browse
               </div>
             </div>
             <input ref={fileRef} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt,.rtf"
@@ -6020,8 +5913,8 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
       <Reveal delay={320}>
         <div className="mt-4">
           <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
-            <SectionIcon name="sparkle" size={15} color="rgba(255,255,255,0.8)" />
-            {generating ? " Generating brief…" : " Generate Storyboard"}
+            <DropdownAssetIcon src={iconStoryboardTitleUrl} size={17} />
+            {generating ? "Generating brief…" : "Generate Storyboard"}
           </LiquidGlassButton>
           {error ? (
             <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
@@ -6822,16 +6715,11 @@ export default function WorkshopV2() {
       const newId = newProjectId();
       setActiveProjectId(newId);
       setActiveProjectIdState(newId);
-      // Auto-file under the client folder. If the user typed a new
-      // client name, create the folder first. The first save (debounce
-      // + ceiling auto-save) will include the folder via the
-      // project's stored metadata.
-      if (meta.client?.trim()) {
+      // Auto-file only when the user selected an existing folder. If
+      // they choose "No Folder", the new project stays at the sidebar
+      // root with the other unfiled projects.
+      if (meta.client?.trim() && listFolders().includes(meta.client.trim())) {
         const clientName = meta.client.trim();
-        const existing = listFolders();
-        if (!existing.includes(clientName)) {
-          createFolder(clientName);
-        }
         // saveProject merges this when it next runs; force a save now
         // so the sidebar updates immediately.
         setProjectFolder(newId, clientName);

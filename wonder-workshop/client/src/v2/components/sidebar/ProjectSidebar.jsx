@@ -583,7 +583,7 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
         <span className="text-white/90" style={{ flex: 1, minWidth: 0, fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, letterSpacing: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {name} <span style={{ opacity: 0.48, fontSize: 12 }}>· {projects.length}</span>
         </span>
-        {hovered && onDeleteFolder && (
+        {onDeleteFolder && (
           <button
             type="button"
             aria-label={`Delete folder ${name}`}
@@ -612,6 +612,9 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
               cursor: "pointer",
               padding: 0,
               outline: "none",
+              opacity: hovered ? 1 : 0,
+              pointerEvents: hovered ? "auto" : "none",
+              transition: "opacity 0.12s ease",
             }}
           >
             <Trash2Icon aria-hidden="true" size={14} strokeWidth={1.8} />
