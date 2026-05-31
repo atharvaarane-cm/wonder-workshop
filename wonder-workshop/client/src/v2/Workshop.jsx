@@ -6466,7 +6466,7 @@ export default function WorkshopV2() {
         format: current.meta?.format || "30",
         aspect: current.meta?.aspect || "16:9",
         treatment: current.meta?.treatment || "",
-      });
+      }, { keepProjectId: activeRef.current });
       return;
     }
     if (scope !== "list" || !plan) return;
@@ -6663,7 +6663,7 @@ export default function WorkshopV2() {
   // migration utility. The user's typed inputs override anything the
   // model might guess differently (the BriefForm IS authoritative for
   // title/client/aspect/format).
-  const handleGenerate = async (meta) => {
+  const handleGenerate = async (meta, opts = {}) => {
     if (generating) return;
     setGenerating(true);
     setGenerationError(null);
@@ -6735,9 +6735,16 @@ export default function WorkshopV2() {
       // Each new brief gets its own project record — that way the
       // sidebar list shows every brief the user has ever generated,
       // and switching between them is just a project-switch.
-      const newId = newProjectId();
-      setActiveProjectId(newId);
-      setActiveProjectIdState(newId);
+      //
+      // EXCEPTION: regenerate-in-place. "Regenerate All" from the brief
+      // audit passes opts.keepProjectId = the current project id, so we
+      // OVERWRITE that same record instead of forking a second project
+      // with an identical title (the cause of duplicate sidebar rows).
+      const newId = opts.keepProjectId || newProjectId();
+      if (!opts.keepProjectId) {
+        setActiveProjectId(newId);
+        setActiveProjectIdState(newId);
+      }
       // Auto-file only when the user selected an existing folder. If
       // they choose "No Folder", the new project stays at the sidebar
       // root with the other unfiled projects.
