@@ -980,17 +980,58 @@ export function uiConfirm(opts = {}) {
   });
 }
 
+// Per-project "approve generations without asking" flag (Flow-style
+// "Approve, do not ask again"). In-memory + localStorage so it persists
+// per project. Cleared by toggling off (no UI for that yet — a fresh
+// project simply starts asking again).
+const _genAutoApprove = {};
+function _genKey(pid) { return `ww_v2_genapprove_${pid || "_"}`; }
+
+// Gate a bulk / expensive image generation behind a confirm — UNLESS the
+// user already chose "don't ask again" for this project. Returns true to
+// proceed. Reads the active project id itself so any component (section
+// buttons, populate-all, chat) can call it without prop-threading.
+export function confirmGeneration({ count = 0, label } = {}) {
+  let pid = "_";
+  try { pid = getActiveProjectId() || "_"; } catch {}
+  if (_genAutoApprove[pid]) return Promise.resolve(true);
+  try {
+    if (localStorage.getItem(_genKey(pid)) === "1") { _genAutoApprove[pid] = true; return Promise.resolve(true); }
+  } catch {}
+  return new Promise(resolve => {
+    uiBus.emit("confirm", {
+      title: `Generate ${count} image${count === 1 ? "" : "s"}?`,
+      message: label || "This will start generating images.",
+      confirmLabel: "Approve",
+      cancelLabel: "Cancel",
+      danger: false,
+      dontAskAgain: true,
+      resolve: (res) => {
+        const obj = (res && typeof res === "object") ? res : { confirmed: !!res, dontAskAgain: false };
+        if (obj.confirmed && obj.dontAskAgain) {
+          _genAutoApprove[pid] = true;
+          try { localStorage.setItem(_genKey(pid), "1"); } catch {}
+        }
+        resolve(!!obj.confirmed);
+      },
+    });
+  });
+}
+
 function UIProvider({ children }) {
   const [confirmState, setConfirmState] = useState(null);
+  const [dontAskAgain, setDontAskAgain] = useState(false);
 
   useEffect(() => {
     const offConfirm = uiBus.on("confirm", (payload) => {
+      setDontAskAgain(false);
       setConfirmState({
         title: payload.title || "Are you sure?",
         message: payload.message || "",
         confirmLabel: payload.confirmLabel || "Confirm",
         cancelLabel: payload.cancelLabel || "Cancel",
         danger: payload.danger !== false,
+        showDontAskAgain: !!payload.dontAskAgain,
         resolve: payload.resolve,
       });
     });
@@ -998,7 +1039,12 @@ function UIProvider({ children }) {
   }, []);
 
   const handleConfirmResolve = (v) => {
-    if (confirmState?.resolve) confirmState.resolve(v);
+    // When the "don't ask again" toggle is present, resolve an object so
+    // confirmGeneration can persist the choice; otherwise keep the plain
+    // boolean that every existing uiConfirm caller expects.
+    if (confirmState?.resolve) {
+      confirmState.resolve(confirmState.showDontAskAgain ? { confirmed: v, dontAskAgain: v && dontAskAgain } : v);
+    }
     setConfirmState(null);
   };
 
@@ -1039,6 +1085,19 @@ function UIProvider({ children }) {
               }}>
                 {confirmState.message}
               </div>
+            )}
+            {confirmState.showDontAskAgain && (
+              <label style={{
+                display: "flex", alignItems: "flex-start", gap: 9, cursor: "pointer",
+                marginBottom: 18, padding: "10px 12px", borderRadius: 8,
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)",
+              }}>
+                <input type="checkbox" checked={dontAskAgain} onChange={e => setDontAskAgain(e.target.checked)}
+                  style={{ marginTop: 1, accentColor: "#fff", width: 15, height: 15, flexShrink: 0 }} />
+                <span style={{ fontFamily: "var(--f)", fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.72)" }}>
+                  <span style={{ fontWeight: 600, color: "#fff" }}>Approve, don't ask again</span> — let me generate freely in this project without confirming each time.
+                </span>
+              </label>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button onClick={() => handleConfirmResolve(false)} style={{
@@ -3221,6 +3280,8 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch, data }) {
   // caption as the prompt. Tiles without captions are skipped.
   async function bulkRegenerate() {
     if (sectionLocked || bulkGenerating) return;
+    const n = moodBoard.filter(m => m.caption).length;
+    if (!(await confirmGeneration({ count: n, label: "Regenerate every mood image from its caption." }))) return;
     setBulkGenerating(true);
     for (const m of moodBoard) {
       if (!m.caption) continue;
@@ -3370,6 +3431,8 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
 
   async function bulkRegenerate() {
     if (locked || bulkGenerating) return;
+    const n = data.talent.filter(t => !t.locked).length;
+    if (!(await confirmGeneration({ count: n, label: "Regenerate every character's reference headshot." }))) return;
     setBulkGenerating(true);
     for (const t of data.talent) {
       if (t.locked) continue; // per-character lock still wins
@@ -3784,6 +3847,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
   const hasAny = views.some(v => slots[v]);
 
   async function handlePopulateAll() {
+    if (!(await confirmGeneration({ count: views.length, label: `Generate all ${views.length} ${label.toLowerCase()} views.` }))) return;
     setPopulating(true);
     // Mark every slot pending up front so they ALL shimmer + show
     // "Generating…" immediately while they wait their turn (populate runs
@@ -4286,6 +4350,8 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
 
   async function bulkRegenerate() {
     if (locked || bulkGenerating) return;
+    const n = data.locations.filter(l => !l.locked).length;
+    if (!(await confirmGeneration({ count: n, label: "Regenerate every location image." }))) return;
     setBulkGenerating(true);
     for (const l of data.locations) {
       if (l.locked) continue;
@@ -4492,6 +4558,8 @@ function ElementTab({ data, dispatch, onFocusAsset }) {
 
   async function bulkRegenerate() {
     if (locked || bulkGenerating) return;
+    const n = data.products.filter(p => !p.locked).length;
+    if (!(await confirmGeneration({ count: n, label: "Regenerate every element image." }))) return;
     setBulkGenerating(true);
     for (const p of data.products) {
       if (p.locked) continue;
@@ -6959,6 +7027,8 @@ export default function WorkshopV2() {
     const current = dataRef.current;
     if (!current) return;
     if (scope === "all") {
+      const n = (current.talent?.length || 0) + (current.locations?.length || 0) + (current.products?.length || 0) + (current.frames?.length || 0);
+      if (!(await confirmGeneration({ count: n, label: "Regenerate the entire project — every character, location, element, and storyboard frame — from the new brief." }))) return;
       toast("Regenerating the full project from the new brief…", { kind: "info", ttl: 4000 });
       await handleGenerate({
         title: current.meta?.title || "",
@@ -7711,10 +7781,22 @@ export default function WorkshopV2() {
       // assets, etc). Each effect resolves against the latest data
       // via dataRef, so it sees the asset the reducer just added.
       if (effects.length > 0) {
-        // Give React a tick to flush the dispatches so dataRef updates.
-        await new Promise(r => setTimeout(r, 50));
-        for (const eff of effects) {
-          runChatEffect(eff).catch(e => console.error("[chat effect]", eff.type, e));
+        // BULK gate: if the chat is about to generate 2+ images, confirm first
+        // (Flow-style). A single image (the common edit→regen) stays instant.
+        // Non-image effects (e.g. reconcile) always run.
+        const GEN_EFFECTS = new Set(["generateTalentPrimary", "generateLocationImage", "generateProductImage", "generateFrameImage", "generateMoodImage"]);
+        const genCount = effects.filter(e => GEN_EFFECTS.has(e.type)).length;
+        let toRun = effects;
+        if (genCount >= 2) {
+          const ok = await confirmGeneration({ count: genCount, label: `The chat is about to generate ${genCount} images.` });
+          if (!ok) toRun = effects.filter(e => !GEN_EFFECTS.has(e.type));
+        }
+        if (toRun.length) {
+          // Give React a tick to flush the dispatches so dataRef updates.
+          await new Promise(r => setTimeout(r, 50));
+          for (const eff of toRun) {
+            runChatEffect(eff).catch(e => console.error("[chat effect]", eff.type, e));
+          }
         }
       }
     } catch (e) {
