@@ -88,8 +88,20 @@ export function listProjects() {
     if (!raw) return [];
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
-    // Most-recently-updated first.
-    return [...arr].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    // Most-recently-updated first, AND de-duped by id — a project must never
+    // appear twice. A stray duplicate index entry (e.g. a save race) would
+    // otherwise render the same project as two rows. Keeping the most-recent
+    // entry per id also self-heals the stored list on the next saveProject
+    // (which writes back whatever listProjects returns).
+    const sorted = [...arr].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const seen = new Set();
+    const deduped = [];
+    for (const p of sorted) {
+      if (!p || !p.id || seen.has(p.id)) continue;
+      seen.add(p.id);
+      deduped.push(p);
+    }
+    return deduped;
   } catch { return []; }
 }
 
