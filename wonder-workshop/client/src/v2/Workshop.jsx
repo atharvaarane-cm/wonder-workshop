@@ -11,9 +11,21 @@ const TAP_SCALE = 0.985;
 import { generateBrief, chatWithTools, regenerateShotList } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { toastManager } from "@/components/ui/toast";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
-import { BriefPanel } from "./components/BriefPanel.jsx";
+import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { AIChatPanel, AIChatTab } from "./components/AIChat.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
@@ -318,6 +330,8 @@ function applyAction(state, action) {
     }
     case "SET_FRAME_IMAGE_STATUS":
       return { ...state, frames: state.frames.map(f => f.id === action.frameId ? { ...f, imageStatus: action.status } : f) };
+    case "CLEAR_FRAME_IMAGE":
+      return { ...state, frames: state.frames.map(f => f.id === action.frameId ? { ...f, uploadedImage: null, imageStatus: action.status || "error" } : f) };
     case "UPLOAD_FRAME_IMAGE":
       return {
         ...state,
@@ -656,11 +670,10 @@ function parseShareHash() {
   }
 }
 
-// -- UI EVENT BUS (toasts + confirm modal) --------------------
+// -- UI EVENT BUS (confirm modal) ------------------------------
 // Module-level pub/sub so any code path — components, async
-// handlers, event listeners — can call toast(...) or confirm(...)
-// without threading context through every prop. UIProvider mounts a
-// single subscriber that renders the toast stack + confirm modal.
+// handlers, event listeners — can call confirm(...) without threading
+// context through every prop. Toasts are handled by coss toastManager.
 
 const uiBus = {
   listeners: { toast: [], confirm: [] },
@@ -739,7 +752,15 @@ export function log(level, message, meta) {
 }
 
 export function toast(message, opts = {}) {
-  uiBus.emit("toast", { message, ...opts });
+  const type = opts.kind || opts.type || "success";
+  toastManager.add({
+    id: opts.id,
+    title: opts.title || message,
+    description: opts.description,
+    type,
+    timeout: opts.ttl || (type === "error" ? 6000 : 3500),
+    priority: type === "error" ? "high" : "low",
+  });
 }
 export function uiConfirm(opts = {}) {
   return new Promise(resolve => {
@@ -748,18 +769,9 @@ export function uiConfirm(opts = {}) {
 }
 
 function UIProvider({ children }) {
-  const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
-  const idRef = useRef(0);
 
   useEffect(() => {
-    const offToast = uiBus.on("toast", (payload) => {
-      const id = ++idRef.current;
-      const kind = payload.kind || "success";
-      const ttl = payload.ttl || (kind === "error" ? 6000 : 3500);
-      setToasts(prev => [...prev, { id, message: payload.message, kind }]);
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl);
-    });
     const offConfirm = uiBus.on("confirm", (payload) => {
       setConfirmState({
         title: payload.title || "Are you sure?",
@@ -770,7 +782,7 @@ function UIProvider({ children }) {
         resolve: payload.resolve,
       });
     });
-    return () => { offToast(); offConfirm(); };
+    return () => { offConfirm(); };
   }, []);
 
   const handleConfirmResolve = (v) => {
@@ -781,38 +793,6 @@ function UIProvider({ children }) {
   return (
     <>{/* fragment wrapper, no context */}
       {children}
-      {/* Toast stack — top-right, fade in/out, stacks newest at top */}
-      {toasts.length > 0 && (
-        <div style={{
-          position: "fixed", top: 56, right: 16, zIndex: 10000,
-          display: "flex", flexDirection: "column", gap: 8,
-          pointerEvents: "none",
-        }}>
-          {toasts.slice().reverse().map(t => {
-            const colors = {
-              success: { border: "rgba(124,252,156,0.4)", dot: "#7CFC9C" },
-              error:   { border: "rgba(255,138,128,0.4)", dot: "#FF8A80" },
-              info:    { border: "rgba(91,178,255,0.4)",  dot: "#7EB9FF" },
-            }[t.kind] || { border: "var(--warm-12)", dot: "var(--warm-40)" };
-            return (
-              <div key={t.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 14px", borderRadius: 8,
-                background: "var(--surface-solid)",
-                border: `1px solid ${colors.border}`,
-                boxShadow: "0 8px 28px rgba(0,0,0,0.32)",
-                fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-                color: "var(--warm)",
-                maxWidth: 360, animation: "fadeIn 0.18s ease",
-                pointerEvents: "auto",
-              }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: colors.dot, flexShrink: 0 }} />
-                <span>{t.message}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
       {/* Confirm modal — centered overlay, click backdrop to cancel. */}
       {confirmState && (
         <div onClick={() => handleConfirmResolve(false)} style={{
@@ -1952,63 +1932,174 @@ function AspectIcon({ ratio, size = 18, color = "var(--warm-30)" }) {
   );
 }
 
-function AspectDropdown({ label, value, options, onChange }) {
+function RootMenuDropdown({ label, value, options, onChange, renderIcon }) {
+  const selected = options.find(o => o.value === value);
+  const selectedLabel = selected?.label || value;
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      {label && <label style={lbl}>{label}</label>}
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full justify-between dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_1px_2px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.045)] dark:hover:bg-[#181818] dark:data-pressed:bg-[#181818]"
+            />
+          }
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            {renderIcon?.(value, "currentColor", 18)}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedLabel}</span>
+          </span>
+          <SectionIcon name="chevron-down" size={14} color="currentColor" />
+        </MenuTrigger>
+        <MenuPopup
+          align="start"
+          className="w-[var(--anchor-width)] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+        >
+          <MenuRadioGroup value={value} onValueChange={onChange}>
+            {options.map(o => (
+              <MenuRadioItem
+                key={o.value}
+                value={o.value}
+                closeOnClick
+                label={o.label}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                  {renderIcon?.(o.value, "currentColor", 20)}
+                  <span>{o.label}</span>
+                </span>
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        </MenuPopup>
+      </Menu>
+    </div>
+  );
+}
+
+function ClientFolderInput({ value, folders, onChange }) {
+  const inputRef = useRef(null);
+  const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const query = value.trim().toLowerCase();
+  const visibleFolders = query
+    ? folders.filter(folder => folder.toLowerCase().includes(query))
+    : folders;
 
   useEffect(() => {
     if (!open) return;
-    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const close = (event) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
+    };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  const selected = options.find(o => o.value === value);
-
   return (
-    <div style={{ marginBottom: 14 }} ref={ref}>
-      {label && <label style={lbl}>{label}</label>}
-      <div style={{ position: "relative" }}>
-        <div onClick={() => setOpen(!open)} style={{
-          width: "100%", background: "var(--warm-06)", border: "1px solid var(--warm-08)",
-          borderRadius: 8, padding: "8px 36px 8px 10px", color: "var(--warm)", fontSize: 13,
-          fontWeight: 500, fontFamily: "var(--f)", cursor: "pointer", display: "flex",
-          alignItems: "center", gap: 8, boxSizing: "border-box", transition: "border-color 0.2s ease",
-        }}>
-          <AspectIcon ratio={value} size={18} color="var(--warm-30)" />
-          <span>{selected?.label || value}</span>
+    <div ref={rootRef} style={{ position: "relative" }}>
+      <Input
+        ref={inputRef}
+        type="text"
+        size="lg"
+        value={value}
+        onFocus={() => setOpen(true)}
+        onChange={e => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        className="[&_[data-slot=input]]:pr-9"
+        placeholder="Pick or type — auto-creates a folder"
+      />
+      <button
+        type="button"
+        aria-label="Open client folder list"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          inputRef.current?.focus();
+          setOpen(current => !current);
+        }}
+        style={{
+          position: "absolute",
+          right: 8,
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: 22,
+          height: 22,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: 0,
+          borderRadius: 6,
+          background: "transparent",
+          color: "var(--warm-35)",
+          cursor: "pointer",
+        }}
+      >
+        <SectionIcon name="chevron-down" size={14} color="currentColor" />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Client folders"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: "calc(100% + 6px)",
+            zIndex: 300,
+            maxHeight: 190,
+            overflowY: "auto",
+            padding: 4,
+            background: "#151517",
+            border: "1px solid var(--warm-08)",
+            borderRadius: 8,
+            boxShadow: "0 12px 28px rgba(0,0,0,0.55)",
+          }}
+        >
+          {visibleFolders.length ? visibleFolders.map(folder => (
+            <button
+              key={folder}
+              type="button"
+              role="option"
+              aria-selected={folder === value}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(folder);
+                setOpen(false);
+              }}
+              style={{
+                width: "100%",
+                display: "block",
+                border: 0,
+                borderRadius: 6,
+                background: folder === value ? "rgba(255,255,255,0.08)" : "transparent",
+                color: "var(--warm)",
+                cursor: "pointer",
+                fontFamily: "var(--f)",
+                fontSize: 12,
+                fontWeight: 500,
+                lineHeight: 1.2,
+                padding: "9px 10px",
+                textAlign: "left",
+              }}
+            >
+              {folder}
+            </button>
+          )) : (
+            <div style={{
+              color: "var(--warm-35)",
+              fontFamily: "var(--f)",
+              fontSize: 12,
+              padding: "9px 10px",
+            }}>
+              No matching client folders
+            </div>
+          )}
         </div>
-        <div style={{
-          position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-          pointerEvents: "none", display: "flex", alignItems: "center",
-        }}>
-          <SectionIcon name="chevron-down" size={14} color="var(--warm-35)" />
-        </div>
-        {open && (
-          <div style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
-            background: "#151517", border: "1px solid var(--warm-08)", borderRadius: 8,
-            overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-          }}>
-            {options.map(o => (
-              <div key={o.value} onClick={() => { onChange(o.value); setOpen(false); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: "9px 12px",
-                  cursor: "pointer", fontFamily: "var(--f)", fontSize: 12, fontWeight: 400,
-                  color: o.value === value ? "#fff" : "var(--warm-35)",
-                  background: o.value === value ? "rgba(255,255,255,0.06)" : "transparent",
-                  transition: "background 0.1s ease",
-                }}
-                onMouseEnter={e => { if (o.value !== value) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
-                onMouseLeave={e => { if (o.value !== value) e.currentTarget.style.background = "transparent"; }}
-              >
-                <AspectIcon ratio={o.value} size={20} color={o.value === value ? "#fff" : "var(--warm-25)"} />
-                <span>{o.label}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -2345,9 +2436,21 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
   const prods = data.products.filter(p => frame.productIds.includes(p.id));
   const talents = data.talent.filter(t => frame.talentIds.includes(t.id));
   const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
+  const handleImageError = () => {
+    dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
+  };
+
+  const frameCardClassName = [
+    "overflow-hidden rounded-lg transition-colors",
+    selected ? "ring-1 ring-ring/50" : "",
+    highlighted ? "ring-1 ring-ring/30" : "",
+    hovered ? "border-ring/40" : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <motion.div
+    <Card
+      render={<motion.div />}
+      className={frameCardClassName}
       layout
       layoutId={`frame-${frame.id}`}
       draggable onDragStart={e => onDragStart(e, frame.id)}
@@ -2359,15 +2462,9 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
       whileTap={isDragSrc ? undefined : { scale: TAP_SCALE }}
       transition={TAP_SPRING}
       style={{
-        borderRadius: 8, overflow: "hidden",
-        border: selected ? "1px solid var(--warm-20)"
-          : highlighted ? "1px solid var(--warm-12)"
-          : hovered ? "1px solid var(--warm-08)" : "1px solid var(--warm-04)",
         cursor: isDragSrc ? "grabbing" : "pointer",
         opacity: isDragSrc ? 0.15 : 1,
-        boxShadow: selected ? "0 2px 20px rgba(0,0,0,0.08)" : hovered ? "0 4px 18px rgba(0,0,0,0.06)" : "none",
         animation: highlighted ? "highlightPulse 1.5s ease" : "none",
-        background: "var(--card-bg)",
       }}
     >
       {/* Header bar */}
@@ -2387,7 +2484,7 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
           an image IS loaded, only the image shows — no overlay, no
           film-strip bars (Logan asked to remove them). */}
       <div style={{ aspectRatio: aspectCSS, background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length], position: "relative", overflow: "hidden" }}>
-        {frame.uploadedImage && <img src={frame.uploadedImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+        {frame.uploadedImage && <img src={frame.uploadedImage} alt="" onError={handleImageError} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
         {!frame.uploadedImage && (
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
         )}
@@ -2443,7 +2540,7 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
           {renderMentions(frame.brief, data)}
         </div>
       </div>
-    </motion.div>
+    </Card>
   );
 }
 
@@ -2555,6 +2652,9 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const loc = data.locations.find(l => l.id === frame.locationId);
   const hasImage = !!frame.uploadedImage;
   const cameraIsDefault = isCameraDefault(frame);
+  const handleImageError = () => {
+    dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
+  };
 
   const handleGenerate = () => {
     setGenLoading(true);
@@ -2621,7 +2721,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
           }}
         >
           <div style={{ aspectRatio: aspCSS, background: frame.uploadedImage ? "transparent" : FILM[fIdx >= 0 ? fIdx % FILM.length : 0], position: "relative", overflow: "hidden" }}>
-            {frame.uploadedImage && <img src={frame.uploadedImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+            {frame.uploadedImage && <img src={frame.uploadedImage} alt="" onError={handleImageError} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
             {!frame.uploadedImage && (
               <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
             )}
@@ -2706,7 +2806,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
 
         {/* === FIELDS (right column in portrait, below in landscape) === */}
         <div>
-        <div style={{ background: "var(--card-bg)", border: "1px solid var(--warm-04)", borderRadius: 10, padding: "20px 24px", marginBottom: 20 }}>
+        <Card className="mb-5 rounded-xl px-6 py-5">
           {/* Description (renamed from Brief) */}
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Description</label>
@@ -2802,7 +2902,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
               <CameraControlStrip frame={frame} dispatch={dispatch} />
             </div>
           </CollapsibleSection>
-        </div>
+        </Card>
 
         {/* Delete frame */}
         <ConfirmAction label="Delete Frame" onConfirm={() => onDeleteFrame(frame.id)} variant="danger" style={{ padding: "6px 14px", fontSize: 11 }} />
@@ -2810,50 +2910,6 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
         </div>{/* close portrait grid wrapper */}
       </Reveal>
     </div>
-  );
-}
-
-// -- ASSET TAB BUTTON (left-rail vertical row) -----------------
-
-function AssetTabButton({ tab, isActive, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  const bg = isActive ? "var(--warm-08)" : hovered ? "var(--warm-04)" : "transparent";
-  const accent = isActive ? "var(--warm)" : hovered ? "var(--warm-50)" : "var(--warm-30)";
-  const iconColor = isActive ? "var(--warm)" : hovered ? "var(--warm-40)" : "var(--warm-25)";
-  return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 10,
-        width: "100%", padding: "10px 12px",
-        borderRadius: 8, cursor: "pointer",
-        outline: "none", border: "none",
-        fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
-        background: bg,
-        color: accent,
-        textAlign: "left",
-        position: "relative",
-        transition: "background 0.15s ease, color 0.15s ease",
-      }}
-    >
-      {/* Left edge accent on active */}
-      {isActive && (
-        <div style={{
-          position: "absolute", left: 0, top: 6, bottom: 6, width: 2,
-          background: "var(--warm-40)", borderRadius: 1,
-        }} />
-      )}
-      <SectionIcon name={tab.icon} size={14} color={iconColor} />
-      <span style={{ flex: 1 }}>{tab.label}</span>
-      <span style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        minWidth: 20, height: 18, padding: "0 5px", borderRadius: 9,
-        background: isActive ? "var(--warm-12)" : "var(--warm-06)",
-        fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-        color: isActive ? "var(--warm-50)" : "var(--warm-25)",
-        flexShrink: 0, lineHeight: 1,
-      }}>{tab.count}</span>
-    </button>
   );
 }
 
@@ -2989,32 +3045,34 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
           <div>
             <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Brand name</label>
-            <input
+            <Input
+              type="text"
+              size="lg"
               value={brand?.name || ""}
               onChange={e => dispatch({ type: "UPDATE_BRAND", field: "name", value: e.target.value })}
               placeholder="Brand name"
-              style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, padding: "7px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm)", outline: "none" }}
             />
           </div>
           <div>
             <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>URL</label>
-            <input
+            <Input
+              type="text"
+              size="lg"
               value={brand?.url || ""}
               onChange={e => dispatch({ type: "UPDATE_BRAND", field: "url", value: e.target.value })}
               placeholder="nike.com"
-              style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 400, padding: "7px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm)", outline: "none" }}
             />
           </div>
         </div>
       </div>
       <div>
         <label style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Guidelines</label>
-        <textarea
+        <Textarea
+          size="lg"
           value={brand?.guidelines || ""}
           onChange={e => dispatch({ type: "UPDATE_BRAND", field: "guidelines", value: e.target.value })}
           placeholder="Brand voice, tone, dos and don'ts…"
           rows={3}
-          style={{ width: "100%", fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, lineHeight: 1.6, padding: "8px 10px", border: "1px solid var(--warm-08)", borderRadius: 6, background: "var(--warm-04)", color: "var(--warm-40)", outline: "none", resize: "vertical" }}
         />
       </div>
     </div>
@@ -4710,71 +4768,28 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
 // right. Brand Info opens by default. Clicking a tab switches the
 // right pane (no toggle-to-close — something is always selected).
 
-function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist, onFocusAsset }) {
+function AssetTabBar({ data, dispatch, activeTab, onAIAssist }) {
   const [expanded, setExpanded] = useState(null);
-
-  const tabs = [
-    { key: "brand", label: "Brand", icon: "link", count: data.brand?.logo ? 1 : 0 },
-    { key: "talent", label: "Characters", icon: "users", count: data.talent.length },
-    { key: "products", label: "Elements", icon: "box", count: data.products.length },
-    { key: "locations", label: "Locations", icon: "map", count: data.locations.length },
-    { key: "mood", label: "Mood", icon: "image", count: (data.moodBoard || []).length },
-  ];
-
   const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
 
   return (
     <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16 }}>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "200px 1fr",
-        gap: 20,
-        // Dynamic height: never below 220 (so a near-empty Brand tab
-        // still looks intentional) and never above 800 (so a packed
-        // Characters tab doesn't push the storyboard off-screen).
-        // The right pane scrolls when content exceeds the cap.
+      <Card className="rounded-xl p-5" style={{
+        background: "#141414",
         minHeight: 220,
         maxHeight: 800,
-        borderRadius: 12,
-        background: "var(--warm-04)",
-        border: "1px solid var(--warm-06)",
-        padding: 12,
+        overflowY: "auto",
       }}>
-        {/* LEFT RAIL — vertical tab stack */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {tabs.map(tab => (
-            <AssetTabButton
-              key={tab.key}
-              tab={tab}
-              isActive={activeTab === tab.key}
-              onClick={() => onToggleTab(tab.key)}
-            />
-          ))}
-        </div>
-
-        {/* RIGHT PANE — selected tab content. Own overflow so the left
-            rail stays put when the right side scrolls. minHeight:0 lets
-            the flex/grid child actually constrain its own height
-            instead of growing past the cap. */}
-        <div style={{
-          borderLeft: "1px solid var(--warm-06)",
-          paddingLeft: 20,
-          minWidth: 0,
-          minHeight: 0,
-          overflowY: "auto",
-        }}>
-          <AssetExpandedPanel
-            activeTab={activeTab}
-            data={data}
-            dispatch={dispatch}
-            expanded={expanded}
-            setExpanded={setExpanded}
-            typeKey={typeKey}
-            onAIAssist={onAIAssist}
-            onFocusAsset={onFocusAsset}
-          />
-        </div>
-      </div>
+        <AssetExpandedPanel
+          activeTab={activeTab}
+          data={data}
+          dispatch={dispatch}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          typeKey={typeKey}
+          onAIAssist={onAIAssist}
+        />
+      </Card>
     </div>
   );
 }
@@ -4786,8 +4801,6 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
   const [dragId, setDragId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
   const didDrag = useRef(false);
-  const [brandHovered, setBrandHovered] = useState(false);
-
   const dragRef = useRef({ id: null, targetPos: null });
   const dragGhostRef = useRef(null);
 
@@ -4889,36 +4902,18 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
               </div>
             </div>
             <div style={{ paddingTop: 6 }}>
-              <span
-                onMouseEnter={() => setBrandHovered(true)}
-                onMouseLeave={() => setBrandHovered(false)}
-                style={{
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-                  color: brandHovered ? "var(--warm-40)" : "var(--warm-25)",
-                  letterSpacing: "0.12em", textTransform: "uppercase",
-                  padding: "5px 12px", borderRadius: 6,
-                  background: brandHovered ? "var(--warm-06)" : "var(--warm-04)",
-                  border: brandHovered ? "1px solid var(--warm-10)" : "1px solid var(--warm-06)",
-                  cursor: "pointer", transition: "all 0.15s ease",
-                }}
-              >{data.meta.client}</span>
+              <EditBriefDialog
+                value={data.meta.treatment || ""}
+                onUpdateMeta={onUpdateMeta}
+                data={data}
+                onRunRegeneration={onRunRegeneration}
+              />
             </div>
           </div>
 
-          {/* Treatment / Brief — squished preview in display mode (a few
-              lines fading out so a long brief doesn't dominate the page),
-              expands to fit content up to 600px when clicked into edit. */}
-          <BriefPanel
-            value={data.meta.treatment || ""}
-            onUpdateMeta={onUpdateMeta}
-            data={data}
-            dispatch={dispatch}
-            onRunRegeneration={onRunRegeneration}
-          />
-
           {/* Asset Tab Bar */}
           <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
-            onToggleTab={onToggleAssetTab} onAIAssist={onAIAssist} onFocusAsset={onFocusAsset} />
+            onAIAssist={onAIAssist} />
 
           {/* Frame Grid */}
           {(() => {
@@ -5227,11 +5222,14 @@ function AssetCard({ item, category, data, dispatch, isExpanded, onToggle, onAIA
     }, 1000);
   };
 
+  const assetCardClassName = [
+    "overflow-hidden rounded-xl transition-colors",
+    isComplete ? "ring-1 ring-ring/30" : "",
+    isDraft ? "border-dashed" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <div style={{
-      borderRadius: 10, overflow: "hidden", transition: "all 0.2s ease",
-      border: isComplete ? "1px solid var(--warm-10)" : isDraft ? "1px dashed var(--warm-08)" : "1px solid var(--warm-06)",
-    }}>
+    <Card className={assetCardClassName}>
       {/* Collapsed header */}
       <div onClick={onToggle} style={{
         display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
@@ -5447,7 +5445,7 @@ function AssetCard({ item, category, data, dispatch, isExpanded, onToggle, onAIA
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -5893,35 +5891,30 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
           borderRadius: 14, padding: "3% 5%", marginBottom: "2%",
         }}>
           <div style={{ marginBottom: 20 }}>
-            <label style={lbl}>Project</label>
-            <input value={meta.title} onChange={e => setMeta(m => ({ ...m, title: e.target.value }))} style={inp} />
+            <label style={lbl}>Storyboard Title</label>
+            <Input type="text" size="lg" value={meta.title} onChange={e => setMeta(m => ({ ...m, title: e.target.value }))} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
             <div>
-              <label style={lbl}>Client</label>
-              <input
+              <label style={lbl}>Client Folder</label>
+              <ClientFolderInput
                 value={meta.client}
-                onChange={e => setMeta(m => ({ ...m, client: e.target.value }))}
-                list="ww-client-folders"
-                placeholder="Pick or type — auto-creates a folder"
-                style={inp}
+                folders={folders}
+                onChange={client => setMeta(m => ({ ...m, client }))}
               />
-              <datalist id="ww-client-folders">
-                {folders.map(f => <option key={f} value={f} />)}
-              </datalist>
             </div>
-            <ChevronDropdown
+            <RootMenuDropdown
               label="Length"
               value={meta.format}
               options={BRIEF_LENGTHS.map(s => ({ value: s.replace(/s$/, ""), label: `:${s.replace(/s$/, "")}` }))}
               onChange={v => setMeta(m => ({ ...m, format: v }))}
-              style={{}}
             />
-            <AspectDropdown
+            <RootMenuDropdown
               label="Aspect Ratio"
               value={meta.aspect}
               options={BRIEF_RATIOS.map(r => ({ value: r.id, label: r.label }))}
               onChange={v => setMeta(m => ({ ...m, aspect: v }))}
+              renderIcon={(ratio, color, size) => <AspectIcon ratio={ratio} color={color} size={size} />}
             />
           </div>
           <div style={{ marginBottom: 20 }}>
@@ -5966,9 +5959,10 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
                 </span>
               </button>
             </div>
-            <textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
+            <Textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
+              size="lg"
               disabled={improving}
-              style={{ ...inp, minHeight: 120, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
+              style={{ minHeight: 120, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
           </div>
 
           {/* File upload zone */}
@@ -6024,21 +6018,23 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
       </Reveal>
 
       <Reveal delay={320}>
-        <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
-          <SectionIcon name="sparkle" size={15} color="rgba(255,255,255,0.8)" />
-          {generating ? " Generating brief…" : " Generate Storyboard"}
-        </LiquidGlassButton>
-        {error ? (
-          <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
-            {error}
-          </p>
-        ) : (
-          <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
-            {generating
-              ? "Talking to Gemini — characters, locations, and a 9-frame storyboard incoming. Usually ~10–20 seconds."
-              : "Creates talent, locations, products, and a complete shot sequence"}
-          </p>
-        )}
+        <div className="mt-4">
+          <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
+            <SectionIcon name="sparkle" size={15} color="rgba(255,255,255,0.8)" />
+            {generating ? " Generating brief…" : " Generate Storyboard"}
+          </LiquidGlassButton>
+          {error ? (
+            <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
+              {error}
+            </p>
+          ) : (
+            <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
+              {generating
+                ? "Talking to Gemini — characters, locations, and a 9-frame storyboard incoming. Usually ~10–20 seconds."
+                : "Creates talent, locations, products, and a complete shot sequence"}
+            </p>
+          )}
+        </div>
       </Reveal>
     </div>
     </div>
@@ -6101,6 +6097,8 @@ export default function WorkshopV2() {
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
   const [chatBusy, setChatBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -6114,6 +6112,11 @@ export default function WorkshopV2() {
   const isDark = theme === "dark";
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [theme, isDark]);
 
   // Hydrate the active project's full data from IndexedDB on mount.
   // localStorage's bootstrap gave us a lightweight (data-URL-stripped)
@@ -6269,6 +6272,16 @@ export default function WorkshopV2() {
     setProjects(listProjects());
   }
 
+  function handleBackToProjects() {
+    if (activeProjectId && built) {
+      saveProject(activeProjectId, data);
+    }
+    setBuilt(false);
+    setProductionFrameId(null);
+    setSelectedFrameId(null);
+    setProjects(listProjects());
+  }
+
   function handleDeleteProject(projectId) {
     // If we're deleting the active project, clear pending auto-saves
     // FIRST so a ceiling timeout doesn't fire seconds later and recreate
@@ -6306,14 +6319,21 @@ export default function WorkshopV2() {
     setFolders(listFolders());
     toast(folder ? `Moved to "${folder}"` : "Removed from folder", { kind: "info", ttl: 2500 });
   }
-  async function handleNewFolder() {
-    const name = window.prompt("Client name? (creates a folder)");
+  function handleNewFolder() {
+    setNewFolderName("");
+    setNewFolderOpen(true);
+  }
+  function handleCreateFolderSubmit(e) {
+    e.preventDefault();
+    const name = newFolderName.trim();
     if (!name) return;
     const created = createFolder(name);
     if (created) {
       setFolders(listFolders());
       toast(`Created client folder "${created}"`, { kind: "success", ttl: 2500 });
     }
+    setNewFolderOpen(false);
+    setNewFolderName("");
   }
   async function handleDeleteFolder(name) {
     const ok = await uiConfirm({
@@ -7256,7 +7276,7 @@ export default function WorkshopV2() {
     // Toggle the appropriate asset tab
     const typeMap = { talent: "talent", product: "products", location: "locations" };
     const tabKey = typeMap[asset._type] || "talent";
-    setAssetTabOpen(prev => prev === tabKey ? null : tabKey);
+    setAssetTabOpen(tabKey);
   }, []);
 
   const handleAssetAIAssist = useCallback((item, category) => {
@@ -7301,7 +7321,7 @@ export default function WorkshopV2() {
 
   return (
     <UIProvider>
-    <div style={{
+    <div className={isDark ? "dark" : undefined} style={{
       ...getThemeVars(isDark),
       background: isDark
         ? "radial-gradient(ellipse 80% 60% at 50% 40%, #111112 0%, #0A0A0A 100%)"
@@ -7312,7 +7332,7 @@ export default function WorkshopV2() {
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
       <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; margin: 0; }
         ::selection { background: var(--warm-10); color: var(--warm); }
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -7374,7 +7394,147 @@ export default function WorkshopV2() {
         const { brief, images } = briefFromV2Data(data);
         return <OnePager brief={brief} images={images} onClose={() => setExportOpen(false)} />;
       })()}
+      {newFolderOpen && (
+        <div
+          onClick={() => setNewFolderOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 11000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            background: "rgba(0,0,0,0.72)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
+          }}
+        >
+          <form
+            onSubmit={handleCreateFolderSubmit}
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "min(100%, 420px)",
+              padding: 24,
+              borderRadius: 12,
+              background: "#1A1A1D",
+              border: "1px solid rgba(255,255,255,0.18)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,0,0,0.4)",
+              animation: "fadeIn 0.18s ease",
+            }}
+          >
+            <div style={{
+              fontFamily: "var(--f)",
+              fontSize: 17,
+              fontWeight: 600,
+              color: "#fff",
+              marginBottom: 8,
+            }}>
+              New client folder
+            </div>
+            <label style={{
+              display: "block",
+              fontFamily: "var(--f)",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.62)",
+              marginBottom: 8,
+            }}>
+              Client name
+            </label>
+            <input
+              autoFocus
+              value={newFolderName}
+              onChange={e => setNewFolderName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Escape") setNewFolderOpen(false);
+              }}
+              style={{
+                width: "100%",
+                height: 42,
+                padding: "0 12px",
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.07)",
+                border: "1px solid rgba(255,255,255,0.16)",
+                color: "#fff",
+                fontFamily: "var(--f)",
+                fontSize: 13,
+                fontWeight: 500,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
+              <button
+                type="button"
+                onClick={() => setNewFolderOpen(false)}
+                style={{
+                  fontFamily: "var(--f)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  padding: "9px 18px",
+                  borderRadius: 7,
+                  cursor: "pointer",
+                  background: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  color: "#fff",
+                  outline: "none",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!newFolderName.trim()}
+                style={{
+                  fontFamily: "var(--f)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: "9px 18px",
+                  borderRadius: 7,
+                  cursor: newFolderName.trim() ? "pointer" : "not-allowed",
+                  background: newFolderName.trim() ? "#fff" : "rgba(255,255,255,0.10)",
+                  border: newFolderName.trim() ? "1px solid #fff" : "1px solid rgba(255,255,255,0.16)",
+                  color: newFolderName.trim() ? "#111" : "rgba(255,255,255,0.42)",
+                  outline: "none",
+                }}
+              >
+                Create folder
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
+      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden" }}>
+        {/* Left: project sidebar (full-height multi-project nav) */}
+        <ProjectSidebar
+          mode={built && activeProjectId ? "project" : "root"}
+          projects={projects}
+          folders={folders}
+          activeProjectId={activeProjectId}
+          activeProjectTitle={data.meta?.title || "Untitled"}
+          activeAssetTab={assetTabOpen}
+          onAssetTabChange={handleToggleAssetTab}
+          onBackToProjects={handleBackToProjects}
+          assetCounts={{
+            brand: data.brand?.logo ? 1 : 0,
+            talent: data.talent.length,
+            products: data.products.length,
+            locations: data.locations.length,
+            mood: (data.moodBoard || []).length,
+          }}
+          onSwitch={switchToProject}
+          onNew={startNewProject}
+          onHome={handleBackToProjects}
+          onDelete={handleDeleteProject}
+          onRename={handleRenameProject}
+          onMoveToFolder={handleMoveToFolder}
+          onNewFolder={handleNewFolder}
+          onDeleteFolder={handleDeleteFolder}
+        />
+
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {/* Read-only banner — surfaces when the project was loaded from
           a #share=<base64> URL hash. Save-as-copy clones the data into
           a fresh local project, switches to it, and strips the hash. */}
@@ -7410,7 +7570,7 @@ export default function WorkshopV2() {
 
       {/* Nav */}
       <nav style={{
-        position: "sticky", top: 0, zIndex: 100, height: 48,
+        position: "relative", zIndex: 100, height: 64, flexShrink: 0,
         display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
         padding: "0 24px",
         borderBottom: "1px solid var(--warm-06)", background: "var(--surface)",
@@ -7418,15 +7578,7 @@ export default function WorkshopV2() {
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div onClick={() => { setBuilt(false); setProductionFrameId(null); setSelectedFrameId(null); }}
-            style={{ cursor: "pointer", display: "flex", alignItems: "center", opacity: 0.9, transition: "opacity 0.15s ease" }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "0.9"}
-            title="Back to home"
-          ><WLogo color="var(--warm)" size={16} /></div>
           {built && <>
-            <div style={{ width: 1, height: 16, background: "var(--warm-08)" }} />
-            <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 500, color: "var(--warm)" }}>{data.meta.title}</span>
             <AspectRatioControl
               value={data.meta.aspect}
               onChange={(newRatio) => handleAspectChange(newRatio)}
@@ -7457,9 +7609,9 @@ export default function WorkshopV2() {
 
             <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
 
-            <PremiumButton variant="secondary" onClick={() => setExportOpen(true)} style={{ padding: "5px 14px", fontSize: 11, gap: 5 }}>
-              <SectionIcon name="download" size={12} color="var(--warm-50)" /> Export
-            </PremiumButton>
+            <Button variant="outline" onClick={() => setExportOpen(true)}>
+              <SectionIcon name="download" color="currentColor" /> Export
+            </Button>
 
             <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
 
@@ -7486,20 +7638,7 @@ export default function WorkshopV2() {
       </nav>
 
       {/* Content area */}
-      <div style={{ display: "flex", height: "calc(100vh - 48px)" }}>
-        {/* Left: project sidebar (always visible — multi-project nav) */}
-        <ProjectSidebar
-          projects={projects}
-          folders={folders}
-          activeProjectId={activeProjectId}
-          onSwitch={switchToProject}
-          onNew={startNewProject}
-          onDelete={handleDeleteProject}
-          onRename={handleRenameProject}
-          onMoveToFolder={handleMoveToFolder}
-          onNewFolder={handleNewFolder}
-          onDeleteFolder={handleDeleteFolder}
-        />
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* Main */}
         <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
           {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} folders={folders} />}
@@ -7555,6 +7694,8 @@ export default function WorkshopV2() {
 
         {/* Floating AI Chat tab — right edge when sidebar closed */}
         {built && <AIChatTab sidebarOpen={sidebarOpen} onClick={() => setSidebarOpen(true)} />}
+      </div>
+        </div>
       </div>
     </div>
     </UIProvider>

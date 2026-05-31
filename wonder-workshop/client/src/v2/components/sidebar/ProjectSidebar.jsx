@@ -1,4 +1,13 @@
 import { useState, useEffect, useRef } from "react";
+import { ChevronDownIcon, FilmIcon, FolderPlusIcon, Trash2Icon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Group, GroupSeparator } from "@/components/ui/group";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import { SectionIcon, WLogo, timeAgo, uiConfirm, toast } from "../../Workshop.jsx";
 
 // -- PROJECT SIDEBAR (left rail, multi-project nav) -------------
@@ -7,7 +16,33 @@ import { SectionIcon, WLogo, timeAgo, uiConfirm, toast } from "../../Workshop.js
 // to switch; the current project saves automatically before the
 // switch so no work is lost.
 
-export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwitch, onNew, onDelete, onRename, onMoveToFolder, onNewFolder, onDeleteFolder }) {
+const PROJECT_SECTION_TABS = [
+  { key: "brand", label: "Brand", icon: "link" },
+  { key: "talent", label: "Characters", icon: "users" },
+  { key: "products", label: "Elements", icon: "box" },
+  { key: "locations", label: "Locations", icon: "map" },
+  { key: "mood", label: "Mood", icon: "image" },
+];
+
+export function ProjectSidebar({
+  projects,
+  folders = [],
+  activeProjectId,
+  onSwitch,
+  onNew,
+  onHome,
+  onDelete,
+  onRename,
+  onMoveToFolder,
+  onNewFolder,
+  onDeleteFolder,
+  mode = "root",
+  activeProjectTitle = "",
+  activeAssetTab = "brand",
+  onAssetTabChange,
+  onBackToProjects,
+  assetCounts = {},
+}) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -38,52 +73,199 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
     setRenameValue("");
   }
 
-  return (
-    <div style={{
-      width: 220, flexShrink: 0,
-      borderRight: "1px solid var(--warm-06)",
-      background: "var(--warm-04)",
-      display: "flex", flexDirection: "column",
-      height: "100%", overflow: "hidden",
-    }}>
-      <div style={{ padding: "16px 14px 10px" }}>
+  if (mode === "project") {
+    return (
+      <div style={{
+        width: 256, flexShrink: 0,
+        borderRight: "1px solid var(--warm-06)",
+        background: "rgba(0,0,0,0.72)",
+        display: "flex", flexDirection: "column",
+        height: "100vh", overflow: "hidden",
+      }}>
         <div style={{
-          display: "flex", alignItems: "center", gap: 6, marginBottom: 14,
+          height: 64,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "0 18px",
         }}>
-          <WLogo color="var(--warm-50)" size={16} />
-          <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, color: "var(--warm-50)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Workshop</span>
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={onNew} style={{
-            flex: 1,
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "8px 10px", borderRadius: 7, cursor: "pointer",
-            background: "var(--warm-06)", border: "1px solid var(--warm-10)",
-            color: "var(--warm)", outline: "none",
-            fontFamily: "var(--f)", fontSize: 12, fontWeight: 500,
-          }}>
-            <SectionIcon name="plus" size={12} color="var(--warm)" />
-            New project
-          </button>
           <button
-            onClick={onNewFolder}
-            title="New client folder"
+            type="button"
+            onClick={onBackToProjects || onHome}
+            title="Back to all projects"
+            aria-label="Back to all projects"
             style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "8px 10px", borderRadius: 7, cursor: "pointer",
-              background: "var(--warm-04)", border: "1px solid var(--warm-08)",
-              color: "var(--warm-40)", outline: "none",
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              color: "var(--warm-50)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              outline: "none",
+              flexShrink: 0,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6a1.5 1.5 0 0 1 1.06.44L8.5 4.5h4A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M12.5 4.5 7 10l5.5 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
+          <div
+            title={activeProjectTitle || "Untitled"}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontFamily: "var(--f)",
+              fontSize: 16,
+              fontWeight: 600,
+              color: "var(--warm-50)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {activeProjectTitle || "Untitled"}
+          </div>
         </div>
+
+        <nav aria-label="Project sections" style={{ padding: "22px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          {PROJECT_SECTION_TABS.map(tab => (
+            <ProjectSectionRow
+              key={tab.key}
+              tab={tab}
+              count={assetCounts[tab.key] ?? 0}
+              isActive={activeAssetTab === tab.key}
+              onClick={() => onAssetTabChange?.(tab.key)}
+            />
+          ))}
+        </nav>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      width: 256, flexShrink: 0,
+      borderRight: "1px solid var(--warm-06)",
+      background: "rgba(0,0,0,0.72)",
+      display: "flex", flexDirection: "column",
+      height: "100vh", overflow: "hidden",
+    }}>
+      <div style={{
+        height: 64,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 16px",
+      }}>
+        <button
+          aria-label="Wonder Workshop"
+          onClick={onHome}
+          title="Back to home"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+            background: "transparent",
+            border: "none",
+            color: "var(--warm)",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          <WLogo color="var(--warm-50)" size={24} />
+        </button>
+        <button
+          title="Collapse sidebar"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 7,
+            border: "1px solid var(--warm-15)",
+            background: "transparent",
+            color: "var(--warm-35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <rect x="3.25" y="2.75" width="9.5" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M6.25 3.25v9.5" stroke="currentColor" strokeWidth="1.4" opacity="0.65"/>
+          </svg>
+        </button>
+      </div>
+
+      <div style={{ padding: "18px 14px" }}>
+        <Group
+          aria-label="New storyboard actions"
+          className="w-full overflow-hidden rounded-[10px]"
+          style={{
+            background: "var(--warm-06)",
+            border: "1px solid var(--warm-08)",
+            boxShadow: "rgba(0, 0, 0, 0.42) 0px 1px 2px 0px, rgba(255, 255, 255, 0.045) 0px 1px 0px 0px inset",
+          }}
+        >
+          <Button
+            className="flex-1"
+            onClick={onNew}
+            size="lg"
+            style={{
+              background: "transparent",
+              border: "none",
+              boxShadow: "none",
+              color: "var(--warm)",
+            }}
+          >
+            <FilmIcon
+              aria-hidden="true"
+              className="size-4 opacity-100"
+              style={{ color: "var(--warm)", opacity: 1 }}
+            />
+            New Project
+          </Button>
+          <GroupSeparator style={{ background: "var(--warm-08)" }} />
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button
+                  aria-label="New storyboard options"
+                  size="icon-lg"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    boxShadow: "none",
+                    color: "var(--warm)",
+                  }}
+                />
+              }
+            >
+              <ChevronDownIcon
+                aria-hidden="true"
+                className="size-4 opacity-100"
+                style={{ color: "var(--warm)", opacity: 1 }}
+              />
+            </MenuTrigger>
+            <MenuPopup align="end">
+              <MenuItem closeOnClick onClick={() => onNewFolder?.()}>
+                <FolderPlusIcon aria-hidden="true" />
+                New client folder
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+        </Group>
       </div>
 
       <div style={{ padding: "0 14px 6px" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm-25)", letterSpacing: 0 }}>
           Projects · {projects.length}{folders.length ? ` · ${folders.length} client${folders.length === 1 ? "" : "s"}` : ""}
         </div>
       </div>
@@ -104,10 +286,11 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
               if (!byFolder.has(p.folder)) byFolder.set(p.folder, []);
               byFolder.get(p.folder).push(p);
             }
-            const renderRow = (p) => (
+            const renderRow = (p, isNested = false) => (
               <ProjectRow
                 key={p.id}
                 project={p}
+                isNested={isNested}
                 isActive={p.id === activeProjectId}
                 isRenaming={renamingId === p.id}
                 renameValue={renameValue}
@@ -147,11 +330,68 @@ export function ProjectSidebar({ projects, folders = [], activeProjectId, onSwit
   );
 }
 
+function ProjectSectionRow({ tab, count, isActive, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  const bg = isActive ? "var(--warm-08)" : hovered ? "var(--warm-04)" : "transparent";
+  const accent = isActive ? "var(--warm)" : hovered ? "var(--warm-50)" : "var(--warm-30)";
+  const iconColor = isActive ? "var(--warm)" : hovered ? "var(--warm-40)" : "var(--warm-25)";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        width: "100%",
+        padding: "12px 14px",
+        minHeight: 48,
+        borderRadius: 12,
+        cursor: "pointer",
+        outline: "none",
+        border: "none",
+        fontFamily: "var(--f)",
+        fontSize: 16,
+        fontWeight: isActive ? 600 : 500,
+        background: bg,
+        color: accent,
+        textAlign: "left",
+        transition: "background 0.15s ease, color 0.15s ease",
+      }}
+    >
+      <SectionIcon name={tab.icon} size={18} color={iconColor} />
+      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tab.label}</span>
+      <span style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 24,
+        height: 24,
+        padding: "0 7px",
+        borderRadius: 12,
+        background: isActive ? "var(--warm-12)" : "var(--warm-06)",
+        fontFamily: "var(--f)",
+        fontSize: 12,
+        fontWeight: 600,
+        color: isActive ? "var(--warm-50)" : "var(--warm-25)",
+        flexShrink: 0,
+        lineHeight: 1,
+      }}>{count}</span>
+    </button>
+  );
+}
+
 // Single project row — extracted so the same render works inside
 // folder groups and the top-level unfiled list. Draggable: dragging
 // onto a FolderDropZone or an Unfiled zone reassigns p.folder via
 // onMoveToFolder.
-function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInputRef, setRenameValue, setRenamingId, commitRename, menuOpenId, setMenuOpenId, folders, onSwitch, onDelete, onMoveToFolder }) {
+function ProjectRow({ project: p, isNested = false, isActive, isRenaming, renameValue, renameInputRef, setRenameValue, setRenamingId, commitRename, menuOpenId, setMenuOpenId, folders, onSwitch, onDelete, onMoveToFolder }) {
+  const [hovered, setHovered] = useState(false);
+  const moreVisible = hovered || menuOpenId === p.id;
+
   return (
     <div
       draggable={!isRenaming}
@@ -162,14 +402,16 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
       }}
       style={{
         display: "flex", alignItems: "center",
-        padding: "6px 8px", borderRadius: 6, marginBottom: 2,
+        padding: isNested ? "6px 8px 6px 24px" : "6px 8px", borderRadius: 6, marginBottom: 2,
         background: isActive ? "var(--warm-08)" : "transparent",
         cursor: isRenaming ? "default" : "grab",
         position: "relative",
       }}
     onClick={() => !isRenaming && onSwitch(p.id)}
-    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--warm-06)"; }}
-    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+    onMouseEnter={e => { setHovered(true); if (!isActive) e.currentTarget.style.background = "var(--warm-06)"; }}
+    onMouseLeave={e => { setHovered(false); if (!isActive) e.currentTarget.style.background = "transparent"; }}
+    onFocusCapture={() => setHovered(true)}
+    onBlurCapture={e => { if (!e.currentTarget.contains(e.relatedTarget)) setHovered(false); }}
     >
       <div style={{
         width: 6, height: 6, borderRadius: "50%",
@@ -199,10 +441,10 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
         <span
           onDoubleClick={e => { e.stopPropagation(); setRenamingId(p.id); setRenameValue(p.name); }}
           title={`Double-click to rename · Updated ${timeAgo(p.updatedAt)}`}
+          className="text-white/90"
           style={{
             flex: 1, fontFamily: "var(--f)", fontSize: 12,
-            fontWeight: isActive ? 600 : 500,
-            color: isActive ? "var(--warm)" : "var(--warm-50)",
+            fontWeight: 500,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}
         >{p.name || "Untitled"}</span>
@@ -217,6 +459,9 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
             cursor: "pointer", outline: "none",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 16, lineHeight: 1, flexShrink: 0,
+            opacity: moreVisible ? 1 : 0,
+            pointerEvents: moreVisible ? "auto" : "none",
+            transition: "opacity 0.12s ease",
           }}
         >⋯</button>
       )}
@@ -230,7 +475,7 @@ function ProjectRow({ project: p, isActive, isRenaming, renameValue, renameInput
         }}>
           <button onClick={() => { setMenuOpenId(null); setRenamingId(p.id); setRenameValue(p.name); }} style={projMenuItemStyle()}>Rename</button>
           {/* Move to folder — inline submenu. Folders array + No folder. */}
-          <div style={{ padding: "4px 8px 2px", fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Move to client</div>
+          <div style={{ padding: "4px 8px 2px", fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Move to Folder</div>
           <button onClick={() => { setMenuOpenId(null); onMoveToFolder?.(p.id, null); }} style={{ ...projMenuItemStyle(), fontWeight: !p.folder ? 700 : 500 }}>
             {!p.folder ? "✓ " : ""}Unfiled
           </button>
@@ -327,31 +572,57 @@ function FolderGroup({ name, projects, renderRow, onDeleteFolder, onDropProject 
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "5px 6px", borderRadius: 5, cursor: "pointer",
-          color: "var(--warm-30)",
+          display: "flex", alignItems: "center", gap: 9,
+          padding: "8px 8px", borderRadius: 8, cursor: "pointer",
         }}
       >
-        <span style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: 9, lineHeight: 1 }}>▾</span>
-        <span style={{ flex: 1, fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {name} <span style={{ opacity: 0.5 }}>· {projects.length}</span>
+        <span style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s ease", fontSize: 10, lineHeight: 1, flexShrink: 0 }}>▾</span>
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+          <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6a1.5 1.5 0 0 1 1.06.44L8.5 4.5h4A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-8z" stroke="currentColor" strokeWidth="1.45" strokeLinejoin="round"/>
+        </svg>
+        <span className="text-white/90" style={{ flex: 1, minWidth: 0, fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, letterSpacing: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {name} <span style={{ opacity: 0.48, fontSize: 12 }}>· {projects.length}</span>
         </span>
         {hovered && onDeleteFolder && (
           <button
-            onClick={e => { e.stopPropagation(); onDeleteFolder(name); }}
-            title="Delete folder"
-            style={{
-              background: "transparent", border: "none", color: "var(--warm-25)",
-              cursor: "pointer", padding: 0, lineHeight: 1, fontSize: 14, outline: "none",
+            type="button"
+            aria-label={`Delete folder ${name}`}
+            onPointerDown={e => e.stopPropagation()}
+            onMouseDown={e => {
+              e.preventDefault();
+              e.stopPropagation();
             }}
-          >×</button>
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              void onDeleteFolder(name);
+            }}
+            title={`Delete folder ${name}`}
+            style={{
+              width: 24,
+              height: 24,
+              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: "none",
+              borderRadius: 6,
+              color: "var(--warm-30)",
+              cursor: "pointer",
+              padding: 0,
+              outline: "none",
+            }}
+          >
+            <Trash2Icon aria-hidden="true" size={14} strokeWidth={1.8} />
+          </button>
         )}
       </div>
       {!collapsed && (
-        <div style={{ paddingLeft: 6 }}>
+        <div>
           {projects.length === 0 ? (
             <div style={{ padding: "4px 8px", fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-20)", fontStyle: "italic" }}>Empty</div>
-          ) : projects.map(renderRow)}
+          ) : projects.map(p => renderRow(p, true))}
         </div>
       )}
     </div>

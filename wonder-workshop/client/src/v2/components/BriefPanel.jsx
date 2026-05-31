@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { SectionIcon } from "../Workshop.jsx";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Brief panel — squished mask-faded preview in display mode; click to
 // expand the textarea up to 600px. Tracks a local draft so the parent
@@ -53,25 +65,21 @@ export function BriefPanel({ value, onUpdateMeta, data, dispatch, onRunRegenerat
           {editing ? "Save to audit changes" : "Click to edit"}
         </span>
       </div>
-      <div
+      <Card
         onClick={startEditing}
+        className={[
+          "overflow-hidden rounded-xl px-[18px] py-4 transition-[max-height,min-height] duration-300 ease-out",
+          editing ? "min-h-[120px] max-h-[600px] cursor-default ring-1 ring-ring/40" : "min-h-24 max-h-24 cursor-pointer",
+        ].join(" ")}
         style={{
-          background: "var(--warm-04)",
-          border: editing ? "1px solid var(--warm-15)" : "1px solid var(--warm-06)",
-          borderRadius: 10,
-          padding: "16px 18px",
-          minHeight: editing ? 120 : 96,
-          maxHeight: editing ? 600 : 96,
-          overflow: "hidden",
-          cursor: editing ? "default" : "pointer",
           WebkitMaskImage: editing ? "none" : "linear-gradient(to bottom, black 55%, transparent 100%)",
           maskImage: editing ? "none" : "linear-gradient(to bottom, black 55%, transparent 100%)",
-          transition: "max-height 0.32s cubic-bezier(0.22,1,0.36,1), min-height 0.32s cubic-bezier(0.22,1,0.36,1)",
         }}
       >
         {editing ? (
-          <textarea
+          <Textarea
             ref={taRef}
+            size="lg"
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onClick={e => e.stopPropagation()}
@@ -80,16 +88,7 @@ export function BriefPanel({ value, onUpdateMeta, data, dispatch, onRunRegenerat
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSave(); }
             }}
             placeholder="Click here to write or paste the brief — the spot's setup, characters, tone, and intent."
-            style={{
-              width: "100%", boxSizing: "border-box",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.18)",
-              borderRadius: 6, padding: "8px 10px",
-              fontFamily: "var(--f)", fontSize: 15, fontWeight: 300,
-              color: "var(--warm)", lineHeight: 1.7,
-              outline: "none", resize: "none",
-              minHeight: 96, maxHeight: 560,
-            }}
+            style={{ resize: "none", minHeight: 96, maxHeight: 560 }}
           />
         ) : (
           <div style={{
@@ -100,7 +99,7 @@ export function BriefPanel({ value, onUpdateMeta, data, dispatch, onRunRegenerat
             {treatmentText || <span style={{ opacity: 0.3 }}>Click here to write or paste the brief — the spot's setup, characters, tone, and intent.</span>}
           </div>
         )}
-      </div>
+      </Card>
       {editing && (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
           <button
@@ -138,6 +137,89 @@ export function BriefPanel({ value, onUpdateMeta, data, dispatch, onRunRegenerat
         />
       )}
     </div>
+  );
+}
+
+export function EditBriefDialog({ value, onUpdateMeta, data, onRunRegeneration }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+  const [auditOpen, setAuditOpen] = useState(false);
+
+  useEffect(() => { setDraft(value || ""); }, [value]);
+
+  const dirty = draft.trim() !== (value || "").trim();
+  const resetDraft = () => setDraft(value || "");
+  const handleCancel = () => {
+    resetDraft();
+    setOpen(false);
+  };
+  const handleSave = () => {
+    if (!dirty) return;
+    onUpdateMeta("treatment", draft);
+    setOpen(false);
+    setAuditOpen(true);
+  };
+
+  return (
+    <>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogTrigger
+          render={
+            <Button variant="outline" size="sm" className="gap-1.5 dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_1px_2px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.045)]" />
+          }
+          onClick={() => setDraft(value || "")}
+        >
+          <SectionIcon name="edit" size={12} color="currentColor" />
+          Edit Brief
+        </AlertDialogTrigger>
+        <AlertDialogPopup className="max-w-2xl dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_20px_60px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.045)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit Brief</AlertDialogTitle>
+            <AlertDialogDescription>
+              Update the project brief. Save turns on after you make a change, then runs the brief-change audit.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-6 pb-4">
+            <label
+              className="mb-2 block font-semibold text-muted-foreground text-xs uppercase tracking-[0.14em]"
+              htmlFor="edit-project-brief"
+            >
+              Brief
+            </label>
+            <Textarea
+              id="edit-project-brief"
+              size="lg"
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder="Write or paste the brief — the spot's setup, characters, tone, and intent."
+              style={{ minHeight: 220, resize: "vertical", lineHeight: 1.7 }}
+            />
+          </div>
+          <AlertDialogFooter>
+            <Button variant="ghost" onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!dirty}
+              onClick={handleSave}
+              title={dirty ? "Save brief and audit changes" : "Make a change to enable Save"}
+            >
+              {dirty ? "Save" : "No changes"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+      {auditOpen && (
+        <RegenerateAuditModal
+          oldBrief={value || ""}
+          newBrief={draft}
+          data={data}
+          onClose={() => setAuditOpen(false)}
+          onRun={(scope, plan) => { setAuditOpen(false); onRunRegeneration?.(scope, plan); }}
+        />
+      )}
+    </>
   );
 }
 
