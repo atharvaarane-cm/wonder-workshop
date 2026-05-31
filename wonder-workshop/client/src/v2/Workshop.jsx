@@ -2309,6 +2309,11 @@ function totalDuration(frames) {
 
 function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highlighted, isDragSrc, dispatch, onRetry, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, onClick }) {
   const [hovered, setHovered] = useState(false);
+  // Watch the pending bus too — bulk/auto regen marks every frame pending
+  // up-front but flips imageStatus to "generating" only as each reaches the
+  // worker pool, so without this a queued frame would sit with no shimmer
+  // (the asset slots already do this; SheetFrame was the odd one out).
+  const isPending = usePending(`frame.${frame.id}`);
   const loc = data.locations.find(l => l.id === frame.locationId);
   const prods = data.products.filter(p => frame.productIds.includes(p.id));
   const talents = data.talent.filter(t => frame.talentIds.includes(t.id));
@@ -2365,7 +2370,7 @@ function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highli
         {!frame.uploadedImage && (
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
         )}
-        {frame.imageStatus === "generating" && <ShimmerOverlay />}
+        {(frame.imageStatus === "generating" || isPending) && <ShimmerOverlay />}
         {/* Error state — frame failed during bulk auto-gen (usually
             a Gemini rate limit). Show a Retry pill so the user doesn't
             have to leave the storyboard to recover the missing frame. */}
