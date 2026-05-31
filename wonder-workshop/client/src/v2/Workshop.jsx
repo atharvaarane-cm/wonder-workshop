@@ -5981,7 +5981,11 @@ export default function WorkshopV2() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [chatMessages, setChatMessages] = useState([]);
+  // Chat history persists per-project: seeded from the project's saved
+  // chatHistory on first paint, saved back into the project data on every
+  // save, and reloaded on project switch — so it survives reloads and
+  // follows you wherever you are in the project.
+  const [chatMessages, setChatMessages] = useState(() => bootstrap.current.data?.chatHistory || []);
   const [chatBusy, setChatBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [highlightedFrames, setHighlightedFrames] = useState(new Set());
@@ -6018,6 +6022,7 @@ export default function WorkshopV2() {
       const memCount = countImageUrls(dataNow);
       if (idbCount > memCount) {
         dispatch({ type: "SET_DATA", data: full });
+        setChatMessages(full.chatHistory || []);
         // If we were stuck on the BriefForm because bootstrap's sync
         // localStorage read came back empty (data lives in IDB only),
         // flip into the workspace now that the IDB data is loaded.
@@ -6048,6 +6053,8 @@ export default function WorkshopV2() {
   activeRef.current = activeProjectId;
   const builtRef = useRef(built);
   builtRef.current = built;
+  const chatRef = useRef(chatMessages);
+  chatRef.current = chatMessages;
   const pendingSaveRef = useRef({ debounce: null, ceiling: null });
 
   useEffect(() => {
@@ -6057,7 +6064,7 @@ export default function WorkshopV2() {
     // hold the save off for more than a fraction of a second.
     if (pendingSaveRef.current.debounce) clearTimeout(pendingSaveRef.current.debounce);
     pendingSaveRef.current.debounce = setTimeout(() => {
-      const ok = saveProject(activeProjectId, data);
+      const ok = saveProject(activeProjectId, { ...data, chatHistory: chatMessages });
       if (ok) {
         setSaveStatus("saved");
         setLastSavedAt(Date.now());
@@ -6073,7 +6080,7 @@ export default function WorkshopV2() {
     if (!pendingSaveRef.current.ceiling) {
       pendingSaveRef.current.ceiling = setTimeout(() => {
         if (activeRef.current && builtRef.current) {
-          const ok = saveProject(activeRef.current, dataRef.current);
+          const ok = saveProject(activeRef.current, { ...dataRef.current, chatHistory: chatRef.current });
           if (ok) {
             setSaveStatus("saved");
             setLastSavedAt(Date.now());
@@ -6088,7 +6095,7 @@ export default function WorkshopV2() {
       // that it fires every 2s during bursts. Only the debounce is
       // cleared on each render so the latest data wins.
     };
-  }, [data, built, activeProjectId]);
+  }, [data, built, activeProjectId, chatMessages]);
 
   // Flush any pending save when the page unloads (refresh, close,
   // navigate away). Synchronous localStorage write — the only reliable
@@ -6096,7 +6103,7 @@ export default function WorkshopV2() {
   useEffect(() => {
     function flushOnUnload() {
       if (activeRef.current && builtRef.current) {
-        saveProjectSync(activeRef.current, dataRef.current);
+        saveProjectSync(activeRef.current, { ...dataRef.current, chatHistory: chatRef.current });
       }
     }
     window.addEventListener("beforeunload", flushOnUnload);
@@ -6122,7 +6129,7 @@ export default function WorkshopV2() {
     if (!projectId) return;
     if (projectId === activeProjectId && built) return;
     if (activeProjectId && built && activeProjectId !== projectId) {
-      saveProject(activeProjectId, data);
+      saveProject(activeProjectId, { ...data, chatHistory: chatMessages });
     }
     let next = loadProject(projectId);
     if (!next) {
@@ -6137,6 +6144,7 @@ export default function WorkshopV2() {
     setActiveProjectId(projectId);
     setActiveProjectIdState(projectId);
     dispatch({ type: "SET_DATA", data: next });
+    setChatMessages(next.chatHistory || []);
     setBuilt(true);
     setProjects(listProjects());
     setSaveStatus("idle");
@@ -6145,18 +6153,19 @@ export default function WorkshopV2() {
   // Start fresh — save current, clear active, show BriefForm.
   function startNewProject() {
     if (activeProjectId && built) {
-      saveProject(activeProjectId, data);
+      saveProject(activeProjectId, { ...data, chatHistory: chatMessages });
     }
     setActiveProjectId(null);
     setActiveProjectIdState(null);
     dispatch({ type: "SET_DATA", data: INITIAL_STATE });
+    setChatMessages([]);
     setBuilt(false);
     setProjects(listProjects());
   }
 
   function handleBackToProjects() {
     if (activeProjectId && built) {
-      saveProject(activeProjectId, data);
+      saveProject(activeProjectId, { ...data, chatHistory: chatMessages });
     }
     setBuilt(false);
     setProductionFrameId(null);
