@@ -391,6 +391,19 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
             required: ['frameNumber', 'newBrief'],
           },
         },
+        newFrames: {
+          type: 'array',
+          description: 'NEW frames to ADD to the storyboard when editing existing ones isn\'t enough — e.g. an establishing shot for a new LOCATION. Use sparingly (0-2). Each becomes a real frame appended after the given frame (or at the end).',
+          items: {
+            type: 'object',
+            properties: {
+              brief: { type: 'string', description: 'The shot description. Reference assets by @handle or exact Name (set the shot AT the location by name).' },
+              shotType: { type: 'string', description: 'e.g. "WIDE" for an establishing shot, "MED", "CU".' },
+              afterFrameNumber: { type: 'string', description: 'Optional — insert right after this frame number; omit to append at the end.' },
+            },
+            required: ['brief'],
+          },
+        },
       },
       required: ['newBrief'],
     },
@@ -410,8 +423,9 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
     'You will be given the current brief, the storyboard frames, and one or more assets that are missing from the brief and/or the storyboard.',
     'CRITICAL: include EVERY asset in the "ASSETS TO RECONCILE" list — do not omit a single one (it is easy to forget the location; do not). Each listed asset must end up in BOTH the rewritten brief AND woven into at least one frame\'s text.',
     'Produce a rewritten brief that includes ALL the asset(s) naturally — preserve the existing creative, voice, and structure; weave each new asset in where it fits. Do NOT drop anything already in the brief.',
-    'For EACH asset missing from the STORYBOARD, edit 1-2 of the most fitting existing frames so their brief text references that asset. Reference it by its @handle when it has one; if its handle is empty, write its exact Name into the frame text (e.g. set the shot at that location by name). Do not invent new frames.',
-    'Before finishing, double-check: is every listed asset — including the location — present in newBrief, and is each missing-from-storyboard asset present in at least one frameEdit? If not, add it.',
+    'For EACH asset missing from the STORYBOARD, edit 1-2 of the most fitting existing frames so their brief text references that asset (by @handle, or by exact Name when the handle is empty).',
+    'LOCATIONS need special care: a location should be the actual SETTING of shots, not just name-dropped. Make it feel integrated — REWRITE 1-2 existing frames so the action takes place AT that location (set the scene there by name), AND/OR add a short establishing WIDE shot of the location via newFrames. Prefer reworking existing frames so it reads as a real part of the spot; add a frame only when an establishing shot genuinely helps. It is OK to restructure or re-set existing frames to make the new location belong.',
+    'Before finishing, double-check: is every listed asset — including the location — present in newBrief, AND is each one actually depicted in the storyboard (a frameEdit or a newFrame), with the location used as a setting (not just mentioned)? If not, fix it.',
     'Call propose_reconciliation exactly once with your result.',
   ].join('\n')
 
@@ -436,6 +450,7 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
   return {
     newBrief: call.args.newBrief || brief || '',
     frameEdits: Array.isArray(call.args.frameEdits) ? call.args.frameEdits : [],
+    newFrames: Array.isArray(call.args.newFrames) ? call.args.newFrames : [],
   }
 }
 
