@@ -381,7 +381,7 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
         },
         frameEdits: {
           type: 'array',
-          description: 'Frame brief touch-ups for assets missing from the storyboard. Only include frames you actually changed. Use the asset\'s @handle in the new brief text.',
+          description: 'Frame brief touch-ups for assets missing from the storyboard. Include one for EVERY asset that needs to appear in the storyboard (don\'t skip the location). Reference the asset by its @handle, or by its exact Name when it has no handle.',
           items: {
             type: 'object',
             properties: {
@@ -398,7 +398,9 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
 
   const assetLines = assets.map(a => {
     const missing = [!a.inBrief && 'the brief', !a.inStoryboard && 'the storyboard'].filter(Boolean).join(' and ')
-    return `- ${a.type === 'talent' ? 'Character' : a.type === 'products' ? 'Element' : 'Location'} "${a.name}" (${a.handle})${a.note ? ` — ${a.note}` : ''}. Missing from: ${missing}.`
+    const ref = a.handle ? `reference it as ${a.handle}` : `it has no @handle, so reference it by name "${a.name}"`
+    const kind = a.type === 'talent' ? 'Character' : a.type === 'products' ? 'Element' : 'Location'
+    return `- ${kind} "${a.name}" (${ref})${a.note ? ` — ${a.note}` : ''}. Missing from: ${missing}.`
   }).join('\n')
 
   const frameLines = (frames || []).map(f => `  ${f.number}: ${f.brief}`).join('\n')
@@ -406,8 +408,10 @@ export async function suggestReconciliation({ brief, frames, assets, signal }) {
   const system = [
     'You reconcile a commercial storyboard so every generated asset is reflected in BOTH the brief and the shots.',
     'You will be given the current brief, the storyboard frames, and one or more assets that are missing from the brief and/or the storyboard.',
-    'Produce a rewritten brief that includes the asset(s) naturally — preserve the existing creative, voice, and structure; weave the new asset(s) in where they fit. Do NOT drop anything already in the brief.',
-    'For any asset missing from the STORYBOARD, also edit 1-2 of the most fitting existing frames so their brief text references the asset by its @handle. Do not invent new frames.',
+    'CRITICAL: include EVERY asset in the "ASSETS TO RECONCILE" list — do not omit a single one (it is easy to forget the location; do not). Each listed asset must end up in BOTH the rewritten brief AND woven into at least one frame\'s text.',
+    'Produce a rewritten brief that includes ALL the asset(s) naturally — preserve the existing creative, voice, and structure; weave each new asset in where it fits. Do NOT drop anything already in the brief.',
+    'For EACH asset missing from the STORYBOARD, edit 1-2 of the most fitting existing frames so their brief text references that asset. Reference it by its @handle when it has one; if its handle is empty, write its exact Name into the frame text (e.g. set the shot at that location by name). Do not invent new frames.',
+    'Before finishing, double-check: is every listed asset — including the location — present in newBrief, and is each missing-from-storyboard asset present in at least one frameEdit? If not, add it.',
     'Call propose_reconciliation exactly once with your result.',
   ].join('\n')
 

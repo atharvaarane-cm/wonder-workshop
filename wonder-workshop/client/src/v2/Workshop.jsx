@@ -222,6 +222,10 @@ function assetReconcileStatus(asset, type, data) {
   const inStoryboard = frames.some(f => {
     const fb = String(f?.brief || "").toLowerCase();
     if (handle && fb.includes(handle)) return true;
+    // Also match by NAME — a location often has no @handle (and locations
+    // aren't @-linked to frames the way talent/products are), so without this
+    // a location woven into a frame's text could never count as "in storyboard".
+    if (name && fb.includes(name)) return true;
     if (type === "locations") return f.locationId === asset.id;
     if (idKey) return (f[idKey] || []).includes(asset.id);
     return false;
@@ -742,9 +746,19 @@ function applyAction(state, action) {
     case "AUTO_DETECT_MENTIONS": {
       return { ...state, frames: state.frames.map(f => {
         const briefLower = f.brief.toLowerCase();
-        const mentionedTalent = state.talent.filter(t => briefLower.includes(t.handle.toLowerCase())).map(t => t.id);
-        const mentionedProducts = state.products.filter(p => briefLower.includes(p.handle.toLowerCase())).map(p => p.id);
-        return { ...f, talentIds: mentionedTalent, productIds: mentionedProducts };
+        // Guard empty handles: "".includes-style matching would otherwise tag
+        // EVERY frame (briefLower.includes("") is always true).
+        const mentionedTalent = state.talent.filter(t => t.handle && briefLower.includes(t.handle.toLowerCase())).map(t => t.id);
+        const mentionedProducts = state.products.filter(p => p.handle && briefLower.includes(p.handle.toLowerCase())).map(p => p.id);
+        // Link a location by handle OR name → set the frame's single locationId.
+        // Locations aren't @-tagged like talent/products, so without this they
+        // never link to a frame (and never count as "in storyboard"). Preserve
+        // the existing locationId when nothing in the text matches.
+        const mloc = state.locations.find(l =>
+          (l.handle && briefLower.includes(l.handle.toLowerCase())) ||
+          (l.name && l.name.trim() && briefLower.includes(l.name.toLowerCase())),
+        );
+        return { ...f, talentIds: mentionedTalent, productIds: mentionedProducts, locationId: mloc ? mloc.id : f.locationId };
       })};
     }
     case "AI_APPLY_CHANGES": {
