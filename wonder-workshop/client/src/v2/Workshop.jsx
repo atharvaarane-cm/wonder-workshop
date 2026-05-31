@@ -1151,6 +1151,129 @@ const V2_CHAT_TOOLS = [
       required: ["frameNumber"],
     },
   },
+  {
+    name: "delete_frame",
+    description: "Delete a storyboard frame. Remaining frames renumber automatically. Won't delete the last remaining frame.",
+    parameters: {
+      type: "object",
+      properties: { frameNumber: { type: "string", description: "Zero-padded frame number." } },
+      required: ["frameNumber"],
+    },
+  },
+  {
+    name: "reorder_frames",
+    description: "Reorder the whole storyboard. Pass EVERY existing frame number exactly once, in the desired new order.",
+    parameters: {
+      type: "object",
+      properties: { order: { type: "array", items: { type: "string" }, description: "All frame numbers in the new order, e.g. ['02','01','03']." } },
+      required: ["order"],
+    },
+  },
+  {
+    name: "delete_talent",
+    description: "Remove a character from the project. Also untags it from any frames it appeared in.",
+    parameters: {
+      type: "object",
+      properties: { talentName: { type: "string", description: "Current name (case-insensitive substring match)." } },
+      required: ["talentName"],
+    },
+  },
+  {
+    name: "delete_location",
+    description: "Remove a location. Also clears it from any frames that used it.",
+    parameters: {
+      type: "object",
+      properties: { locationName: { type: "string" } },
+      required: ["locationName"],
+    },
+  },
+  {
+    name: "delete_product",
+    description: "Remove a product / element. Also untags it from any frames it appeared in.",
+    parameters: {
+      type: "object",
+      properties: { productName: { type: "string" } },
+      required: ["productName"],
+    },
+  },
+  {
+    name: "update_brand",
+    description: "Edit the project's brand info — the brand name, website URL, or written brand guidelines.",
+    parameters: {
+      type: "object",
+      properties: {
+        field: { type: "string", enum: ["name", "url", "guidelines"] },
+        value: { type: "string" },
+      },
+      required: ["field", "value"],
+    },
+  },
+  {
+    name: "add_mood",
+    description: "Add a new mood-board reference. Optionally generate its image from the caption.",
+    parameters: {
+      type: "object",
+      properties: {
+        caption: { type: "string", description: "Short description of the visual reference." },
+        generateImage: { type: "boolean", description: "Default false — set true only if the user wants an image generated now." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "update_mood",
+    description: "Edit a mood-board item's caption. Reference the item by its 1-based position in the mood board.",
+    parameters: {
+      type: "object",
+      properties: {
+        index: { type: "number", description: "1-based position in the mood board." },
+        caption: { type: "string" },
+      },
+      required: ["index", "caption"],
+    },
+  },
+  {
+    name: "delete_mood",
+    description: "Remove a mood-board item by its 1-based position.",
+    parameters: {
+      type: "object",
+      properties: { index: { type: "number" } },
+      required: ["index"],
+    },
+  },
+  {
+    name: "generate_mood_image",
+    description: "Generate (or regenerate) the image for a mood-board item by its 1-based position, from its caption.",
+    parameters: {
+      type: "object",
+      properties: {
+        index: { type: "number" },
+        promptOverride: { type: "string", description: "Optional custom prompt." },
+      },
+      required: ["index"],
+    },
+  },
+  {
+    name: "toggle_section_lock",
+    description: "Lock or unlock an entire section so its images are protected from regeneration. Toggles the current state.",
+    parameters: {
+      type: "object",
+      properties: { section: { type: "string", enum: ["talent", "locations", "products", "mood", "brand"] } },
+      required: ["section"],
+    },
+  },
+  {
+    name: "toggle_asset_lock",
+    description: "Lock or unlock a single character, location, or product so it's protected from regeneration. Toggles the current state.",
+    parameters: {
+      type: "object",
+      properties: {
+        assetType: { type: "string", enum: ["talent", "location", "product"] },
+        assetName: { type: "string" },
+      },
+      required: ["assetType", "assetName"],
+    },
+  },
 ];
 
 // Apply a single chat tool call to the v2 reducer. Returns metadata
@@ -1307,6 +1430,101 @@ function applyChatToolCall(action, data, dispatch) {
         },
         message: `Generating new image for frame ${args.frameNumber}…`,
       };
+    }
+    case "delete_frame": {
+      const id = findFrameId(args.frameNumber);
+      if (!id) return null;
+      if ((data.frames || []).length <= 1) {
+        return { applied: false, kind: "frame", message: "Can't delete the last remaining frame." };
+      }
+      dispatch({ type: "DELETE_FRAME", frameId: id });
+      return { applied: true, kind: "frame", field: "deleted", message: `Deleted frame ${args.frameNumber}` };
+    }
+    case "reorder_frames": {
+      const order = Array.isArray(args.order) ? args.order : [];
+      const orderedIds = order.map(findFrameId).filter(Boolean);
+      // Only reorder if we matched every frame exactly once — a partial
+      // order would silently drop frames via the reducer's filter.
+      if (orderedIds.length !== (data.frames || []).length) return null;
+      dispatch({ type: "REORDER_FRAMES", orderedIds });
+      return { applied: true, kind: "frame", field: "reordered", message: "Reordered the storyboard" };
+    }
+    case "delete_talent": {
+      const target = (data.talent || []).find(t =>
+        t.name?.toLowerCase().includes((args.talentName || "").toLowerCase()),
+      );
+      if (!target) return null;
+      dispatch({ type: "DELETE_TALENT", id: target.id });
+      return { applied: true, kind: "talent", field: "deleted", message: `Deleted character ${target.name}` };
+    }
+    case "delete_location": {
+      const target = (data.locations || []).find(l =>
+        l.name?.toLowerCase().includes((args.locationName || "").toLowerCase()),
+      );
+      if (!target) return null;
+      dispatch({ type: "DELETE_LOCATION", id: target.id });
+      return { applied: true, kind: "location", field: "deleted", message: `Deleted location ${target.name}` };
+    }
+    case "delete_product": {
+      const target = (data.products || []).find(p =>
+        p.name?.toLowerCase().includes((args.productName || "").toLowerCase()),
+      );
+      if (!target) return null;
+      dispatch({ type: "DELETE_PRODUCT", id: target.id });
+      return { applied: true, kind: "product", field: "deleted", message: `Deleted element ${target.name}` };
+    }
+    case "update_brand": {
+      if (!args.field || args.value == null) return null;
+      dispatch({ type: "UPDATE_BRAND", field: args.field, value: args.value });
+      return { applied: true, kind: "brand", field: args.field, message: `Updated brand ${args.field}` };
+    }
+    case "add_mood": {
+      dispatch({ type: "ADD_MOOD", data: { caption: args.caption || "" } });
+      const wantImage = args.generateImage === true;
+      // New item lands at the end → its 1-based index is current length + 1.
+      const idx = (data.moodBoard || []).length + 1;
+      return {
+        applied: true, kind: "mood", field: "created",
+        message: `Added mood reference${wantImage ? " — generating…" : ""}`,
+        effect: wantImage ? { type: "generateMoodImage", index: idx, promptOverride: args.caption || null } : null,
+      };
+    }
+    case "update_mood": {
+      const item = (data.moodBoard || [])[Number(args.index) - 1];
+      if (!item) return null;
+      dispatch({ type: "UPDATE_MOOD", id: item.id, field: "caption", value: args.caption || "" });
+      return { applied: true, kind: "mood", field: "caption", message: "Updated mood caption" };
+    }
+    case "delete_mood": {
+      const item = (data.moodBoard || [])[Number(args.index) - 1];
+      if (!item) return null;
+      dispatch({ type: "DELETE_MOOD", id: item.id });
+      return { applied: true, kind: "mood", field: "deleted", message: "Removed mood reference" };
+    }
+    case "generate_mood_image": {
+      const item = (data.moodBoard || [])[Number(args.index) - 1];
+      if (!item) return null;
+      return {
+        applied: true, kind: "mood", field: "regenerating",
+        effect: { type: "generateMoodImage", index: Number(args.index), promptOverride: args.promptOverride || null },
+        message: "Generating mood image…",
+      };
+    }
+    case "toggle_section_lock": {
+      if (!args.section) return null;
+      dispatch({ type: "TOGGLE_SECTION_LOCK", section: args.section });
+      return { applied: true, kind: "lock", field: args.section, message: `Toggled ${args.section} lock` };
+    }
+    case "toggle_asset_lock": {
+      const list = args.assetType === "talent" ? (data.talent || [])
+        : args.assetType === "location" ? (data.locations || [])
+        : args.assetType === "product" ? (data.products || [])
+        : [];
+      const target = list.find(x => x.name?.toLowerCase().includes((args.assetName || "").toLowerCase()));
+      const actionType = { talent: "TOGGLE_TALENT_LOCK", location: "TOGGLE_LOCATION_LOCK", product: "TOGGLE_PRODUCT_LOCK" }[args.assetType];
+      if (!target || !actionType) return null;
+      dispatch({ type: actionType, id: target.id });
+      return { applied: true, kind: args.assetType, field: "lock", message: `Toggled lock on ${target.name}` };
     }
     default:
       return null;
@@ -1983,17 +2201,23 @@ function ConfirmAction({ label, onConfirm, variant = "danger", style = {} }) {
 
 // -- ASSET CONTEXT (for AI chat) ------------------------------
 
-export function AssetContext({ asset, type, onDismiss }) {
-  const badges = { talent: "T", product: "P", location: "L" };
+export function AssetContext({ asset, type, thumb, onDismiss }) {
+  const badges = { talent: "T", product: "P", location: "L", mood: "M", brand: "B" };
+  const labels = { talent: "Character", product: "Element", location: "Location", mood: "Mood", brand: "Brand" };
   return (
     <div style={{ borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", overflow: "hidden" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px" }}>
-        <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 700, color: "var(--warm-30)", background: "var(--warm-06)", padding: "3px 6px", borderRadius: 3 }}>{badges[type]}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm)" }}>{asset.name}</div>
-          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-25)" }}>{asset.handle}</div>
+        {thumb ? (
+          <img src={thumb} alt="" style={{ width: 34, height: 34, borderRadius: 6, objectFit: "cover", flexShrink: 0, border: "1px solid var(--warm-08)", background: "var(--warm-06)" }} />
+        ) : (
+          <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: "var(--warm-30)", background: "var(--warm-06)", width: 34, height: 34, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{badges[type]}</span>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{labels[type] || "Selected"}</div>
+          <div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, color: "var(--warm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{asset.name}</div>
+          {asset.handle ? <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-25)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{asset.handle}</div> : null}
         </div>
-        <button onClick={onDismiss} style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--warm-08)", background: "transparent", color: "var(--warm-30)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 11, flexShrink: 0 }}>&times;</button>
+        <button onClick={onDismiss} title="Dismiss" style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--warm-08)", background: "transparent", color: "var(--warm-30)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 11, flexShrink: 0 }}>&times;</button>
       </div>
     </div>
   );
@@ -2937,7 +3161,7 @@ function MoodTile({ item, dispatch, locked, versions = [] }) {
 // mirroring v1's Character Design section layout while keeping the
 // v2 IA (left-rail asset nav + persistent right pane).
 
-function CharacterTab({ data, dispatch }) {
+function CharacterTab({ data, dispatch, onFocusAsset }) {
   const [viewingId, setViewingId] = useState(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const locked = !!data.locks?.talent;
@@ -3001,7 +3225,7 @@ function CharacterTab({ data, dispatch }) {
         gap: 12,
       }}>
         {data.talent.map(t => (
-          <CharacterTile key={t.id} character={t} onClick={() => setViewingId(t.id)} />
+          <CharacterTile key={t.id} character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
         ))}
         <AddCharacterTile onClick={() => dispatch({ type: "ADD_TALENT", data: {} })} />
       </div>
@@ -3789,7 +4013,7 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
 // Same shape as CharacterTab. Single reference image per location
 // (no FRONT/SIDE/BACK grid — locations aren't multi-angle assets).
 
-function LocationTab({ data, dispatch }) {
+function LocationTab({ data, dispatch, onFocusAsset }) {
   const [viewingId, setViewingId] = useState(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const aspect = data.meta?.aspect || "16:9";
@@ -3848,7 +4072,7 @@ function LocationTab({ data, dispatch }) {
           return (
             <>
               {data.locations.map(l => (
-                <LocationTile key={l.id} location={l} onClick={() => setViewingId(l.id)} aspectCSS={aspectCSS} />
+                <LocationTile key={l.id} location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
               ))}
               <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} aspectCSS={aspectCSS} />
             </>
@@ -3989,7 +4213,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
 
 // -- ELEMENT TAB (products tile grid + drill-down) --------------
 
-function ElementTab({ data, dispatch }) {
+function ElementTab({ data, dispatch, onFocusAsset }) {
   const [viewingId, setViewingId] = useState(null);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const locked = !!data.locks?.products;
@@ -4042,7 +4266,7 @@ function ElementTab({ data, dispatch }) {
         gap: 12,
       }}>
         {data.products.map(p => (
-          <ElementTile key={p.id} product={p} onClick={() => setViewingId(p.id)} />
+          <ElementTile key={p.id} product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
         ))}
         <AddTile label="Add Element" iconName="box" onClick={() => dispatch({ type: "ADD_PRODUCT", data: {} })} />
       </div>
@@ -4368,7 +4592,7 @@ function HoverBarBtn({ children, title, onClick, disabled, danger, active, accen
 
 // -- ASSET EXPANDED PANEL (scrollable with fade hints) ----------
 
-function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist }) {
+function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist, onFocusAsset }) {
   const scrollRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -4414,21 +4638,21 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   if (activeTab === "talent") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <CharacterTab data={data} dispatch={dispatch} />
+        <CharacterTab data={data} dispatch={dispatch} onFocusAsset={onFocusAsset} />
       </div>
     );
   }
   if (activeTab === "locations") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <LocationTab data={data} dispatch={dispatch} />
+        <LocationTab data={data} dispatch={dispatch} onFocusAsset={onFocusAsset} />
       </div>
     );
   }
   if (activeTab === "products") {
     return (
       <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <ElementTab data={data} dispatch={dispatch} />
+        <ElementTab data={data} dispatch={dispatch} onFocusAsset={onFocusAsset} />
       </div>
     );
   }
@@ -4486,7 +4710,7 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
 // right. Brand Info opens by default. Clicking a tab switches the
 // right pane (no toggle-to-close — something is always selected).
 
-function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
+function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist, onFocusAsset }) {
   const [expanded, setExpanded] = useState(null);
 
   const tabs = [
@@ -4547,6 +4771,7 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
             setExpanded={setExpanded}
             typeKey={typeKey}
             onAIAssist={onAIAssist}
+            onFocusAsset={onFocusAsset}
           />
         </div>
       </div>
@@ -4557,7 +4782,7 @@ function AssetTabBar({ data, dispatch, activeTab, onToggleTab, onAIAssist }) {
 // -- ONE-SHEET WORKSPACE (drag-drop grid) ---------------------
 
 
-function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist, onRetryFrame, onRunRegeneration }) {
+function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist, onFocusAsset, onRetryFrame, onRunRegeneration }) {
   const [dragId, setDragId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
   const didDrag = useRef(false);
@@ -4693,7 +4918,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 
           {/* Asset Tab Bar */}
           <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
-            onToggleTab={onToggleAssetTab} onAIAssist={onAIAssist} />
+            onToggleTab={onToggleAssetTab} onAIAssist={onAIAssist} onFocusAsset={onFocusAsset} />
 
           {/* Frame Grid */}
           {(() => {
@@ -6202,6 +6427,27 @@ export default function WorkshopV2() {
         await regenerateOneFrame(effect.frameId);
         return;
       }
+      case "generateMoodImage": {
+        const item = (current.moodBoard || [])[Number(effect.index) - 1];
+        if (!item) return;
+        const aspect = current.meta?.aspect || "16:9";
+        markPending(`mood.${item.id}`);
+        dispatch({ type: "UPDATE_MOOD", id: item.id, field: "generationStatus", value: "generating" });
+        try {
+          const promptText = effect.promptOverride || item.caption || "Cinematic mood reference frame, atmospheric, on-brand";
+          log("info", `chat: generating mood image #${effect.index}`);
+          const url = await generateImage(promptText, { ratio: aspect });
+          dispatch({ type: "UPLOAD_MOOD_IMAGE", id: item.id, dataUrl: url });
+          dispatch({ type: "UPDATE_MOOD", id: item.id, field: "generationStatus", value: "complete" });
+        } catch (e) {
+          log("error", "chat mood gen failed", { error: String(e?.message || e) });
+          dispatch({ type: "UPDATE_MOOD", id: item.id, field: "generationStatus", value: "error" });
+          toast(`Couldn't generate mood image: ${e?.message?.slice(0, 100) || "unknown"}`, { kind: "error" });
+        } finally {
+          markDone(`mood.${item.id}`);
+        }
+        return;
+      }
       default:
         console.warn("[runChatEffect] unknown effect type", effect.type);
     }
@@ -6470,6 +6716,7 @@ export default function WorkshopV2() {
   const selectFrame = useCallback((id) => {
     setSelectedFrameId(id);
     setProductionFrameId(id);
+    setChatAssetContext(null); // selecting a frame clears any asset focus
     if (!sidebarOpen) setSidebarOpen(true);
   }, [sidebarOpen]);
 
@@ -6865,18 +7112,49 @@ export default function WorkshopV2() {
     // current camera settings), not image URLs or generationStatus.
     const stateSnap = {
       meta: currentData.meta,
-      talent: (currentData.talent || []).map(t => ({ id: t.id, name: t.name, handle: t.handle, role: t.role, note: t.note })),
-      locations: (currentData.locations || []).map(l => ({ id: l.id, name: l.name, handle: l.handle, type: l.type, note: l.note })),
-      products: (currentData.products || []).map(p => ({ id: p.id, name: p.name, handle: p.handle, category: p.category, note: p.note })),
+      talent: (currentData.talent || []).map(t => ({ id: t.id, name: t.name, handle: t.handle, role: t.role, note: t.note, hasImage: !!(t.headshot || t.headshots?.front), locked: !!t.locked })),
+      locations: (currentData.locations || []).map(l => ({ id: l.id, name: l.name, handle: l.handle, type: l.type, note: l.note, hasImage: !!(l.generatedImage || l.referenceImage), locked: !!l.locked })),
+      products: (currentData.products || []).map(p => ({ id: p.id, name: p.name, handle: p.handle, category: p.category, note: p.note, hasImage: !!p.referenceImage, locked: !!p.locked })),
+      moodBoard: (currentData.moodBoard || []).map((m, i) => ({ index: i + 1, caption: m.caption, hasImage: !!m.image })),
+      brand: currentData.brand ? { name: currentData.brand.name, url: currentData.brand.url, guidelines: currentData.brand.guidelines, hasLogo: !!currentData.brand.logo } : null,
+      locks: currentData.locks || {},
       frames: (currentData.frames || []).map(f => ({
         id: f.id, number: f.number, shotType: f.shotType, brief: f.brief,
         camera: f.camera, cameraAngle: f.cameraAngle, cameraHeight: f.cameraHeight,
-        lens: f.lens, movement: f.movement,
+        lens: f.lens, movement: f.movement, hasImage: !!f.uploadedImage,
         talentIds: f.talentIds, locationId: f.locationId, productIds: f.productIds,
       })),
     };
 
     const focusedFrame = frameId ? currentData.frames.find(f => f.id === frameId) : null;
+
+    // What the user has selected on the left — frame OR an asset (talent /
+    // product / location / mood / brand). This is what makes pronouns like
+    // "this", "her", "it" resolve to the thing the user clicked. The frame
+    // path keeps its existing wording; assets get a focus line + their full
+    // current fields so the model edits/regenerates the right one.
+    let focusLine = focusedFrame
+      ? `The user has frame ${focusedFrame.number} selected — "this"/"this frame" refers to it. Prefer edits/actions on that frame unless they say otherwise.`
+      : "No frame is selected — global / multi-frame edits are appropriate.";
+    if (chatAssetContext?.type) {
+      const c = chatAssetContext;
+      if (c.type === "talent") {
+        const a = (currentData.talent || []).find(t => t.id === c.id);
+        if (a) focusLine = `The user has the character "${a.name}" (${a.handle}) selected — "this", "her", "him", "they", "it" refer to this character. Prefer edits / regeneration on this character unless they clearly mean another. Current fields: ${JSON.stringify({ name: a.name, role: a.role, note: a.note, hasImage: !!(a.headshot || a.headshots?.front), locked: !!a.locked })}. When regenerating its image after an appearance change, the existing headshot is reused as an identity reference.`;
+      } else if (c.type === "product") {
+        const a = (currentData.products || []).find(p => p.id === c.id);
+        if (a) focusLine = `The user has the element "${a.name}" (${a.handle}) selected — "this"/"it" refers to it. Prefer edits / regeneration on this element. Current fields: ${JSON.stringify({ name: a.name, category: a.category, note: a.note, hasImage: !!a.referenceImage, locked: !!a.locked })}.`;
+      } else if (c.type === "location") {
+        const a = (currentData.locations || []).find(l => l.id === c.id);
+        if (a) focusLine = `The user has the location "${a.name}" (${a.handle}) selected — "this"/"it"/"here" refer to it. Prefer edits / regeneration on this location. Current fields: ${JSON.stringify({ name: a.name, note: a.note, hasImage: !!(a.generatedImage || a.referenceImage), locked: !!a.locked })}.`;
+      } else if (c.type === "mood") {
+        const idx = (currentData.moodBoard || []).findIndex(m => m.id === c.id);
+        if (idx >= 0) focusLine = `The user has mood-board item #${idx + 1} selected — "this"/"it" refers to it. Use index ${idx + 1} with the mood tools. Current caption: ${JSON.stringify((currentData.moodBoard || [])[idx]?.caption || "")}.`;
+      } else if (c.type === "brand") {
+        const b = currentData.brand || {};
+        focusLine = `The user has the Brand section selected — "this"/"it"/"the brand" refer to it. Use update_brand for name/url/guidelines. Current: ${JSON.stringify({ name: b.name, url: b.url, hasLogo: !!b.logo })}.`;
+      }
+    }
 
     const systemPrompt = [
       "You are a creative production assistant editing a storyboard.",
@@ -6888,15 +7166,21 @@ export default function WorkshopV2() {
       "- 'Talent' / 'Characters' / 'Cast' = `talent[]`. 'Locations' / 'Settings' = `locations[]`. 'Products' / 'Elements' / 'Hero items' = `products[]`.",
       "- 'Brand' = `brand` (singular): the client's logo, URL, guidelines.",
       "",
-      "Tool selection guide:",
-      "- 'Create a character / location / product' → use create_talent / create_location / create_product. These also generate the reference image by default.",
-      "- 'Make a new image / regenerate this' → use generate_asset_image or generate_frame_image.",
-      "- Editing existing fields → update_talent / update_location / update_product / update_frame_brief / update_frame_camera / update_meta.",
+      "Tool selection guide — you can drive EVERYTHING on the left from chat:",
+      "- Create: create_talent / create_location / create_product (these also generate the reference image by default); add_mood; add_frame.",
+      "- Edit fields: update_talent / update_location / update_product / update_frame_brief / update_frame_shot_type / update_frame_camera / update_meta / update_brand / update_mood.",
+      "- Images: generate_asset_image (talent/location/product), generate_frame_image, generate_mood_image.",
+      "- Remove: delete_frame / delete_talent / delete_location / delete_product / delete_mood. Reorder: reorder_frames.",
+      "- Protect from regeneration: toggle_section_lock / toggle_asset_lock.",
+      "- Mood-board items have no name — reference them by 1-based index (see moodBoard in the state).",
+      "",
+      "Deletions apply immediately (the user has undo), so only delete when the user clearly asks to remove something — don't infer a delete from an edit request.",
+      "You may emit MULTIPLE tool calls in one turn — e.g. 'make every shot a close-up' → one update_frame_shot_type per frame; 'remove all the extra characters' → multiple delete_talent.",
       "",
       "When creating a character: keep the `note` field to APPEARANCE only (age range, ethnicity, build, hair color/length, wardrobe). Do NOT put expression / pose / mood directions in the note — those bias every generated frame. The system will neutralize them but it's better not to add them.",
       "",
-      "Prefer specific, narrow edits — change one frame at a time when possible, change every frame when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
-      focusedFrame ? `The user has frame ${focusedFrame.number} selected — prefer edits to that frame unless they say otherwise.` : "No frame is selected — global / multi-frame edits are appropriate.",
+      "Prefer specific, narrow edits — change one item at a time when possible, change every item only when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
+      focusLine,
       "After making changes, briefly explain what you changed in 1-2 sentences. Don't restate every tool call.",
       "",
       "THE CURRENT BRIEF (meta.treatment):",
@@ -6936,7 +7220,7 @@ export default function WorkshopV2() {
         id: Date.now(),
         role: "ai",
         text: summary,
-        changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field })),
+        changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field, label: a.message })),
       }]);
 
       // Fire async side-effects (image generation for newly created
@@ -6960,7 +7244,7 @@ export default function WorkshopV2() {
     } finally {
       setChatBusy(false);
     }
-  }, [data, chatMessages]);
+  }, [data, chatMessages, chatAssetContext]);
 
   const handleDeleteFrame = useCallback((id) => {
     dispatch({ type: "DELETE_FRAME", frameId: id });
@@ -6978,6 +7262,17 @@ export default function WorkshopV2() {
   const handleAssetAIAssist = useCallback((item, category) => {
     const type = { talent: "talent", products: "product", locations: "location" }[category];
     setChatAssetContext({ type, id: item.id });
+    setSidebarOpen(true);
+  }, []);
+
+  // Clicking any asset tile selects it for the chat (shows its thumbnail +
+  // context card on the right and opens the chat) AND still drills into the
+  // detail editor (the tile's own onClick handles that). `type` is the chat
+  // context type: "talent" | "product" | "location".
+  const handleFocusAsset = useCallback((type, id) => {
+    if (!type || !id) return;
+    setChatAssetContext({ type, id });
+    setSelectedFrameId(null); // focusing an asset clears any frame focus
     setSidebarOpen(true);
   }, []);
 
@@ -7215,6 +7510,7 @@ export default function WorkshopV2() {
               dispatch={dispatch}
               assetTabOpen={assetTabOpen} onToggleAssetTab={handleToggleAssetTab}
               onAIAssist={handleAssetAIAssist}
+              onFocusAsset={handleFocusAsset}
               onRetryFrame={regenerateOneFrame}
               onRunRegeneration={handleRunRegeneration} />
           )}

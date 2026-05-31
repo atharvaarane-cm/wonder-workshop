@@ -73,9 +73,13 @@ function ChatMessage({ message: m, data, onMentionClick }) {
         <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 6, background: "rgba(255,255,255,0.02)", border: "1px solid var(--warm-06)" }}>
           <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Changes</div>
           {m.changes.map((c, j) => {
-            const fr = data.frames.find(f => f.id === c.id);
-            const label = c.type === "camera" ? "camera" : c.field;
-            return <div key={j} style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-20)", marginBottom: 2 }}>Frame {fr?.number || "?"} {"\xB7"} {label}</div>;
+            // Prefer the explicit human label the tool returned. Fall back
+            // to the frame-number form for the older frame-only changes, or
+            // a generic "<kind> · <field>" for anything else.
+            const fr = c.id ? data.frames.find(f => f.id === c.id) : null;
+            const label = c.label
+              || (fr ? `Frame ${fr.number} \xB7 ${c.type === "camera" ? "camera" : c.field}` : `${c.type}${c.field ? " \xB7 " + c.field : ""}`);
+            return <div key={j} style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-20)", marginBottom: 2 }}>{label}</div>;
           })}
         </div>
       )}
@@ -137,13 +141,19 @@ function FrameContext({ frame, data, onDismiss, onOpenProduction }) {
     <div style={{ borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", overflow: "hidden" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px" }}>
         <div style={{
-          width: 52, height: 22, borderRadius: 4, flexShrink: 0, position: "relative", overflow: "hidden",
+          width: 52, height: 30, borderRadius: 4, flexShrink: 0, position: "relative", overflow: "hidden",
           background: FILM[fIdx >= 0 ? fIdx % FILM.length : 0],
         }}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "8%", background: "rgba(0,0,0,0.4)" }} />
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "8%", background: "rgba(0,0,0,0.4)" }} />
+          {frame.uploadedImage ? (
+            <img src={frame.uploadedImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "8%", background: "rgba(0,0,0,0.4)" }} />
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "8%", background: "rgba(0,0,0,0.4)" }} />
+            </>
+          )}
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontFamily: "var(--f)", fontSize: 7, fontWeight: 600, color: "var(--warm-20)" }}>{frame.number}</span>
+            <span style={{ fontFamily: "var(--f)", fontSize: 7, fontWeight: 600, color: "var(--warm-20)", background: frame.uploadedImage ? "rgba(0,0,0,0.45)" : "transparent", padding: frame.uploadedImage ? "1px 3px" : 0, borderRadius: 2 }}>{frame.number}</span>
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -197,12 +207,31 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
   const inputRef = useRef(null);
   const selectedFrame = selectedFrameId ? data.frames.find(f => f.id === selectedFrameId) : null;
 
-  // Resolve asset context
+  // Resolve asset context — find the focused element and the best image
+  // field to use as its chat-context thumbnail. Mood items and Brand are
+  // synthesized into a {name, handle} shape so they render in the same card.
   const assetContextResolved = chatAssetContext ? (() => {
     const { type, id } = chatAssetContext;
-    if (type === "talent") return { type, asset: data.talent.find(t => t.id === id) };
-    if (type === "product") return { type, asset: data.products.find(p => p.id === id) };
-    if (type === "location") return { type, asset: data.locations.find(l => l.id === id) };
+    if (type === "talent") {
+      const asset = data.talent.find(t => t.id === id);
+      return asset && { type, asset, thumb: asset.headshot || asset.headshots?.front || asset.headshots?.threeQuarter || asset.headshots?.side || asset.headshots?.back || null };
+    }
+    if (type === "product") {
+      const asset = data.products.find(p => p.id === id);
+      return asset && { type, asset, thumb: asset.referenceImage || null };
+    }
+    if (type === "location") {
+      const asset = data.locations.find(l => l.id === id);
+      return asset && { type, asset, thumb: asset.generatedImage || asset.referenceImage || null };
+    }
+    if (type === "mood") {
+      const m = (data.moodBoard || []).find(x => x.id === id);
+      return m && { type, asset: { name: m.caption || "Mood reference", handle: "" }, thumb: m.image || null };
+    }
+    if (type === "brand") {
+      const b = data.brand || {};
+      return { type, asset: { name: b.name || "Brand", handle: b.url || "" }, thumb: b.logo || null };
+    }
     return null;
   })() : null;
 
@@ -290,7 +319,13 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
   // Determine placeholder
   let placeholder = selectedFrame ? `Describe changes for Frame ${selectedFrame.number}...` : "What do you want to change?";
   if (assetContextResolved?.asset) {
-    const pMap = { talent: "Describe this character...", product: "Describe this product...", location: "Help me refine this location..." };
+    const pMap = {
+      talent: "Describe a change to this character...",
+      product: "Describe a change to this element...",
+      location: "Help me refine this location...",
+      mood: "Describe this mood reference...",
+      brand: "Edit brand name, URL, or guidelines...",
+    };
     placeholder = pMap[assetContextResolved.type] || placeholder;
   }
 
@@ -364,7 +399,7 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
         )}
         {assetContextResolved?.asset && (
           <div style={{ marginBottom: 10 }}>
-            <AssetContext asset={assetContextResolved.asset} type={assetContextResolved.type} onDismiss={onDismissAssetContext} />
+            <AssetContext asset={assetContextResolved.asset} type={assetContextResolved.type} thumb={assetContextResolved.thumb} onDismiss={onDismissAssetContext} />
           </div>
         )}
         <div style={{ position: "relative" }}>
