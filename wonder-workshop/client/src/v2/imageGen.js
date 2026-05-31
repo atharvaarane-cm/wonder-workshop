@@ -115,11 +115,16 @@ function neutralizeCharacterNote(note) {
 // to repetition. We never use "no smile / not laughing" — that
 // actively summons smiles in most diffusion models.
 const NEUTRAL_FACE = "calm composed expression, mouth closed, lips relaxed and neutral, eyes open looking directly at camera, deadpan stoic face, passport-style neutral pose";
-const REFERENCE_STYLE = "photorealistic studio reference photograph, neutral seamless gray studio backdrop, soft even diffused reference lighting, sharp focus, head facing forward squarely toward camera, head level not tilted, casting reference for production";
+// IMPORTANT: never say "casting reference" / "reference card" in the
+// prompt — image models render that literally as a white photo frame
+// with a "NAME · CASTING REFERENCE" caption (looks like an actor's
+// headshot card). We want a clean, full-bleed studio portrait, so we
+// describe the look directly and explicitly forbid any frame/border/text.
+const REFERENCE_STYLE = "photorealistic studio portrait photograph, neutral seamless gray studio backdrop, soft even diffused lighting, sharp focus, head facing forward squarely toward camera, head level not tilted, full-bleed image filling the entire frame edge to edge, no border, no white frame, no matte, no text, no caption, no label, no watermark";
 
 export function talentPrompt(t) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
-  return `Character casting reference headshot of ${t.name}${note}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
+  return `Photorealistic studio portrait headshot of ${t.name}${note}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
 }
 
 // View-specific prompts for the 4-up Headshots and Full Body grids in
@@ -143,13 +148,13 @@ const FULLBODY_VIEW_PHRASES = {
 export function talentHeadshotPrompt(t, view) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = HEADSHOT_VIEW_PHRASES[view] || HEADSHOT_VIEW_PHRASES.front;
-  return `Character casting reference headshot of ${t.name}${note}, ${phrase}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
+  return `Photorealistic studio portrait of ${t.name}${note}, ${phrase}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
 }
 
 export function talentFullBodyPrompt(t, view) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = FULLBODY_VIEW_PHRASES[view] || FULLBODY_VIEW_PHRASES.front;
-  return `Character casting reference full body shot of ${t.name}${note}, ${phrase}. Calm composed expression, mouth closed, lips relaxed, eyes open, deadpan stoic face. Arms relaxed at sides, neutral upright standing posture, weight evenly distributed, feet shoulder-width apart, no performance gesture. Photorealistic studio reference photograph, neutral seamless gray backdrop, soft even diffused reference lighting, full body in frame head to toe, casting reference for production.`;
+  return `Photorealistic full-body studio portrait of ${t.name}${note}, ${phrase}. Calm composed expression, mouth closed, lips relaxed, eyes open, deadpan stoic face. Arms relaxed at sides, neutral upright standing posture, weight evenly distributed, feet shoulder-width apart, no performance gesture. Photorealistic studio portrait photograph, neutral seamless gray backdrop, soft even diffused lighting, full body in frame head to toe, full-bleed image filling the entire frame edge to edge, no border, no white frame, no matte, no text, no caption, no label, no watermark.`;
 }
 
 export function locationPrompt(l) {

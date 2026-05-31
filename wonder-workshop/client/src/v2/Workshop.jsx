@@ -3550,16 +3550,31 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
     return url;
   }
   async function regenerateHeadshot(view, opts) {
-    const refs = character.headshot ? [character.headshot] : [];
-    const url = await generateImage(resolvePrompt(talentHeadshotPrompt(character, view), opts), { ratio: "1:1", referenceImages: refs });
-    dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url });
-    return url;
+    // Mark the slot pending so it shimmers + shows "Generating…" — covers
+    // both single-slot regen and the "Populate all" loop, which both route
+    // through here (previously neither lit the slot up).
+    const key = `talent.${character.id}.headshots.${view}`;
+    markPending(key);
+    try {
+      const refs = character.headshot ? [character.headshot] : [];
+      const url = await generateImage(resolvePrompt(talentHeadshotPrompt(character, view), opts), { ratio: "1:1", referenceImages: refs });
+      dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url });
+      return url;
+    } finally {
+      markDone(key);
+    }
   }
   async function regenerateFullBody(view, opts) {
-    const refs = character.headshot ? [character.headshot] : [];
-    const url = await generateImage(resolvePrompt(talentFullBodyPrompt(character, view), opts), { ratio: "3:4", referenceImages: refs });
-    dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url });
-    return url;
+    const key = `talent.${character.id}.fullBody.${view}`;
+    markPending(key);
+    try {
+      const refs = character.headshot ? [character.headshot] : [];
+      const url = await generateImage(resolvePrompt(talentFullBodyPrompt(character, view), opts), { ratio: "3:4", referenceImages: refs });
+      dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url });
+      return url;
+    } finally {
+      markDone(key);
+    }
   }
 
   return (
@@ -3699,8 +3714,14 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
 
   async function handlePopulateAll() {
     setPopulating(true);
+    // Mark every slot pending up front so they ALL shimmer + show
+    // "Generating…" immediately while they wait their turn (populate runs
+    // sequentially). Each regen clears its own key as it finishes; the
+    // finally clears any stragglers.
+    const keys = Object.values(pendingKeyByView).filter(Boolean);
+    keys.forEach(markPending);
     try { await onPopulateAll(); } catch (e) { console.error(e); }
-    finally { setPopulating(false); }
+    finally { setPopulating(false); keys.forEach(markDone); }
   }
 
   return (
@@ -3758,7 +3779,10 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
   // The slot shimmers whether or not its task has actually started,
   // so queued items announce themselves alongside in-flight ones.
   const externalPending = usePending(pendingKey);
-  const showShimmer = generating || (externalPending && !src);
+  // Shimmer whenever this slot is generating — including a repopulate over an
+  // existing image (every pending key is reliably cleared in a finally, so
+  // there's no stuck-shimmer risk). "any time there's something generating".
+  const showShimmer = generating || externalPending;
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveText, setImproveText] = useState("");
   const [upscaleOpen, setUpscaleOpen] = useState(false);
@@ -3934,7 +3958,7 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
             <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
           </div>
         )}
-        {showShimmer && <ShimmerOverlay />}
+        {showShimmer && <ShimmerOverlay label="Generating…" />}
         {/* Version navigator — surfaces when 2+ versions exist for
             this slot. Prev/next arrows + "N of M" badge in the
             bottom-left, doesn't block the hover bar centered below. */}
