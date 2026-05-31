@@ -4628,7 +4628,7 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onFocusAsset }) {
   const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
 
   return (
-    <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16 }}>
+    <div id="ww-asset-rail" style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16, scrollMarginTop: 12 }}>
       <Card className="rounded-xl p-5" style={{
         background: "#141414",
         minHeight: 220,
@@ -7213,12 +7213,22 @@ export default function WorkshopV2() {
   // listen and pop back to its tile grid. Matches Logan's request
   // that clicking the tab name returns to the grid.
   const handleToggleAssetTab = useCallback((tabKey) => {
+    // The left-rail nav must work from anywhere. If we're in a frame's
+    // ProductionView, return to the One-Sheet first — otherwise we'd only
+    // change off-screen state and nothing would visibly happen.
+    setProductionFrameId(null);
+    setSelectedFrameId(null);
     setAssetTabOpen(prev => {
       if (prev === tabKey) {
         window.dispatchEvent(new CustomEvent("ww-asset-tab-reset", { detail: { tab: tabKey } }));
       }
       return tabKey;
     });
+    // Once the One-Sheet has rendered, scroll the asset rail into view so
+    // clicking a section actually takes you to that section.
+    setTimeout(() => {
+      document.getElementById("ww-asset-rail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
   }, []);
 
   // Production view frame navigation
