@@ -87,8 +87,21 @@
   --sidebar-ring: rgba(255,255,255,0.28);
 }
 
-html { height: 100%; overflow: hidden; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100%; overflow: hidden; }
+html {
+  height: 100%;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 #root { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 button { font-family: var(--font); cursor: pointer; }
 button:not([data-slot]) { border: none; background: none; }

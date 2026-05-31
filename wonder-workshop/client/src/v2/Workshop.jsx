@@ -36,6 +36,12 @@ import iconDropfilesUrl from "../assets/icon-dropfiles.svg";
 import iconFolderUrl from "../assets/icon-folder.svg";
 import iconSparkleUrl from "../assets/icon-sparkle.svg";
 import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
+import ratioIcon169Svg from "../assets/ratio-icon-16-9.svg?raw";
+import ratioIcon916Svg from "../assets/ratio-icon-9-16.svg?raw";
+import ratioIcon11Svg from "../assets/ratio-icon-1-1.svg?raw";
+import ratioIcon45Svg from "../assets/ratio-icon-4-5.svg?raw";
+import ratioIcon43Svg from "../assets/ratio-icon-4-3.svg?raw";
+import ratioIcon21Svg from "../assets/ratio-icon-2-1.svg?raw";
 import {
   newProjectId,
   listProjects,
@@ -1671,6 +1677,25 @@ function DropdownAssetIcon({ src, size = 18, alt = "" }) {
       width={size}
       height={size}
       style={{ display: "block", width: size, height: size, flexShrink: 0, objectFit: "contain" }}
+    />
+  );
+}
+
+const RATIO_ICON_SVGS = {
+  "16:9": ratioIcon169Svg,
+  "9:16": ratioIcon916Svg,
+  "1:1": ratioIcon11Svg,
+  "4:5": ratioIcon45Svg,
+  "4:3": ratioIcon43Svg,
+  "2:1": ratioIcon21Svg,
+};
+
+function RatioIcon({ ratio, size = 18, color = "currentColor" }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{ color, width: size, height: size, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 0 }}
+      dangerouslySetInnerHTML={{ __html: RATIO_ICON_SVGS[ratio] || ratioIcon169Svg }}
     />
   );
 }
@@ -5661,7 +5686,7 @@ function TargetDurationControl({ value, onChange }) {
 function AspectRatioControl({ value, onChange }) {
   const [open, setOpen] = useState(false);
   // Match v1's RATIOS (16:9 / 9:16 / 1:1 / 4:5 / 4:3 / 2:1).
-  const RATIOS = ["16:9", "9:16", "1:1", "4:5", "4:3", "2:1"];
+  const RATIOS = BRIEF_RATIOS;
   useEffect(() => {
     if (!open) return;
     function onDoc(e) { if (!e.target.closest?.(".ww-aspect-control")) setOpen(false); }
@@ -5693,15 +5718,19 @@ function AspectRatioControl({ value, onChange }) {
           boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
         }}>
           {RATIOS.map(r => (
-            <button key={r} onClick={() => { setOpen(false); onChange?.(r); }}
+            <button key={r.id} onClick={() => { setOpen(false); onChange?.(r.id); }}
               style={{
+                display: "flex", alignItems: "center", gap: 8,
                 padding: "5px 10px", textAlign: "left",
-                background: r === value ? "var(--warm-08)" : "transparent",
+                background: r.id === value ? "var(--warm-08)" : "transparent",
                 border: "none", borderRadius: 4, cursor: "pointer", outline: "none",
-                fontFamily: "var(--f)", fontSize: 11, fontWeight: r === value ? 700 : 500,
-                color: r === value ? "var(--warm)" : "var(--warm-40)",
+                fontFamily: "var(--f)", fontSize: 11, fontWeight: r.id === value ? 700 : 500,
+                color: r.id === value ? "var(--warm)" : "var(--warm-40)",
               }}
-            >{r}</button>
+            >
+              <RatioIcon ratio={r.id} size={18} />
+              <span>{r.label}</span>
+            </button>
           ))}
         </div>
       )}
@@ -5749,12 +5778,12 @@ function SaveIndicator({ status, lastSavedAt }) {
 const BRIEF_LENGTHS = ["6s", "15s", "30s", "60s", "90s", "120s"];
 // Aspect ratio options. Direct port of v1's RATIOS.
 const BRIEF_RATIOS = [
-  { id: "16:9", label: "16 : 9", sub: "Widescreen" },
-  { id: "9:16", label: "9 : 16", sub: "Portrait" },
-  { id: "1:1",  label: "1 : 1",  sub: "Square" },
-  { id: "4:5",  label: "4 : 5",  sub: "Portrait 4:5" },
-  { id: "4:3",  label: "4 : 3",  sub: "Classic" },
-  { id: "2:1",  label: "2 : 1",  sub: "Anamorphic" },
+  { id: "16:9", label: "16:9 - Widescreen" },
+  { id: "9:16", label: "9:16 - Vertical" },
+  { id: "1:1",  label: "1:1 - Square" },
+  { id: "4:5",  label: "4:5 - Portrait" },
+  { id: "4:3",  label: "4:3 - Classic" },
+  { id: "2:1",  label: "2:1 - Wide Banner" },
 ];
 // Wonder Workshop brand backdrop — replaces the rotating cinematic
 // stills with a single signature mark. Kept as a single-element array
@@ -5939,7 +5968,10 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
               onChange={client => setMeta(m => ({ ...m, client }))}
               triggerIcon={<DropdownAssetIcon src={iconFolderUrl} size={18} />}
               triggerLabel={meta.client || "Select Folder"}
-              renderIcon={() => <DropdownAssetIcon src={iconFolderUrl} size={18} />}
+              renderIcon={(value, _color, size = 18) => value
+                ? <DropdownAssetIcon src={iconFolderUrl} size={size} />
+                : <span aria-hidden="true" style={{ display: "block", width: size, height: size, flexShrink: 0 }} />
+              }
               popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
             />
             <RootMenuDropdown
@@ -5959,7 +5991,7 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
               onChange={v => setMeta(m => ({ ...m, aspect: v }))}
               triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={18} />}
               triggerLabel={`Aspect: ${meta.aspect || "16:9"}`}
-              renderIcon={() => <DropdownAssetIcon src={iconAspectUrl} size={18} />}
+              renderIcon={(value, color, size = 18) => <RatioIcon ratio={value} color={color} size={size} />}
             />
           </div>
           <div style={{ marginBottom: 20, position: "relative" }}>
