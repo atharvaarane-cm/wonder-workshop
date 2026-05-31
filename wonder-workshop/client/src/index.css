@@ -9,6 +9,12 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 }
 
+/* Text selection — a clear, high-contrast highlight that reads on both the
+   dark and light UI. Without it the browser default left selected text
+   invisible in dark surfaces like the Edit Brief textarea. */
+::selection { background: #2F6BFF; color: #fff; }
+::-moz-selection { background: #2F6BFF; color: #fff; }
+
 :root {
   --bg:        #F0EFED;
   --card: oklch(1 0 0);
