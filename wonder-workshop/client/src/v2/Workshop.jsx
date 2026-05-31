@@ -3668,6 +3668,27 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
     }
   }
 
+  // Populate-all: generate every view, RETRY each once (firing 8 images at
+  // once often trips a transient rate-limit / safety block), and if any still
+  // fail, TOAST which ones — instead of silently leaving an empty slot with no
+  // explanation (that's why a "front full body" could just not appear).
+  async function populateAllViews(genFn, kindLabel) {
+    const failed = [];
+    let lastMsg = "";
+    for (const v of VIEWS) {
+      try {
+        await genFn(v);
+      } catch {
+        try { await genFn(v); }
+        catch (e2) { failed.push(v); lastMsg = e2?.message || lastMsg; console.error(`[populate ${kindLabel}]`, v, e2); }
+      }
+    }
+    if (failed.length) {
+      const names = failed.map(v => VIEW_LABEL[v] || v).join(", ");
+      toast(`Couldn't generate ${failed.length} ${kindLabel} view${failed.length === 1 ? "" : "s"} (${names})${lastMsg ? `: ${lastMsg}` : ""}. Click the empty slot to retry.`, { kind: "error", ttl: 8000 });
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {/* Detail header — back button, name, role, LOCK CHARACTER pill */}
@@ -3790,9 +3811,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
             onRegenerate={regenerateHeadshot}
             onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `headshots:${view}` })}
             onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: dataUrl })}
-            onPopulateAll={async () => {
-              for (const v of VIEWS) { try { await regenerateHeadshot(v); } catch (e) { console.error(e); } }
-            }}
+            onPopulateAll={() => populateAllViews(regenerateHeadshot, "headshot")}
           />
 
           {/* Full Body grid (4 views) */}
@@ -3810,9 +3829,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
             onRegenerate={regenerateFullBody}
             onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `fullBody:${view}` })}
             onUpload={(view, dataUrl) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: dataUrl })}
-            onPopulateAll={async () => {
-              for (const v of VIEWS) { try { await regenerateFullBody(v); } catch (e) { console.error(e); } }
-            }}
+            onPopulateAll={() => populateAllViews(regenerateFullBody, "full-body")}
           />
         </>
       ) : (
@@ -4089,9 +4106,22 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
           />
         )}
         {!src && !showShimmer && (
-          <div style={{ textAlign: "center", color: "var(--warm-25)", position: "relative", zIndex: 1 }}>
-            <SectionIcon name="plus" size={16} color="var(--warm-25)" />
-            <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
+          <div style={{ textAlign: "center", color: "var(--warm-25)", position: "relative", zIndex: 1, padding: 8 }}>
+            {locked ? (
+              <>
+                <SectionIcon name="plus" size={16} color="var(--warm-25)" />
+                <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
+              </>
+            ) : (
+              // Empty + unlocked → clicking the slot generates. Make that
+              // obvious (it was just a "+ LABEL" placeholder before, so users
+              // typed a description and didn't know how to generate the image).
+              <>
+                <SectionIcon name="sparkle" size={18} color="var(--warm-45)" />
+                <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, marginTop: 5, color: "var(--warm-50)" }}>Generate {label.toLowerCase()}</div>
+                <div style={{ fontFamily: "var(--f)", fontSize: 8.5, fontWeight: 400, marginTop: 2, color: "var(--warm-25)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Click to generate</div>
+              </>
+            )}
           </div>
         )}
         {showShimmer && <ShimmerOverlay label="Generating…" />}
