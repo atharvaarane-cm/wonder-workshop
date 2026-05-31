@@ -14,6 +14,12 @@
    invisible in dark surfaces like the Edit Brief textarea. */
 ::selection { background: #2F6BFF; color: #fff; }
 ::-moz-selection { background: #2F6BFF; color: #fff; }
+/* Form controls need the rule at element specificity too — a bare
+   (universal) ::selection is not reliably honored inside <textarea>/<input>
+   in some engines, which left the highlight invisible in the Edit Brief
+   modal even though the global rule was present. */
+textarea::selection, input::selection { background: #2F6BFF !important; color: #fff !important; }
+textarea::-moz-selection, input::-moz-selection { background: #2F6BFF !important; color: #fff !important; }
 
 :root {
   --bg:        #F0EFED;
