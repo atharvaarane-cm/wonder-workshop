@@ -20,16 +20,20 @@ import {
   AssetContext,
 } from "../Workshop.jsx";
 
+// Slide-in wrapper — subtle 6px rise + fade, spring settle. MUST live at
+// module scope so it has a STABLE component identity. Defining it inside
+// ChatMessage made it a new component type on every render, so React
+// remounted the motion.div and replayed the entry animation on every
+// keystroke — the chat appeared to "blink". Hoisting it fixes that.
+const MotionWrap = ({ children }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 8 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.7 }}
+  >{children}</motion.div>
+);
+
 function ChatMessage({ message: m, data, onMentionClick }) {
-  // Slide-in: subtle 6px rise + fade. Spring transition gives a little
-  // settle instead of the linear bottom-up scrolls every chat UI does.
-  const MotionWrap = ({ children }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.7 }}
-    >{children}</motion.div>
-  );
   if (m.role === "system") {
     return <MotionWrap><div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 300, color: "var(--warm-25)", lineHeight: 1.65, padding: "4px 0" }}>{m.text}</div></MotionWrap>;
   }
