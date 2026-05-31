@@ -27,7 +27,6 @@ import {
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
 import { EditBriefDialog } from "./components/BriefPanel.jsx";
-import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { AIChatPanel, AIChatTab } from "./components/AIChat.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import iconAspectUrl from "../assets/icon-aspect.svg";
@@ -3509,7 +3508,6 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
   const [editPromptOpen, setEditPromptOpen] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [improvingPrompt, setImprovingPrompt] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
   const fileRef = useRef(null);
   const aspectCSS = ratio.replace(":", "/");
 
@@ -3644,10 +3642,13 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
           background: "var(--warm-04)",
           border: "1px solid var(--warm-08)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          cursor: src ? "zoom-in" : "pointer", overflow: "hidden",
+          cursor: "pointer", overflow: "hidden",
         }}
         onClick={() => {
-          if (src) setLightboxOpen(true);
+          // Clicking an image opens the AI chat to edit it (the lightbox was
+          // removed). The chat is already focused on the asset you drilled
+          // into; this just surfaces the panel.
+          if (src) window.dispatchEvent(new CustomEvent("ww-open-chat"));
           else if (!generating && !locked) handleRegen();
         }}
       >
@@ -3715,9 +3716,6 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
             boxShadow: "0 4px 14px rgba(0,0,0,0.32)",
             zIndex: 5,
           }} onClick={e => e.stopPropagation()}>
-            <HoverBarBtn title="Expand" onClick={() => setLightboxOpen(true)}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </HoverBarBtn>
             <HoverBarBtn title="Download" onClick={handleDownload}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </HoverBarBtn>
@@ -3816,18 +3814,6 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
         <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
           onChange={e => { handleUploadFile(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
-      {lightboxOpen && src && (
-        <V2Lightbox
-          src={src}
-          label={label}
-          basePrompt={basePrompt}
-          versions={versions}
-          onSelectVersion={onSelectVersion}
-          onRegenerate={locked ? undefined : (opts) => onRegenerate?.(opts)}
-          onUpload={locked ? undefined : onUpload}
-          onClose={() => setLightboxOpen(false)}
-        />
-      )}
       {editPromptOpen && (
         <div onClick={() => setEditPromptOpen(false)} style={{
           position: "fixed", inset: 0, zIndex: 9500,
@@ -6112,6 +6098,15 @@ export default function WorkshopV2() {
       window.removeEventListener("beforeunload", flushOnUnload);
       window.removeEventListener("pagehide", flushOnUnload);
     };
+  }, []);
+
+  // Clicking any image opens the AI chat (the per-image lightbox was removed
+  // in favor of editing images via chat). The chat is already focused on the
+  // asset/frame you're viewing; this surfaces and focuses the panel.
+  useEffect(() => {
+    function openChat() { setSidebarOpen(true); setChatFocusTrigger(p => p + 1); }
+    window.addEventListener("ww-open-chat", openChat);
+    return () => window.removeEventListener("ww-open-chat", openChat);
   }, []);
 
   // Project switcher — load a different project into the workspace.
