@@ -2910,6 +2910,29 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .img-slot-empty-placeholder { color: var(--faint); font-size: 11px; }
 
+.img-hover-nav-anchor {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.img-hover-nav-popover {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.img-hover-nav-popover::before { display: none; }
+.img-hover-nav-popover [data-slot="popover-viewport"] {
+  overflow: visible;
+  padding: 0;
+}
+
 /* Blue floating hover-nav pill — Ravi's "hover nav" from the Figma
    canvas. Floats ABOVE the image (outside the slot's top edge) so its
    action buttons don't cover image content. Section-card no longer
@@ -2924,6 +2947,12 @@ textarea { font-family: var(--font); resize: none; }
   box-shadow: 0 4px 14px rgba(0,0,0,0.32);
   opacity: 0; pointer-events: none;
   transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.img-hover-nav-popover .img-hover-nav {
+  position: static;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
 }
 /* Toolbar is click-only — hover used to show it but Ed asked for a less
    chatty UI. Selection still reads clearly via the .img-slot.active

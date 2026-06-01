@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
 const HOVER_SCALE = 1.012;
@@ -26,21 +27,13 @@ const MOVEMENT_TYPES = [
 
 function ShimmerOverlay({ label = "Generating..." }) {
   return (
-    <div style={{
-      position: "absolute", inset: 0, zIndex: 3,
-      background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%)",
-      backgroundSize: "200% 100%",
-      animation: "shimmer 1.5s infinite linear",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      pointerEvents: "none",
-    }}>
-      <span style={{
-        fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
-        color: "var(--warm-50)", letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        background: "rgba(0,0,0,0.4)", padding: "3px 8px", borderRadius: 999,
-        backdropFilter: "blur(6px)",
-      }}>{label}</span>
+    <div
+      className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center bg-[length:200%_100%] animate-[shimmer_1.5s_infinite_linear]"
+      style={{ backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%)" }}
+    >
+      <span className="rounded-full bg-black/40 px-2 py-[3px] font-semibold text-[9px] uppercase tracking-[0.06em] text-[color:var(--warm-50)] backdrop-blur-md">
+        {label}
+      </span>
     </div>
   );
 }
@@ -83,13 +76,7 @@ function FrameDuration({ duration, onChange }) {
           }
         }}
         onClick={e => e.stopPropagation()}
-        style={{
-          width: 42, fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
-          color: "var(--warm-40)", textAlign: "center",
-          background: "var(--warm-08)", border: "1px solid var(--warm-12)",
-          borderRadius: 4, padding: "2px 4px", outline: "none",
-          letterSpacing: "0.04em",
-        }}
+        className="w-[42px] rounded-md border border-[#363636] bg-[#191919]/80 px-1 py-0.5 text-center text-xs font-medium leading-5 text-white/70 outline-none"
       />
     );
   }
@@ -101,12 +88,7 @@ function FrameDuration({ duration, onChange }) {
         setEditing(true);
       }}
       title="Click to edit shot duration"
-      style={{
-        fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
-        color: "var(--warm-30)", letterSpacing: "0.06em",
-        padding: "2px 6px", borderRadius: 4, cursor: "pointer",
-        background: "var(--warm-04)", border: "1px solid var(--warm-06)",
-      }}
+      className="cursor-pointer whitespace-nowrap text-xs font-medium leading-5 text-white/60"
     >
       {duration || "-"}
     </span>
@@ -138,12 +120,15 @@ function StoryboardFrameCardComponent({
     dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
   };
 
-  const frameCardClassName = [
-    "overflow-hidden rounded-lg transition-colors",
-    selected ? "ring-1 ring-ring/50" : "",
-    highlighted ? "ring-1 ring-ring/30" : "",
-    hovered ? "border-ring/40" : "",
-  ].filter(Boolean).join(" ");
+  const frameCardClassName = cn(
+    "relative flex h-full cursor-pointer flex-col overflow-hidden rounded-[12px] border border-[#363636] bg-[#202020] text-white",
+    "shadow-[0px_-1px_0px_0px_rgba(255,255,255,0.06),0px_1px_2px_0px_rgba(0,0,0,0.42)] transition-[border-color,box-shadow,opacity]",
+    isDragSrc ? "cursor-grabbing opacity-[0.15]" : "cursor-pointer opacity-100",
+    selected && "border-[#43a3fd] ring-1 ring-[#43a3fd]/60",
+    highlighted && "ring-1 ring-[#43a3fd]/40 animate-[highlightPulse_1.5s_ease]",
+    hovered && !selected && "border-white/25",
+  );
+  const movementLabel = MOVEMENT_TYPES.find(m => m.value === frame.movement)?.label || "Static";
 
   return (
     <Card
@@ -163,50 +148,76 @@ function StoryboardFrameCardComponent({
       whileHover={isDragSrc ? undefined : { y: -2, scale: HOVER_SCALE }}
       whileTap={isDragSrc ? undefined : { scale: TAP_SCALE }}
       transition={TAP_SPRING}
-      style={{
-        cursor: isDragSrc ? "grabbing" : "pointer",
-        opacity: isDragSrc ? 0.15 : 1,
-        animation: highlighted ? "highlightPulse 1.5s ease" : "none",
-        border: "1px solid #ff2b2b",
-      }}
     >
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "6px 10px",
-        borderBottom: "1px solid var(--warm-04)",
-      }}>
-        <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-35)", letterSpacing: "0.04em" }}>
-          {frame.number}
-        </span>
-        <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-20)", letterSpacing: "0.04em" }}>
-          {frame.shotType} {"\xB7"} {MOVEMENT_TYPES.find(m => m.value === frame.movement)?.label || "Static"}
-        </span>
+      <div className="pointer-events-none absolute -left-px -top-[3px] h-14 w-[calc(100%+2px)] overflow-hidden">
+        <div className="absolute inset-0 bg-[rgba(90,90,90,0.5)]" />
+        <div
+          className="absolute inset-0 opacity-10"
+          style={{
+            background:
+              "radial-gradient(60% 120% at 18% 0%, rgba(255,216,130,0.45), transparent 60%), radial-gradient(70% 120% at 76% 4%, rgba(85,190,255,0.42), transparent 65%)",
+          }}
+        />
       </div>
 
-      <div style={{ aspectRatio: aspectCSS, background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length], position: "relative", overflow: "hidden" }}>
+      <div className="relative z-[1] flex h-[38px] shrink-0 items-center justify-between gap-3 px-[18px]">
+        <span className="shrink-0 text-base font-semibold leading-5 text-white [font-feature-settings:'zero']">
+          {frame.number}
+        </span>
+        <span className="flex min-w-0 items-center gap-1 text-xs font-medium leading-5 text-white/60">
+          <span className="shrink-0 font-['SF_Pro'] font-medium">{`\u{1002D2}`}</span>
+          <span className="truncate">{loc?.name || "-"}</span>
+        </span>
+        <span className="flex min-w-0 items-center gap-1 text-xs font-medium leading-5 text-white/60">
+          <span className="shrink-0 font-['SF_Pro'] font-medium">{`\u{1008AF}`}</span>
+          <span className="truncate">{frame.shotType} {"\xB7"} {movementLabel}</span>
+        </span>
+        <FrameDuration
+          duration={frame.duration}
+          onChange={v => dispatch?.({ type: "UPDATE_FRAME", frameId: frame.id, field: "duration", value: v })}
+        />
+      </div>
+
+      <div
+        className="relative mx-[-1px] shrink-0 overflow-hidden rounded-[12px] border border-[#363636] bg-[#191919] shadow-[inset_0px_0px_0px_2px_rgba(255,255,255,0.15)]"
+        style={{ aspectRatio: aspectCSS }}
+      >
+        <div
+          className="absolute inset-0"
+          style={{ background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length] }}
+        />
         {frame.uploadedImage && (
           <img
             src={frame.uploadedImage}
             alt=""
             onError={handleImageError}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+            className="absolute inset-0 h-full w-full object-cover"
           />
         )}
         {!frame.uploadedImage && (
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
+          <div
+            className="absolute inset-0"
+            style={{ background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }}
+          />
         )}
         {frame.imageStatus === "generating" && <ShimmerOverlay />}
+        {!frame.uploadedImage && frame.imageStatus !== "generating" && frame.imageStatus !== "error" && onRetry && (
+          <div className="absolute inset-0 z-[3] flex items-center justify-center bg-black/20 p-2.5">
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onRetry(frame.id);
+              }}
+              className="cursor-pointer rounded-full border border-white/40 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-[0.04em] text-white backdrop-blur-md"
+            >
+              Generate
+            </button>
+          </div>
+        )}
         {frame.imageStatus === "error" && !frame.uploadedImage && (
-          <div style={{
-            position: "absolute", inset: 0, zIndex: 3,
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            gap: 8, padding: 10,
-            background: "rgba(0,0,0,0.42)",
-          }}>
-            <div style={{
-              fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-              color: "rgba(255,255,255,0.92)", letterSpacing: "0.06em", textTransform: "uppercase",
-            }}>
+          <div className="absolute inset-0 z-[3] flex flex-col items-center justify-center gap-2 bg-black/40 p-2.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-white/90">
               Generation failed
             </div>
             {onRetry && (
@@ -216,12 +227,7 @@ function StoryboardFrameCardComponent({
                   e.stopPropagation();
                   onRetry(frame.id);
                 }}
-                style={{
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-                  color: "#fff", background: "rgba(255,255,255,0.12)",
-                  border: "1px solid rgba(255,255,255,0.4)", borderRadius: 999,
-                  padding: "4px 12px", cursor: "pointer", letterSpacing: "0.04em",
-                }}
+                className="cursor-pointer rounded-full border border-white/40 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-[0.04em] text-white"
               >
                 Retry
               </button>
@@ -230,23 +236,15 @@ function StoryboardFrameCardComponent({
         )}
       </div>
 
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "5px 10px",
-        borderTop: "1px solid var(--warm-04)",
-      }}>
-        <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-20)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          {loc?.name || "-"}
-        </span>
-        <FrameDuration
-          duration={frame.duration}
-          onChange={v => dispatch?.({ type: "UPDATE_FRAME", frameId: frame.id, field: "duration", value: v })}
-        />
-      </div>
-
-      <div style={{ padding: "8px 10px 10px" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-          {renderMentions ? renderMentions(frame.brief, data) : frame.brief}
+      <div
+        className="relative z-[1] min-h-[91px] flex-1 px-[23px] pb-3 pt-3 backdrop-blur-[25px]"
+        style={{
+          backgroundImage:
+            "linear-gradient(0deg, rgba(0,0,0,0.74) 0%, rgba(0,0,0,0.733) 6.2698%, rgba(0,0,0,0.714) 12.54%, rgba(0,0,0,0.68) 18.81%, rgba(0,0,0,0.63) 25.079%, rgba(0,0,0,0.57) 31.349%, rgba(0,0,0,0.494) 37.619%, rgba(0,0,0,0.41) 43.889%, rgba(0,0,0,0.33) 50.159%, rgba(0,0,0,0.247) 56.429%, rgba(0,0,0,0.173) 62.698%, rgba(0,0,0,0.11) 68.968%, rgba(0,0,0,0.06) 75.238%, rgba(0,0,0,0) 94.048%)",
+        }}
+      >
+        <div className="line-clamp-3 text-sm font-medium leading-[24.39px] text-white">
+          {renderMentions ? renderMentions(frame.brief, data, { variant: "figmaCard" }) : frame.brief}
         </div>
       </div>
     </Card>

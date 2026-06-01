@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext } from "react";
+import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext, useId } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { LockIcon, LockOpenIcon, MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
@@ -25,6 +25,11 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@/components/ui/menu";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
 import { EditBriefDialog } from "./components/BriefPanel.jsx";
@@ -1712,10 +1717,9 @@ const CHAT_SUGGESTION_ICON_SVGS = {
   elements: iconNavElementsSvg,
 };
 
-function ChatSuggestionIcon({ name, size = 16 }) {
+function ChatSuggestionIcon({ name }) {
   const svg = CHAT_SUGGESTION_ICON_SVGS[name]
-    ?.replace("<svg ", `<svg style="width:${size}px;height:${size}px;min-width:${size}px;min-height:${size}px;" `)
-    ?.replace('width="24" height="24"', `width="${size}" height="${size}"`);
+    ?.replace("<svg ", '<svg class="size-5" ');
 
   return (
     <span
@@ -2409,7 +2413,14 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
         </Card>
 
         {/* Delete frame */}
-        <ConfirmAction label="Delete Frame" onConfirm={() => onDeleteFrame(frame.id)} variant="danger" style={{ padding: "6px 14px", fontSize: 11 }} />
+        <Button
+          variant="destructive-outline"
+          size="xs"
+          className="mt-4 w-fit"
+          onClick={() => onDeleteFrame(frame.id)}
+        >
+          Delete Frame
+        </Button>
         </div>
         </div>{/* close portrait grid wrapper */}
       </Reveal>
@@ -3146,6 +3157,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
 // minimum surface for the redesign to feel right.
 function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versions = [], onSelectVersion, onRegenerate, onClear, onUpload }) {
   const [hovered, setHovered] = useState(false);
+  const [toolbarHovered, setToolbarHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
   // External pending state (from the autoGen pool's pending bus).
   // The slot shimmers whether or not its task has actually started,
@@ -3160,7 +3172,32 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
   const [improvingPrompt, setImprovingPrompt] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const fileRef = useRef(null);
+  const toolbarCloseTimer = useRef(null);
+  const toolbarTriggerId = useId();
   const aspectCSS = ratio.replace(":", "/");
+  const toolbarOpen = (hovered || toolbarHovered) && src && !generating;
+
+  useEffect(() => () => clearTimeout(toolbarCloseTimer.current), []);
+
+  function openToolbar() {
+    clearTimeout(toolbarCloseTimer.current);
+    setHovered(true);
+  }
+
+  function scheduleToolbarClose() {
+    clearTimeout(toolbarCloseTimer.current);
+    toolbarCloseTimer.current = setTimeout(() => {
+      setHovered(false);
+      setToolbarHovered(false);
+      setImproveOpen(false);
+      setUpscaleOpen(false);
+    }, 140);
+  }
+
+  function keepToolbarOpen() {
+    clearTimeout(toolbarCloseTimer.current);
+    setToolbarHovered(true);
+  }
 
   async function handleUpscale(targetRes) {
     setUpscaleOpen(false);
@@ -3286,8 +3323,12 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
   return (
     <>
       <div
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => { setHovered(false); setImproveOpen(false); setUpscaleOpen(false); }}
+        onMouseEnter={openToolbar}
+        onMouseMove={openToolbar}
+        onMouseLeave={scheduleToolbarClose}
+        onPointerEnter={openToolbar}
+        onPointerMove={openToolbar}
+        onPointerLeave={scheduleToolbarClose}
         style={{
           position: "relative", aspectRatio: aspectCSS, borderRadius: 8,
           background: "var(--warm-04)",
@@ -3355,14 +3396,24 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
             </div>
           );
         })()}
-        {/* Blue v1-style hover bar — visible when image exists and user hovers */}
-        {hovered && src && !generating && (
+        {/* Portaled action bar — anchored to the slot but rendered outside
+            the image/card clipping context. */}
+        {src && !generating && (
+          <Popover open={toolbarOpen} triggerId={toolbarTriggerId}>
+            <PopoverTrigger id={toolbarTriggerId} className="img-hover-nav-anchor" aria-label="Image actions" />
+            <PopoverPopup
+              side="top"
+              align="center"
+              sideOffset={8}
+              className="img-hover-nav-popover"
+              onMouseEnter={keepToolbarOpen}
+              onMouseLeave={scheduleToolbarClose}
+              onClick={e => e.stopPropagation()}
+            >
           <div style={{
-            position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
             display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 20,
             background: "#006dd4", border: "1px solid #43a3fd",
             boxShadow: "0 4px 14px rgba(0,0,0,0.32)",
-            zIndex: 5,
           }} onClick={e => e.stopPropagation()}>
             <HoverBarBtn title="Expand" onClick={() => setLightboxOpen(true)}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -3412,9 +3463,11 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </HoverBarBtn>
           </div>
+            </PopoverPopup>
+          </Popover>
         )}
         {/* Improve with AI popover */}
-        {improveOpen && hovered && src && !generating && (
+        {improveOpen && toolbarOpen && src && !generating && (
           <div onClick={e => e.stopPropagation()} style={{
             position: "absolute", bottom: 56, left: "50%", transform: "translateX(-50%)",
             zIndex: 6, width: "min(90%, 320px)",
@@ -4398,11 +4451,6 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
               </div>
               <EditableText value={data.meta.title} onChange={v => onUpdateMeta("title", v)}
                 style={{ fontFamily: "var(--f)", fontSize: 32, fontWeight: 700, color: "var(--warm)", letterSpacing: "-0.03em", display: "block", lineHeight: 1.1 }} />
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
-                <span style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 400, color: "var(--warm-30)" }}>:{data.meta.format}</span>
-                <span style={{ color: "var(--warm-12)" }}>&middot;</span>
-                <span style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 400, color: "var(--warm-30)" }}>{data.meta.aspect === "2.39" ? "2.39:1 Anamorphic" : data.meta.aspect}</span>
-              </div>
             </div>
             <div style={{ paddingTop: 6 }}>
               <EditBriefDialog
@@ -4573,7 +4621,21 @@ function renderMentions(text, data, opts = {}) {
         key={i}
         title={part.asset?.name || part.handle}
         onClick={opts.onMentionClick ? (e => { e.stopPropagation(); opts.onMentionClick(part.asset); }) : undefined}
-        style={{
+        style={opts.variant === "figmaCard" ? {
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "6.098px 7.317px",
+          margin: "0 2px",
+          borderRadius: 7.317,
+          background: "rgba(32,32,32,0.4)",
+          color: part.asset?._type === "product" ? "#f1d676" : "#aecff3",
+          border: "0",
+          fontSize: "1em",
+          fontWeight: 500,
+          lineHeight: "1",
+          cursor: opts.onMentionClick ? "pointer" : "default",
+        } : {
           display: "inline-block",
           padding: "0 5px", margin: "0 1px",
           borderRadius: 4,
@@ -4585,7 +4647,7 @@ function renderMentions(text, data, opts = {}) {
           cursor: opts.onMentionClick ? "pointer" : "default",
         }}
       >
-        {part.handle}
+        {opts.variant === "figmaCard" ? part.handle.replace(/^@/, "") : part.handle}
       </span>
     );
   });
@@ -4950,13 +5012,13 @@ function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, 
           </>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "0 16px", flex: 1, justifyContent: "center" }}>
-            <div style={{ fontFamily: "var(--f)", fontSize: 18, fontWeight: 300, color: "var(--warm-35)", letterSpacing: "-0.02em" }}>
+            <div style={{ fontFamily: "var(--f)", fontSize: 16, fontWeight: 300, color: "var(--warm-35)", letterSpacing: "-0.02em" }}>
               What should we do?
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
               {CHAT_SUGGESTIONS.map(s => (
-                <Button key={s.label} variant="outline" size="sm" className="w-[min(330px,100%)] justify-center text-sm sm:text-sm" onClick={() => handleSuggestion(s.label)}>
-                  <ChatSuggestionIcon name={s.icon} size={18} />
+                <Button key={s.label} variant="outline" size="sm" className="w-[min(330px,100%)] justify-center !text-foreground/80 text-[13px] dark:!text-white/80 sm:text-[13px] [&_svg]:!size-5" onClick={() => handleSuggestion(s.label)}>
+                  <ChatSuggestionIcon name={s.icon} />
                   {s.label}
                 </Button>
               ))}
