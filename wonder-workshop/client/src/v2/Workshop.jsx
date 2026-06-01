@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext } from "react";
+import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext, useId } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { LockIcon, LockOpenIcon, MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
 
 // Shared spring config — used across press/hover feedback so the whole
 // app feels physically coherent. Tuned to feel snappy on click without
@@ -24,32 +25,51 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@/components/ui/menu";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
 import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { AIChatPanel, AIChatTab } from "./components/AIChat.jsx";
+import { GenerateStoryboardButton } from "./components/GenerateStoryboardButton.jsx";
+import { StoryboardFrameCard } from "./components/storyboard/StoryboardFrameCard.jsx";
+import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import iconAspectUrl from "../assets/icon-aspect.svg";
 import iconClockUrl from "../assets/icon-clock.svg";
 import iconDropfilesUrl from "../assets/icon-dropfiles.svg";
 import iconFolderUrl from "../assets/icon-folder.svg";
+import iconSparkleUrl from "../assets/icon-sparkle.svg";
 import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
+import iconNavCharSvg from "../assets/icon-nav-char.svg?raw";
+import iconNavElementsSvg from "../assets/icon-nav-elements.svg?raw";
+import iconNavLocationSvg from "../assets/icon-nav-location.svg?raw";
+import ratioIcon169Svg from "../assets/ratio-icon-16-9.svg?raw";
+import ratioIcon916Svg from "../assets/ratio-icon-9-16.svg?raw";
+import ratioIcon11Svg from "../assets/ratio-icon-1-1.svg?raw";
+import ratioIcon45Svg from "../assets/ratio-icon-4-5.svg?raw";
+import ratioIcon43Svg from "../assets/ratio-icon-4-3.svg?raw";
+import ratioIcon21Svg from "../assets/ratio-icon-2-1.svg?raw";
 import {
   newProjectId,
   listProjects,
   loadProject,
   loadProjectAsync,
   saveProject,
+  saveProjectAsync,
   saveProjectSync,
   deleteProject,
   renameProject,
   setProjectFolder,
   getActiveProjectId,
   setActiveProjectId,
-  migrateLegacyState,
   listFolders,
   createFolder,
   deleteFolder,
+  renameFolder,
 } from "./persistence.js";
 
 /*
@@ -2221,14 +2241,19 @@ function LocationThumb({ loc, size = 32, borderRadius = 6, style = {} }) {
 
 // -- PRIMITIVES -----------------------------------------------
 
-function Reveal({ children, delay = 0, y = 24 }) {
-  const [on, set] = useState(false);
-  useEffect(() => { const t = setTimeout(() => set(true), delay); return () => clearTimeout(t); }, []);
+function Reveal({ children, delay = 0, y = 20, duration = 540, direction = "down" }) {
+  const revealY = direction === "down" ? -Math.abs(y) : Math.abs(y);
   return (
-    <div style={{
-      opacity: on ? 1 : 0, transform: on ? "translateY(0)" : `translateY(${y}px)`,
-      filter: on ? "blur(0px)" : "blur(4px)", transition: "all 0.9s cubic-bezier(0.22, 1, 0.36, 1)",
-    }}>{children}</div>
+    <div
+      className="ww-reveal"
+      style={{
+        "--ww-reveal-y": `${revealY}px`,
+        animationDelay: `${delay}ms`,
+        animationDuration: `${duration}ms`,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -2433,28 +2458,14 @@ export function SectionIcon({ name, size = 14, color = "var(--warm-25)" }) {
 
 function ChevronDropdown({ label, value, options, onChange, style: extraStyle = {} }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      {label && <label style={lbl}>{label}</label>}
-      <div style={{ position: "relative" }}>
-        <select value={value} onChange={e => onChange(e.target.value)}
-          style={{
-            width: "100%", background: "var(--warm-06)", border: "1px solid var(--warm-08)",
-            borderRadius: 8, padding: "10px 36px 10px 14px", color: "var(--warm)", fontSize: 13,
-            fontWeight: 500, fontFamily: "var(--f)", outline: "none", boxSizing: "border-box",
-            letterSpacing: "-0.01em", transition: "border-color 0.2s ease",
-            appearance: "none", cursor: "pointer", ...extraStyle,
-          }}
-        >
-          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <div style={{
-          position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-          pointerEvents: "none", display: "flex", alignItems: "center",
-        }}>
-          <SectionIcon name="chevron-down" size={14} color="var(--warm-35)" />
-        </div>
-      </div>
-    </div>
+    <RootMenuDropdown
+      label={label}
+      value={value}
+      options={options}
+      onChange={onChange}
+      style={extraStyle}
+      triggerSize="lg"
+    />
   );
 }
 
@@ -2470,21 +2481,59 @@ function DropdownAssetIcon({ src, size = 18, alt = "" }) {
   );
 }
 
-function RootMenuDropdown({ label, value, options, onChange, renderIcon, triggerIcon, triggerLabel, popupClassName }) {
-  const selected = options.find(o => !o.type && o.value === value);
-  const selectedLabel = triggerLabel || selected?.triggerLabel || selected?.label || value;
-  const menuClassName = popupClassName || "w-[var(--anchor-width)] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]";
+const RATIO_ICON_SVGS = {
+  "16:9": ratioIcon169Svg,
+  "9:16": ratioIcon916Svg,
+  "1:1": ratioIcon11Svg,
+  "4:5": ratioIcon45Svg,
+  "4:3": ratioIcon43Svg,
+  "2:1": ratioIcon21Svg,
+};
+
+function RatioIcon({ ratio, size = 18, color = "currentColor" }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{ color, width: size, height: size, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 0 }}
+      dangerouslySetInnerHTML={{ __html: RATIO_ICON_SVGS[ratio] || ratioIcon169Svg }}
+    />
+  );
+}
+
+const CHAT_SUGGESTION_ICON_SVGS = {
+  characters: iconNavCharSvg,
+  locations: iconNavLocationSvg,
+  elements: iconNavElementsSvg,
+};
+
+function ChatSuggestionIcon({ name }) {
+  const svg = CHAT_SUGGESTION_ICON_SVGS[name]
+    ?.replace("<svg ", '<svg class="size-5" ');
 
   return (
-    <div style={{ marginBottom: 14 }}>
+    <span
+      aria-hidden="true"
+      style={{ color: "currentColor", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 0 }}
+      dangerouslySetInnerHTML={{ __html: svg || "" }}
+    />
+  );
+}
+
+function RootMenuDropdown({ label, value, options, onChange, renderIcon, triggerIcon, triggerLabel, popupClassName, style, triggerSize = "lg", sideOffset = 4 }) {
+  const selected = options.find(o => o.type !== "separator" && o.value === value);
+  const selectedLabel = triggerLabel || selected?.triggerLabel || selected?.label || value;
+  const menuClassName = popupClassName || "w-[var(--anchor-width)]";
+
+  return (
+    <div style={{ marginBottom: 14, ...style }}>
       {label && <label style={lbl}>{label}</label>}
       <Menu>
         <MenuTrigger
           render={
             <Button
               variant="outline"
-              size="lg"
-              className="w-full justify-between dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_1px_2px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.045)] dark:hover:bg-[#181818] dark:data-pressed:bg-[#181818]"
+              size={triggerSize}
+              className="w-full justify-between"
             />
           }
         >
@@ -2496,6 +2545,7 @@ function RootMenuDropdown({ label, value, options, onChange, renderIcon, trigger
         </MenuTrigger>
         <MenuPopup
           align="start"
+          sideOffset={sideOffset}
           className={menuClassName}
         >
           <MenuRadioGroup value={value} onValueChange={onChange}>
@@ -2521,20 +2571,24 @@ function RootMenuDropdown({ label, value, options, onChange, renderIcon, trigger
   );
 }
 
-// -- LOCATION DROPDOWN (custom with thumbnail previews) --------
+// -- LOCATION DROPDOWN -----------------------------------------
 
 function LocationDropdown({ label, value, locations, onChange }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const selected = locations.find(l => l.id === value);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    if (open) document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  const options = [{ value: "", label: "None" }, ...locations.map(loc => ({ value: loc.id, label: loc.name, loc }))];
+  const selectedValue = value || "";
+  const renderLocationIcon = (locationId) => {
+    const loc = locations.find(l => l.id === locationId);
+    if (loc) return <LocationThumb loc={loc} size={18} borderRadius={4} />;
+    return (
+      <span style={{
+        width: 18, height: 18, borderRadius: 4, background: "var(--warm-06)",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-25)",
+      }}>
+        —
+      </span>
+    );
+  };
 
   return (
     <div style={{ marginBottom: 14 }} ref={ref}>
@@ -2781,56 +2835,6 @@ function AssetUploadZone({ label, hasImage, onUpload }) {
       </div>
       <input ref={fileRef} type="file" hidden accept="image/*" onChange={e => { if (e.target.files[0]) handleFile(e.target.files[0]); e.target.value = ""; }} />
     </div>
-  );
-}
-
-// -- SHEET FRAME (Hollywood storyboard style) -----------------
-
-// Editable per-shot duration pill — sits in the SheetFrame footer.
-// Click-bubble stopped so editing doesn't trigger the frame onClick
-// (which would open ProductionView).
-function FrameDuration({ duration, onChange }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(duration || "");
-  useEffect(() => { setValue(duration || ""); }, [duration]);
-  function commit() {
-    setEditing(false);
-    const v = (value || "").trim();
-    if (!v) { onChange?.("3s"); return; }
-    // Normalize — ensure trailing "s" so "3" becomes "3s"
-    const normalized = /^\d/.test(v) && !/s$/i.test(v) ? `${v}s` : v;
-    if (normalized !== duration) onChange?.(normalized);
-  }
-  return editing ? (
-    <input
-      autoFocus
-      value={value}
-      onChange={e => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => {
-        if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
-        if (e.key === "Escape") { e.preventDefault(); setEditing(false); setValue(duration || ""); }
-      }}
-      onClick={e => e.stopPropagation()}
-      style={{
-        width: 42, fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
-        color: "var(--warm-40)", textAlign: "center",
-        background: "var(--warm-08)", border: "1px solid var(--warm-12)",
-        borderRadius: 4, padding: "2px 4px", outline: "none",
-        letterSpacing: "0.04em",
-      }}
-    />
-  ) : (
-    <span
-      onClick={e => { e.stopPropagation(); setEditing(true); }}
-      title="Click to edit shot duration"
-      style={{
-        fontFamily: "var(--f)", fontSize: 9, fontWeight: 600,
-        color: "var(--warm-30)", letterSpacing: "0.06em",
-        padding: "2px 6px", borderRadius: 4, cursor: "pointer",
-        background: "var(--warm-04)", border: "1px solid var(--warm-06)",
-      }}
-    >{duration || "—"}</span>
   );
 }
 
@@ -3308,10 +3312,19 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
             </div>
             <CameraControlStrip frame={frame} dispatch={dispatch} onStageChange={onStageChange} />
           </div>
-        </Card>
 
-        {/* Delete frame */}
-        <ConfirmAction label="Delete Frame" onConfirm={() => onDeleteFrame(frame.id)} variant="danger" style={{ padding: "6px 14px", fontSize: 11 }} />
+          <div className="mt-5 flex border-t border-white/10 pt-5">
+            <Button
+              variant="destructive-outline"
+              size="xs"
+              className="w-fit gap-1.5"
+              onClick={() => onDeleteFrame(frame.id)}
+            >
+              <SectionIcon name="trash" size={12} color="#ff6b6b" />
+              Delete Frame
+            </Button>
+          </div>
+        </Card>
         </div>
         </div>{/* close portrait grid wrapper */}
       </Reveal>
@@ -3650,6 +3663,10 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
+    const ids = data.talent.map(t => t.id);
+    const idx = ids.indexOf(viewingId);
+    const goPrev = ids.length > 1 ? () => setViewingId(ids[(idx - 1 + ids.length) % ids.length]) : undefined;
+    const goNext = ids.length > 1 ? () => setViewingId(ids[(idx + 1) % ids.length]) : undefined;
     return (
       <CharacterDetailView
         character={character}
@@ -3657,6 +3674,8 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
         dispatch={dispatch}
         sectionLocked={locked}
         onBack={() => setViewingId(null)}
+        onPrev={goPrev}
+        onNext={goNext}
       />
     );
   }
@@ -3834,7 +3853,7 @@ function AddCharacterTile({ onClick }) {
   );
 }
 
-function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack }) {
+function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack, onPrev, onNext }) {
   const VIEWS = ["front", "side", "threeQuarter", "back"];
   const VIEW_LABEL = { front: "FRONT", side: "SIDE", threeQuarter: "3/4 ANGLE", back: "BACK" };
   // Effective lock = section lock OR per-character lock. Either blocks regen.
@@ -3917,17 +3936,23 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      {/* Detail header — back button, name, role, LOCK CHARACTER pill */}
+      {/* Detail header — cycle arrows flank the name to step through
+          characters (‹ prev / next ›); the left-nav "Characters" tab
+          still returns to the grid. Falls back to ‹ Back if no siblings. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <button onClick={onBack} style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "5px 9px", borderRadius: 6, cursor: "pointer",
-          background: "transparent", border: "1px solid var(--warm-08)",
-          color: "var(--warm-40)", outline: "none",
-          fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-        }}>
-          <span>‹</span> Back
-        </button>
+        {onPrev || onNext ? (
+          <CycleArrow dir="prev" onClick={onPrev} title="Previous character" />
+        ) : (
+          <button onClick={onBack} style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "5px 9px", borderRadius: 6, cursor: "pointer",
+            background: "transparent", border: "1px solid var(--warm-08)",
+            color: "var(--warm-40)", outline: "none",
+            fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+          }}>
+            <span>‹</span> Back
+          </button>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <EditableText
             value={character.name}
@@ -3938,6 +3963,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
             {character.role || "Supporting"} · {character.handle}
           </div>
         </div>
+        {(onPrev || onNext) && <CycleArrow dir="next" onClick={onNext} title="Next character" />}
         <button
           onClick={() => dispatch({ type: "TOGGLE_TALENT_LOCK", id: character.id })}
           style={{
@@ -4165,6 +4191,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
 // minimum surface for the redesign to feel right.
 function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versions = [], onSelectVersion, onRegenerate, onClear, onUpload }) {
   const [hovered, setHovered] = useState(false);
+  const [toolbarHovered, setToolbarHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
   // External pending state (from the autoGen pool's pending bus).
   // The slot shimmers whether or not its task has actually started,
@@ -4181,7 +4208,32 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
   const [customPrompt, setCustomPrompt] = useState("");
   const [improvingPrompt, setImprovingPrompt] = useState(false);
   const fileRef = useRef(null);
+  const toolbarCloseTimer = useRef(null);
+  const toolbarTriggerId = useId();
   const aspectCSS = ratio.replace(":", "/");
+  const toolbarOpen = (hovered || toolbarHovered) && src && !generating;
+
+  useEffect(() => () => clearTimeout(toolbarCloseTimer.current), []);
+
+  function openToolbar() {
+    clearTimeout(toolbarCloseTimer.current);
+    setHovered(true);
+  }
+
+  function scheduleToolbarClose() {
+    clearTimeout(toolbarCloseTimer.current);
+    toolbarCloseTimer.current = setTimeout(() => {
+      setHovered(false);
+      setToolbarHovered(false);
+      setImproveOpen(false);
+      setUpscaleOpen(false);
+    }, 140);
+  }
+
+  function keepToolbarOpen() {
+    clearTimeout(toolbarCloseTimer.current);
+    setToolbarHovered(true);
+  }
 
   async function handleUpscale(targetRes) {
     setUpscaleOpen(false);
@@ -4307,8 +4359,12 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
   return (
     <>
       <div
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => { setHovered(false); setImproveOpen(false); setUpscaleOpen(false); }}
+        onMouseEnter={openToolbar}
+        onMouseMove={openToolbar}
+        onMouseLeave={scheduleToolbarClose}
+        onPointerEnter={openToolbar}
+        onPointerMove={openToolbar}
+        onPointerLeave={scheduleToolbarClose}
         style={{
           position: "relative", aspectRatio: aspectCSS, borderRadius: 8,
           background: "var(--warm-04)",
@@ -4392,14 +4448,24 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
             </div>
           );
         })()}
-        {/* Blue v1-style hover bar — visible when image exists and user hovers */}
-        {hovered && src && !generating && (
+        {/* Portaled action bar — anchored to the slot but rendered outside
+            the image/card clipping context. */}
+        {src && !generating && (
+          <Popover open={toolbarOpen} triggerId={toolbarTriggerId}>
+            <PopoverTrigger id={toolbarTriggerId} className="img-hover-nav-anchor" aria-label="Image actions" />
+            <PopoverPopup
+              side="top"
+              align="center"
+              sideOffset={8}
+              className="img-hover-nav-popover"
+              onMouseEnter={keepToolbarOpen}
+              onMouseLeave={scheduleToolbarClose}
+              onClick={e => e.stopPropagation()}
+            >
           <div style={{
-            position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 0,
             display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 20,
             background: "#006dd4", border: "1px solid #43a3fd",
             boxShadow: "0 4px 14px rgba(0,0,0,0.32)",
-            zIndex: 50,
           }} onClick={e => e.stopPropagation()}>
             <HoverBarBtn title="Download" onClick={handleDownload}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -4446,9 +4512,11 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9h5l.5-9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </HoverBarBtn>
           </div>
+            </PopoverPopup>
+          </Popover>
         )}
         {/* Improve with AI popover */}
-        {improveOpen && hovered && src && !generating && (
+        {improveOpen && toolbarOpen && src && !generating && (
           <div onClick={e => e.stopPropagation()} style={{
             position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)",
             zIndex: 6, width: "min(90%, 320px)",
@@ -4614,7 +4682,11 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
-    return <LocationDetailView location={loc} data={data} dispatch={dispatch} sectionLocked={locked} aspect={aspect} onBack={() => setViewingId(null)} />;
+    const ids = data.locations.map(l => l.id);
+    const idx = ids.indexOf(viewingId);
+    const goPrev = ids.length > 1 ? () => setViewingId(ids[(idx - 1 + ids.length) % ids.length]) : undefined;
+    const goNext = ids.length > 1 ? () => setViewingId(ids[(idx + 1) % ids.length]) : undefined;
+    return <LocationDetailView location={loc} data={data} dispatch={dispatch} sectionLocked={locked} aspect={aspect} onBack={() => setViewingId(null)} onPrev={goPrev} onNext={goNext} />;
   }
 
   async function bulkRegenerate() {
@@ -4742,7 +4814,7 @@ function LocationTile({ location, onClick, aspectCSS = "16/9" }) {
   );
 }
 
-function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = "16:9", onBack }) {
+function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = "16:9", onBack, onPrev, onNext }) {
   const effLocked = sectionLocked || location.locked;
   const versions = data?.versionHistory?.[`location.${location.id}`] || [];
   async function regenerateReference(opts) {
@@ -4759,6 +4831,8 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <DetailHeader
         onBack={onBack}
+        onPrev={onPrev}
+        onNext={onNext}
         name={location.name}
         subtitle={`${location.type === "ai" ? "AI generated" : "Reference"} · ${location.handle}`}
         locked={effLocked}
@@ -4832,7 +4906,11 @@ function ElementTab({ data, dispatch, onFocusAsset }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
-    return <ElementDetailView product={prod} data={data} dispatch={dispatch} sectionLocked={locked} onBack={() => setViewingId(null)} />;
+    const ids = data.products.map(p => p.id);
+    const idx = ids.indexOf(viewingId);
+    const goPrev = ids.length > 1 ? () => setViewingId(ids[(idx - 1 + ids.length) % ids.length]) : undefined;
+    const goNext = ids.length > 1 ? () => setViewingId(ids[(idx + 1) % ids.length]) : undefined;
+    return <ElementDetailView product={prod} data={data} dispatch={dispatch} sectionLocked={locked} onBack={() => setViewingId(null)} onPrev={goPrev} onNext={goNext} />;
   }
 
   async function bulkRegenerate() {
@@ -4944,7 +5022,7 @@ function ElementTile({ product, onClick }) {
   );
 }
 
-function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
+function ElementDetailView({ product, data, dispatch, sectionLocked, onBack, onPrev, onNext }) {
   const effLocked = sectionLocked || product.locked;
   const versions = data?.versionHistory?.[`product.${product.id}`] || [];
   async function regenerateReference(opts) {
@@ -4961,6 +5039,8 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <DetailHeader
         onBack={onBack}
+        onPrev={onPrev}
+        onNext={onNext}
         name={product.name}
         subtitle={`${product.focus || "Medium"} focus · ${product.handle}`}
         locked={effLocked}
@@ -5048,16 +5128,36 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
 // Header (back button, editable name, subtitle, lock pill) and small
 // reusable bits used by Location/Element/Character detail views.
 
-function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, lockLabel = "Lock" }) {
+// Cycle arrow used in the detail-view headers — ‹ / › flanking the name
+// to step through the siblings in the current section (characters /
+// elements / locations) with wraparound. Replaces the old "‹ Back" button;
+// clicking the section name in the left nav still returns to the grid.
+function CycleArrow({ dir, onClick, title }) {
+  return (
+    <button onClick={onClick} title={title || (dir === "prev" ? "Previous" : "Next")} style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      width: 32, height: 32, borderRadius: 8, cursor: "pointer", flexShrink: 0,
+      background: "transparent", border: "1px solid var(--warm-08)",
+      color: "var(--warm-40)", outline: "none",
+      fontFamily: "var(--f)", fontSize: 18, fontWeight: 500, lineHeight: 1,
+    }}>{dir === "prev" ? "‹" : "›"}</button>
+  );
+}
+
+function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, lockLabel = "Lock", onPrev, onNext }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <button onClick={onBack} style={{
-        display: "flex", alignItems: "center", gap: 6,
-        padding: "5px 9px", borderRadius: 6, cursor: "pointer",
-        background: "transparent", border: "1px solid var(--warm-08)",
-        color: "var(--warm-40)", outline: "none",
-        fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-      }}>‹ Back</button>
+      {onPrev || onNext ? (
+        <CycleArrow dir="prev" onClick={onPrev} title="Previous" />
+      ) : (
+        <button onClick={onBack} style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 9px", borderRadius: 6, cursor: "pointer",
+          background: "transparent", border: "1px solid var(--warm-08)",
+          color: "var(--warm-40)", outline: "none",
+          fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+        }}>‹ Back</button>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <EditableText
           value={name}
@@ -5070,6 +5170,7 @@ function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, 
           </div>
         )}
       </div>
+      {(onPrev || onNext) && <CycleArrow dir="next" onClick={onNext} title="Next" />}
       <button
         onClick={onToggleLock}
         style={{
@@ -5238,27 +5339,26 @@ function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, gen
           </button>
         )}
         {onAutoGenerate && (
-          <PremiumButton
-            variant="secondary"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={onAutoGenerate}
             disabled={locked || generating}
-            style={{ fontSize: 10, padding: "5px 10px" }}
             title={locked ? "Unlock section to regenerate" : "Regenerate every item in this section"}
           >
-            <SectionIcon name="sparkle" size={11} color="var(--warm-40)" />
+            <SparklesIcon aria-hidden="true" className="size-3.5" />
             {generating ? "Generating…" : autoGenerateLabel}
-          </PremiumButton>
+          </Button>
         )}
-        <PremiumButton
-          variant="secondary"
+        <Button
+          variant="outline"
+          size="xs"
           onClick={onToggleLock}
-          style={{
-            fontSize: 10, padding: "5px 10px",
-            background: locked ? "var(--warm-12)" : undefined,
-          }}
+          aria-pressed={locked}
         >
-          {locked ? "🔒 Locked" : "Lock section"}
-        </PremiumButton>
+          {locked ? <LockIcon aria-hidden="true" className="size-3.5" /> : <LockOpenIcon aria-hidden="true" className="size-3.5" />}
+          {locked ? "Locked" : "Lock section"}
+        </Button>
       </div>
     </div>
   );
@@ -5597,11 +5697,6 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
               </div>
               <EditableText value={data.meta.title} onChange={v => onUpdateMeta("title", v)}
                 style={{ fontFamily: "var(--f)", fontSize: 32, fontWeight: 700, color: "var(--warm)", letterSpacing: "-0.03em", display: "block", lineHeight: 1.1 }} />
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
-                <span style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 400, color: "var(--warm-30)" }}>:{data.meta.format}</span>
-                <span style={{ color: "var(--warm-12)" }}>&middot;</span>
-                <span style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 400, color: "var(--warm-30)" }}>{data.meta.aspect === "2.39" ? "2.39:1 Anamorphic" : data.meta.aspect}</span>
-              </div>
             </div>
             <div style={{ paddingTop: 6 }}>
               <EditBriefDialog
@@ -5657,12 +5752,13 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
 
                 if (!showPlaceholder) {
                   return data.frames.map((f, i) => (
-                    <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={i} data={data} aspectCSS={aspCSS}
+                    <StoryboardFrameCard key={f.id} dispatch={dispatch} frame={f} index={i} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={dragId === f.id}
                       onRetry={onRetryFrame}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
-                      onClick={() => clickF(f.id)} />
+                      onClick={() => clickF(f.id)}
+                      renderMentions={renderMentions} />
                   ));
                 }
 
@@ -5675,12 +5771,13 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                   if (i === insertAt) items.push(dropPreview);
                   const origIdx = data.frames.indexOf(f);
                   items.push(
-                    <SheetFrame key={f.id} dispatch={dispatch} frame={f} index={origIdx} data={data} aspectCSS={aspCSS}
+                    <StoryboardFrameCard key={f.id} dispatch={dispatch} frame={f} index={origIdx} data={data} aspectCSS={aspCSS}
                       selected={selectedFrameId === f.id} highlighted={highlightedFrames.has(f.id)}
                       isDragSrc={false}
                       onRetry={onRetryFrame}
                       onDragStart={onDS} onDragOver={onDO} onDragLeave={onDL} onDragEnd={onDE} onDrop={onDr}
-                      onClick={() => clickF(f.id)} />
+                      onClick={() => clickF(f.id)}
+                      renderMentions={renderMentions} />
                   );
                 });
                 if (insertAt >= remaining.length) items.push(dropPreview);
@@ -5770,7 +5867,19 @@ function renderMentions(text, data, opts = {}) {
         key={i}
         title={part.asset?.name || part.handle}
         onClick={opts.onMentionClick ? (e => { e.stopPropagation(); opts.onMentionClick(part.asset); }) : undefined}
-        style={{
+        style={opts.variant === "figmaCard" ? {
+          display: "inline",
+          padding: "1px 7.317px 2px",
+          margin: "0 1px",
+          borderRadius: 7.317,
+          background: "rgba(32,32,32,0.4)",
+          color: part.asset?._type === "product" ? "#f1d676" : "#aecff3",
+          border: "0",
+          fontSize: "1em",
+          fontWeight: 500,
+          lineHeight: "inherit",
+          cursor: opts.onMentionClick ? "pointer" : "default",
+        } : {
           display: "inline-block",
           padding: "0 5px", margin: "0 1px",
           borderRadius: 4,
@@ -5782,7 +5891,7 @@ function renderMentions(text, data, opts = {}) {
           cursor: opts.onMentionClick ? "pointer" : "default",
         }}
       >
-        {part.handle}
+        {opts.variant === "figmaCard" ? part.handle.replace(/^@/, "") : part.handle}
       </span>
     );
   });
@@ -6179,81 +6288,6 @@ function SidebarPanel({ onClose, children }) {
   );
 }
 
-// -- LIQUID GLASS BUTTON --------------------------------------
-
-function LiquidGlassButton({ onClick, children }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div style={{ position: "relative", width: "100%", padding: "6px 0" }}>
-      {/* Primary glow — tight, bright at edges */}
-      <div style={{
-        position: "absolute", inset: "2px -2px", borderRadius: 16, zIndex: 0,
-        backgroundImage: "linear-gradient(135deg, #8855f0, #5577f4, #9960f0, #6070f8, #7755ee, #4a68f0)",
-        backgroundSize: "300% 300%",
-        animation: "liquidGradient 18s ease infinite",
-        filter: "blur(6px)",
-        opacity: hovered ? 0.9 : 0.6,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Secondary glow — offset, different timing for organic feel */}
-      <div style={{
-        position: "absolute", inset: "4px 2px", borderRadius: 16, zIndex: 0,
-        backgroundImage: "linear-gradient(225deg, #6644dd, #3b62e8, #8050e4, #5060ec, #6644dd)",
-        backgroundSize: "350% 350%",
-        animation: "liquidGradient 24s ease-in-out infinite reverse",
-        filter: "blur(10px)",
-        opacity: hovered ? 0.6 : 0.3,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Third glow — larger, softer ambient */}
-      <div style={{
-        position: "absolute", inset: "-2px -4px", borderRadius: 20, zIndex: 0,
-        backgroundImage: "radial-gradient(ellipse at 30% 50%, rgba(120,60,230,0.5), transparent 70%), radial-gradient(ellipse at 70% 50%, rgba(60,100,240,0.4), transparent 70%)",
-        backgroundSize: "200% 200%",
-        animation: "liquidGradient 20s ease infinite",
-        filter: "blur(14px)",
-        opacity: hovered ? 0.5 : 0.25,
-        transition: "opacity 0.5s ease",
-      }} />
-      {/* Button */}
-      <button onClick={onClick}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          position: "relative", zIndex: 1, width: "100%", padding: "16px 0",
-          fontFamily: "var(--f)", fontSize: 17, fontWeight: 500, letterSpacing: "-0.01em",
-          border: "1px solid rgba(255,255,255,0.18)",
-          borderRadius: 14, cursor: "pointer", outline: "none",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-          color: hovered ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.85)",
-          backgroundImage: hovered
-            ? "linear-gradient(135deg, rgba(0,0,0,0.97), rgba(4,4,8,0.98), rgba(0,0,0,0.97))"
-            : "linear-gradient(135deg, rgba(6,6,10,0.97), rgba(10,10,14,0.98))",
-          backgroundSize: "100% 100%",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          boxShadow: hovered
-            ? "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(255,255,255,0.035), 0 1px 2px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.06)"
-            : "inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 2px rgba(0,0,0,0.42)",
-          transition: "all 0.4s cubic-bezier(0.22,1,0.36,1)",
-          overflow: "hidden",
-        }}
-      >
-        {/* Grain overlay inside button */}
-        <div style={{
-          position: "absolute", inset: 0, borderRadius: 14, pointerEvents: "none",
-          opacity: 0.04,
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'g\'%3E%3CfeTurbulence baseFrequency=\'0.7\' numOctaves=\'4\' type=\'fractalNoise\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23g)\'/%3E%3C/svg%3E")',
-          backgroundSize: "128px",
-          animation: "grainShift 8s steps(10) infinite",
-          mixBlendMode: "overlay",
-        }} />
-        {children}
-      </button>
-    </div>
-  );
-}
-
 // -- BRIEF FORM (with file upload) ----------------------------
 
 
@@ -6282,52 +6316,22 @@ export function timeAgo(ts) {
 // immediately, then prompts whether to re-pace the storyboard so the
 // shot list sums to the new total.
 function TargetDurationControl({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-  // Match v1's LENGTHS (6 / 15 / 30 / 60 / 90 / 120 seconds).
   const FORMATS = ["6", "15", "30", "60", "90", "120"];
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e) { if (!e.target.closest?.(".ww-format-control")) setOpen(false); }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  const selectedValue = value || "30";
+
   return (
-    <div className="ww-format-control" style={{ position: "relative" }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        display: "flex", alignItems: "center", gap: 4,
-        padding: "4px 9px", borderRadius: 6,
-        background: "var(--warm-04)", border: "1px solid var(--warm-08)",
-        color: "var(--warm-40)", cursor: "pointer", outline: "none",
-        fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-        letterSpacing: "0.04em",
-      }} title="Change target runtime (re-paces the storyboard)">
-        :{value || "30"}
-        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        </svg>
-      </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 8,
-          display: "flex", flexDirection: "column", gap: 2, padding: 4,
-          minWidth: 70, borderRadius: 6,
-          background: "var(--surface-solid)",
-          border: "1px solid var(--warm-12)",
-          boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        }}>
-          {FORMATS.map(f => (
-            <button key={f} onClick={() => { setOpen(false); onChange?.(f); }}
-              style={{
-                padding: "5px 10px", textAlign: "left",
-                background: f === value ? "var(--warm-08)" : "transparent",
-                border: "none", borderRadius: 4, cursor: "pointer", outline: "none",
-                fontFamily: "var(--f)", fontSize: 11, fontWeight: f === value ? 700 : 500,
-                color: f === value ? "var(--warm)" : "var(--warm-40)",
-              }}
-            >:{f}</button>
-          ))}
-        </div>
-      )}
+    <div className="ww-format-control" style={{ minWidth: 170 }}>
+      <RootMenuDropdown
+        value={selectedValue}
+        options={FORMATS.map(f => ({ value: f, label: `${f} sec` }))}
+        onChange={onChange}
+        triggerIcon={<DropdownAssetIcon src={iconClockUrl} size={18} />}
+        triggerLabel={`Length: ${selectedValue} sec`}
+        renderIcon={() => <DropdownAssetIcon src={iconClockUrl} size={18} />}
+        style={{ marginBottom: 0 }}
+        triggerSize="sm"
+        popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(360px,calc(100vw-32px))]"
+      />
     </div>
   );
 }
@@ -6337,52 +6341,21 @@ function TargetDurationControl({ value, onChange }) {
 // supplied onChange, which the App routes through handleAspectChange
 // (saves new ratio + asks whether to regenerate all images).
 function AspectRatioControl({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-  // Match v1's RATIOS (16:9 / 9:16 / 1:1 / 4:5 / 4:3 / 2:1).
-  const RATIOS = ["16:9", "9:16", "1:1", "4:5", "4:3", "2:1"];
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e) { if (!e.target.closest?.(".ww-aspect-control")) setOpen(false); }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  const selectedValue = value || "16:9";
+
   return (
-    <div className="ww-aspect-control" style={{ position: "relative" }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        display: "flex", alignItems: "center", gap: 4,
-        padding: "4px 9px", borderRadius: 6,
-        background: "var(--warm-04)", border: "1px solid var(--warm-08)",
-        color: "var(--warm-40)", cursor: "pointer", outline: "none",
-        fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-        letterSpacing: "0.04em",
-      }} title="Change aspect ratio (regenerates images)">
-        {value || "16:9"}
-        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        </svg>
-      </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 8,
-          display: "flex", flexDirection: "column", gap: 2, padding: 4,
-          minWidth: 100, borderRadius: 6,
-          background: "var(--surface-solid)",
-          border: "1px solid var(--warm-12)",
-          boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        }}>
-          {RATIOS.map(r => (
-            <button key={r} onClick={() => { setOpen(false); onChange?.(r); }}
-              style={{
-                padding: "5px 10px", textAlign: "left",
-                background: r === value ? "var(--warm-08)" : "transparent",
-                border: "none", borderRadius: 4, cursor: "pointer", outline: "none",
-                fontFamily: "var(--f)", fontSize: 11, fontWeight: r === value ? 700 : 500,
-                color: r === value ? "var(--warm)" : "var(--warm-40)",
-              }}
-            >{r}</button>
-          ))}
-        </div>
-      )}
+    <div className="ww-aspect-control" style={{ minWidth: 170 }}>
+      <RootMenuDropdown
+        value={selectedValue}
+        options={BRIEF_RATIOS.map(r => ({ value: r.id, label: r.label }))}
+        onChange={onChange}
+        triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={18} />}
+        triggerLabel={`Aspect: ${selectedValue}`}
+        renderIcon={(ratio) => <RatioIcon ratio={ratio} size={18} />}
+        style={{ marginBottom: 0 }}
+        triggerSize="sm"
+        popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))]"
+      />
     </div>
   );
 }
@@ -6427,12 +6400,12 @@ function SaveIndicator({ status, lastSavedAt }) {
 const BRIEF_LENGTHS = ["6s", "15s", "30s", "60s", "90s", "120s"];
 // Aspect ratio options. Direct port of v1's RATIOS.
 const BRIEF_RATIOS = [
-  { id: "16:9", label: "16 : 9", sub: "Widescreen" },
-  { id: "9:16", label: "9 : 16", sub: "Portrait" },
-  { id: "1:1",  label: "1 : 1",  sub: "Square" },
-  { id: "4:5",  label: "4 : 5",  sub: "Portrait 4:5" },
-  { id: "4:3",  label: "4 : 3",  sub: "Classic" },
-  { id: "2:1",  label: "2 : 1",  sub: "Anamorphic" },
+  { id: "16:9", label: "16:9 - Widescreen" },
+  { id: "9:16", label: "9:16 - Vertical" },
+  { id: "1:1",  label: "1:1 - Square" },
+  { id: "4:5",  label: "4:5 - Portrait" },
+  { id: "4:3",  label: "4:3 - Classic" },
+  { id: "2:1",  label: "2:1 - Wide Banner" },
 ];
 // Wonder Workshop brand backdrop — replaces the rotating cinematic
 // stills with a single signature mark. Kept as a single-element array
@@ -6564,23 +6537,21 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
         background: "linear-gradient(180deg, rgba(10,10,10,0.4) 0%, rgba(10,10,10,0.7) 60%, rgba(10,10,10,0.95) 100%)",
       }} />
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "5vh 5% 4vh", position: "relative", zIndex: 1 }}>
-      <Reveal>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "3%" }}>
-          <WLogo color="rgba(224,224,224,0.25)" size={28} />
+      <Reveal delay={30}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "3%" }}>
+            <WLogo color="rgba(224,224,224,0.25)" size={28} />
+          </div>
+          <h1 style={{ fontFamily: "var(--f)", fontSize: 48, fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)", whiteSpace: "nowrap" }}>
+            Welcome to the Workshop.
+          </h1>
+          <p style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, marginBottom: "5%", whiteSpace: "nowrap" }}>
+            Write a brief, a script, or a sentence. Add reference files for more context. AI builds the boards.
+          </p>
         </div>
       </Reveal>
-      <Reveal delay={60}>
-        <h1 style={{ fontFamily: "var(--f)", fontSize: 48, fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)", whiteSpace: "nowrap" }}>
-          Welcome to the Workshop.
-        </h1>
-      </Reveal>
-      <Reveal delay={120}>
-        <p style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, marginBottom: "5%", whiteSpace: "nowrap" }}>
-          Write a brief, a script, or a sentence. Add reference files for more context. AI builds the boards.
-        </p>
-      </Reveal>
 
-      <Reveal delay={200}>
+      <Reveal delay={520}>
         {/* Form card sits over the W backdrop, so it needs near-solid
             opacity + a backdrop blur to keep inputs and labels readable.
             Subtle inner highlight + soft shadow lift it off the bg. */}
@@ -6619,8 +6590,11 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
               onChange={client => setMeta(m => ({ ...m, client }))}
               triggerIcon={<DropdownAssetIcon src={iconFolderUrl} size={18} />}
               triggerLabel={meta.client || "Select Folder"}
-              renderIcon={() => <DropdownAssetIcon src={iconFolderUrl} size={18} />}
-              popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+              renderIcon={(value, _color, size = 18) => value
+                ? <DropdownAssetIcon src={iconFolderUrl} size={size} />
+                : <span aria-hidden="true" style={{ display: "block", width: size, height: size, flexShrink: 0 }} />
+              }
+              popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))]"
             />
             <RootMenuDropdown
               value={meta.format}
@@ -6639,7 +6613,7 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
               onChange={v => setMeta(m => ({ ...m, aspect: v }))}
               triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={18} />}
               triggerLabel={`Aspect: ${meta.aspect || "16:9"}`}
-              renderIcon={() => <DropdownAssetIcon src={iconAspectUrl} size={18} />}
+              renderIcon={(value, color, size = 18) => <RatioIcon ratio={value} color={color} size={size} />}
             />
           </div>
           <div style={{ marginBottom: 20, position: "relative" }}>
@@ -6657,33 +6631,31 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
                 style={{
                   position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
                   display: "flex", alignItems: "center", gap: 6,
-                  padding: "6px 12px", borderRadius: 18,
-                  background: "rgba(255,200,87,0.10)",
-                  border: "1px solid rgba(255,200,87,0.5)",
-                  color: "#FFC857",
+                  height: 25, padding: "0 8px", borderRadius: 7,
+                  background: "linear-gradient(0deg, rgba(0, 0, 0, 0.17) 0%, rgba(102, 102, 102, 0.153) 100%), linear-gradient(0deg, rgba(219, 219, 219, 0.6), rgba(219, 219, 219, 0.6)), linear-gradient(92deg, #429FD6 3.61%, #7762E7 24.14%, #A45EE1 39.21%, #CB4FCB 56.02%, #FF3598 70.65%, #ED7180 85.72%, #E9886D 100%)",
+                  border: "0.5px solid color(display-p3 1 1 1 / 0.5)",
+                  color: "#fff",
                   cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
                   outline: "none",
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 600,
-                  letterSpacing: "0.02em",
+                  fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
+                  letterSpacing: "-0.01em",
                   opacity: meta.treatment?.trim() && !improving ? 1 : 0.5,
-                  transition: "background 0.14s, border-color 0.14s",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)",
+                  transition: "filter 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease",
                 }}
                 onMouseEnter={e => {
                   if (e.currentTarget.disabled) return;
-                  e.currentTarget.style.background = "rgba(255,200,87,0.18)";
-                  e.currentTarget.style.borderColor = "rgba(255,200,87,0.7)";
+                  e.currentTarget.style.filter = "brightness(1.05)";
+                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.65), 0 2px 8px rgba(188,87,197,0.22)";
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.background = "rgba(255,200,87,0.10)";
-                  e.currentTarget.style.borderColor = "rgba(255,200,87,0.5)";
+                  e.currentTarget.style.filter = "none";
+                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)";
                 }}
               >
-                {improving && <ShimmerSweep color="rgba(255,200,87,0.32)" />}
+                {improving && <ShimmerSweep color="rgba(255,255,255,0.38)" />}
                 <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <svg width="11" height="11" viewBox="0 0 18 18" fill="none">
-                    <path d="M10.5 3.5l2 2L6 12l-2.5.5L4 10l6.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-                    <path d="M13.5 1l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L13.5 1z" fill="currentColor"/>
-                  </svg>
+                  <DropdownAssetIcon src={iconSparkleUrl} size={11} />
                   {improving ? "Improving…" : "Improve with AI"}
                 </span>
               </button>
@@ -6745,12 +6717,12 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
         </div>
       </Reveal>
 
-      <Reveal delay={320}>
-        <div className="mt-4">
-          <LiquidGlassButton onClick={() => !generating && onGenerate(meta)}>
-            <DropdownAssetIcon src={iconStoryboardTitleUrl} size={17} />
-            {generating ? "Generating brief…" : "Generate Storyboard"}
-          </LiquidGlassButton>
+      <Reveal delay={680}>
+        <div style={{ marginTop: 28 }}>
+          <GenerateStoryboardButton
+            generating={generating}
+            onClick={() => !generating && onGenerate(meta)}
+          />
           {error ? (
             <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
               {error}
@@ -6773,8 +6745,7 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
 
 export default function WorkshopV2() {
   // First mount: check for a #share=<base64> URL hash first (read-only
-  // shared brief), then migrate any legacy single-project state, then
-  // resolve the active project id. If a project's already active,
+  // shared brief), then resolve the active project id. If a project's already active,
   // restore its data and jump straight to the OneSheet workspace. If
   // the active ID points at a project whose data blob is missing
   // (corruption, manual localStorage edit, mid-save crash) we clear
@@ -6786,7 +6757,6 @@ export default function WorkshopV2() {
     if (shared) {
       bootstrap.current = { activeId: null, data: shared, shared: true };
     } else {
-      migrateLegacyState();
       let activeId = getActiveProjectId();
       // Sync read of localStorage fallback for instant paint. If
       // empty, the post-mount async effect (further below) hydrates
@@ -6918,14 +6888,18 @@ export default function WorkshopV2() {
     // hold the save off for more than a fraction of a second.
     if (pendingSaveRef.current.debounce) clearTimeout(pendingSaveRef.current.debounce);
     pendingSaveRef.current.debounce = setTimeout(() => {
-      const ok = saveProject(activeProjectId, { ...data, chatHistory: chatMessages });
-      if (ok) {
-        setSaveStatus("saved");
-        setLastSavedAt(Date.now());
-        setProjects(listProjects());
-      } else {
-        setSaveStatus("error");
-      }
+      const saveId = activeProjectId;
+      const saveData = data;
+      saveProjectAsync(saveId, saveData).then(ok => {
+        if (activeRef.current !== saveId || dataRef.current !== saveData) return;
+        if (ok) {
+          setSaveStatus("saved");
+          setLastSavedAt(Date.now());
+          setProjects(listProjects());
+        } else {
+          setSaveStatus("error");
+        }
+      });
       pendingSaveRef.current.debounce = null;
     }, 150);
     // Ceiling — if changes keep coming faster than the debounce can
@@ -6934,12 +6908,18 @@ export default function WorkshopV2() {
     if (!pendingSaveRef.current.ceiling) {
       pendingSaveRef.current.ceiling = setTimeout(() => {
         if (activeRef.current && builtRef.current) {
-          const ok = saveProject(activeRef.current, { ...dataRef.current, chatHistory: chatRef.current });
-          if (ok) {
-            setSaveStatus("saved");
-            setLastSavedAt(Date.now());
-            setProjects(listProjects());
-          }
+          const saveId = activeRef.current;
+          const saveData = dataRef.current;
+          saveProjectAsync(saveId, saveData).then(ok => {
+            if (activeRef.current !== saveId || dataRef.current !== saveData) return;
+            if (ok) {
+              setSaveStatus("saved");
+              setLastSavedAt(Date.now());
+              setProjects(listProjects());
+            } else {
+              setSaveStatus("error");
+            }
+          });
         }
         pendingSaveRef.current.ceiling = null;
       }, 2000);
@@ -7244,6 +7224,21 @@ export default function WorkshopV2() {
     setProjects(listProjects());
     setFolders(listFolders());
     toast(`Deleted folder "${name}"`, { kind: "info", ttl: 2500 });
+  }
+  function handleRenameFolder(oldName, newName) {
+    const cleaned = (newName || "").trim();
+    if (!cleaned || cleaned === oldName) return;
+    if (folders.includes(cleaned)) {
+      toast(`A folder named "${cleaned}" already exists`, { kind: "warning", ttl: 2500 });
+      return;
+    }
+    if (!renameFolder(oldName, cleaned)) return;
+    setProjects(listProjects());
+    setFolders(listFolders());
+    if (data.meta?.client === oldName) {
+      dispatch({ type: "SET_META", meta: { client: cleaned } });
+    }
+    toast(`Renamed folder to "${cleaned}"`, { kind: "success", ttl: 2500 });
   }
 
   // Run a chat-driven side-effect. The chat tool handlers return
@@ -7935,15 +7930,22 @@ export default function WorkshopV2() {
     // headshots × N talent + locations + products + mood) and half
     // were dropping silently.
     const IMG_CONCURRENCY = 3;
-    async function withRetry(task) {
-      try {
-        return await task();
-      } catch (err) {
-        if (err?.status === 429 || (err?.status >= 500 && err?.status < 600) || !err?.status) {
-          await new Promise(r => setTimeout(r, 1500));
+    // Up to 3 retries with exponential backoff (1.5s → 3s → 6s) on
+    // rate-limits / transient 5xx. Gemini rate-limits hard under a ~50-call
+    // batch, and a single retry left too many calls dropping both attempts
+    // (empty full-body SIDE slots, failed frames). More attempts + longer
+    // backoff lets the per-minute window recover before giving up.
+    async function withRetry(task, attempts = 3) {
+      let delay = 1500;
+      for (let i = 0; ; i++) {
+        try {
           return await task();
+        } catch (err) {
+          const retryable = err?.status === 429 || (err?.status >= 500 && err?.status < 600) || !err?.status;
+          if (!retryable || i >= attempts) throw err;
+          await new Promise(r => setTimeout(r, delay));
+          delay *= 2;
         }
-        throw err;
       }
     }
     async function runPool(tasks, concurrency = IMG_CONCURRENCY) {
@@ -7981,7 +7983,10 @@ export default function WorkshopV2() {
       phaseA1.push((async () => {
         dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
         try {
-          const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
+          // Retry here too — the primary is the prerequisite for ALL of a
+          // character's other 7 views, so a single dropped 429 here used to
+          // wipe out the whole character (this was why Zoe generated nothing).
+          const url = await withRetry(() => generateImage(talentPrompt(t), { ratio: "1:1" }));
           generated.talent.set(t.id, url);
           dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
           // The primary also fills the FRONT headshot slot in the
@@ -8493,6 +8498,18 @@ export default function WorkshopV2() {
           from { opacity: 0 }
           to { opacity: 1 }
         }
+        @keyframes workshopRevealDown {
+          from {
+            opacity: 0;
+            filter: blur(5px);
+            transform: translate3d(0, var(--ww-reveal-y, -14px), 0);
+          }
+          to {
+            opacity: 1;
+            filter: blur(0);
+            transform: translate3d(0, 0, 0);
+          }
+        }
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
@@ -8511,6 +8528,21 @@ export default function WorkshopV2() {
           50% { transform: translate(-3%, 1%); }
           70% { transform: translate(2%, -1%); }
           90% { transform: translate(-1%, 2%); }
+        }
+        .ww-reveal {
+          opacity: 0;
+          will-change: opacity, transform, filter;
+          animation-name: workshopRevealDown;
+          animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+          animation-fill-mode: both;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ww-reveal {
+            opacity: 1;
+            filter: none;
+            transform: none;
+            animation: none;
+          }
         }
         button { font-family: var(--f); }
         button:focus-visible { outline: 1.5px solid rgba(255,255,255,0.4); outline-offset: 2px; }
@@ -8533,7 +8565,7 @@ export default function WorkshopV2() {
         // OneSheetExport. briefFromV2Data adapts the data + images shape so
         // OnePager resolves slot images via its existing stable-ID keys.
         const { brief, images } = briefFromV2Data(data);
-        return <OnePager brief={brief} images={images} onClose={() => setExportOpen(false)} />;
+        return <OnePager brief={brief} images={images} projectId={activeProjectId} onClose={() => setExportOpen(false)} />;
       })()}
       {newFolderOpen && (
         <div
@@ -8675,6 +8707,7 @@ export default function WorkshopV2() {
           onNewFolder={handleNewFolder}
           onDeleteFolder={handleDeleteFolder}
           onCleanupDuplicates={handleCleanupDuplicates}
+          onRenameFolder={handleRenameFolder}
         />
 
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -8714,13 +8747,13 @@ export default function WorkshopV2() {
       {/* Nav */}
       <nav style={{
         position: "relative", zIndex: 100, height: 64, flexShrink: 0,
-        display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
+        display: "grid", gridTemplateColumns: "minmax(0, 1fr) max-content", columnGap: 16, alignItems: "center",
         padding: "0 24px",
         borderBottom: "1px solid var(--warm-06)", background: "var(--surface)",
         backdropFilter: "blur(24px) saturate(1.3)", WebkitBackdropFilter: "blur(24px) saturate(1.3)",
         transition: "background 0.4s ease",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           {built && <>
             <AspectRatioControl
               value={data.meta.aspect}
@@ -8742,11 +8775,8 @@ export default function WorkshopV2() {
           </>}
         </div>
 
-        {/* Center spacer */}
-        <div />
-
         {built && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end", justifySelf: "end" }}>
             <PremiumButton variant="ghost" onClick={() => dispatch({ type: "UNDO" })} disabled={past.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Undo (Ctrl+Z)">{"↩"}</PremiumButton>
             <PremiumButton variant="ghost" onClick={() => dispatch({ type: "REDO" })} disabled={future.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Redo (Ctrl+Shift+Z)">{"↪"}</PremiumButton>
 
@@ -8758,24 +8788,30 @@ export default function WorkshopV2() {
 
             <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
 
-            <PremiumButton variant="ghost" onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-              style={{ padding: "5px 8px" }}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
               title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
-              <SectionIcon name={isDark ? "sun" : "moon"} size={14} color="var(--warm-30)" />
-            </PremiumButton>
+              {isDark ? <SunIcon aria-hidden="true" className="size-4" /> : <MoonIcon aria-hidden="true" className="size-4" />}
+            </Button>
           </div>
         )}
 
         {/* Theme toggle when not built (landing page) */}
         {!built && (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <PremiumButton variant="ghost" onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-              style={{ padding: "5px 8px" }}
+          <div style={{ display: "flex", justifyContent: "flex-end", justifySelf: "end" }}>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
               title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
-              <SectionIcon name={isDark ? "sun" : "moon"} size={14} color="var(--warm-30)" />
-            </PremiumButton>
+              {isDark ? <SunIcon aria-hidden="true" className="size-4" /> : <MoonIcon aria-hidden="true" className="size-4" />}
+            </Button>
           </div>
         )}
       </nav>

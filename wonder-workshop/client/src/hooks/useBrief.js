@@ -62,6 +62,30 @@ Rules:
 - environment.heroEnvironment is REQUIRED — populate it with a vivid 1-2 sentence description of the main location pulled from the user's prompt (architecture, time of day, weather, surrounding context). Never leave empty.
 - DO NOT populate moodBoard or environments arrays — those are user-driven sections; the user adds entries manually via "Add mood reference" / "Add location" buttons. Leave them out of the JSON entirely.
 - shotList (the storyboard) must have exactly 9 items
+- DIRECT THE STORYBOARD LIKE A REAL COMMERCIAL — it must read as a deliberately
+  shot spot, not 9 near-identical frames:
+  • VARY THE COVERAGE: use a genuine range of framings and angles across the 9
+    shots — wide establishers, mediums, close-ups, an over-the-shoulder, a POV,
+    high/low angles, and at least one unexpected vantage. Do NOT shoot every
+    shot from the same distance and angle on the same spot.
+  • USE THE LOCATION: characters must actually INTERACT with the setting and
+    occupy it the way real people would. If it's a pool, people are IN THE
+    WATER (swimming, splashing, floating, jumping in) for several shots — not
+    only standing dry beside it. Show the space from multiple vantage points.
+  • SCENE LOGIC / CONTINUITY: every action must have its visible cause. Water
+    splashing means the people are IN or AT the water's edge actually touching
+    it. Never depict an effect whose source isn't in the shot. Wet hair/skin
+    after a swim, dry before. Keep cause and effect consistent shot to shot.
+  • WARDROBE MUST SUIT THE ACTIVITY/LOCATION: at a pool/beach EVERY character is
+    in swimwear (and gets wet); at a gym, workout clothes; etc. Do not put
+    characters in street clothes for an activity that demands otherwise.
+  • Keep it interesting and on-brand: build the 9 shots around the brief and the
+    key message with a clear beginning/middle/end and visual variety.
+- WARDROBE FIELDS (character.wardrobe and characters[].wardrobe) MUST be specific
+  and complete (named garments + colors, INCLUDING a top for everyone) and MUST
+  suit the project's primary location/activity — e.g. a pool spot means a
+  specific swimsuit/trunks for each person, not a generic shirt. Specific,
+  complete wardrobe is what keeps each character consistent across every shot.
 - MULTIPLE CHARACTERS: the primary subject ALWAYS goes in the 'character' field.
   If the prompt clearly implies additional distinct named people (a
   couple, two friends, parent + child, a team, etc.), put each

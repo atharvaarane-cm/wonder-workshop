@@ -18,6 +18,7 @@ const STORE_NAME = "projects";
 const VERSION = 1;
 
 let dbPromise = null;
+const writeQueues = new Map();
 
 function openDb() {
   if (dbPromise) return dbPromise;
@@ -56,21 +57,37 @@ export async function blobGet(id) {
   }
 }
 
-// Write a project's full data blob.
-export async function blobSet(id, data) {
+async function writeBlob(id, data) {
   if (!id || !data) return false;
   try {
     const db = await openDb();
     return await new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      const req = tx.objectStore(STORE_NAME).put({ id, data, savedAt: Date.now() });
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => resolve(false);
+      tx.objectStore(STORE_NAME).put({ id, data, savedAt: Date.now() });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
     });
   } catch (e) {
     console.error("[blobStore] set failed", e);
     return false;
   }
+}
+
+// Write a project's full data blob. Writes are serialized per project
+// so an older, smaller snapshot cannot finish after a newer image-bearing
+// snapshot and overwrite it.
+export async function blobSet(id, data) {
+  if (!id || !data) return false;
+  const previous = writeQueues.get(id) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(() => writeBlob(id, data));
+  const queued = next.finally(() => {
+    if (writeQueues.get(id) === queued) writeQueues.delete(id);
+  });
+  writeQueues.set(id, queued);
+  return next;
 }
 
 // Synchronous best-effort: kicks the write off but doesn't await.

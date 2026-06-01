@@ -176,16 +176,24 @@ const FULLBODY_VIEW_PHRASES = {
   back: "back-facing full body shot, subject facing away from camera",
 };
 
+// Every view (headshot + full-body) is generated conditioned on the
+// character's PRIMARY headshot (opts.referenceImages). Without an explicit
+// instruction the model invents a different top per angle — black shirt on
+// the front, red on the side, shirtless on the 3/4 — so we hard-lock wardrobe
+// to the reference. This is what made the men inconsistent while the women
+// (whose descriptions named one specific swimsuit) stayed consistent.
+const WARDROBE_LOCK = "WARDROBE: wear the exact same complete outfit in every view — identical garments, identical colors, identical fit as described and as shown in the reference image. Do NOT change, recolor, add, remove, or invent different clothing between views; if a top is described or shown, keep that exact same top in all four angles (never switch to shirtless or a different shirt).";
+
 export function talentHeadshotPrompt(t, view) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = HEADSHOT_VIEW_PHRASES[view] || HEADSHOT_VIEW_PHRASES.front;
-  return `Photorealistic studio portrait of ${t.name}${note}, ${phrase}. ${HEADSHOT_FRAMING}. ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
+  return `Photorealistic studio portrait of ${t.name}${note}, ${phrase}. ${HEADSHOT_FRAMING}. ${WARDROBE_LOCK} ${NEUTRAL_FACE}. ${REFERENCE_STYLE}.`;
 }
 
 export function talentFullBodyPrompt(t, view) {
   const note = t.note ? `, ${neutralizeCharacterNote(t.note)}` : "";
   const phrase = FULLBODY_VIEW_PHRASES[view] || FULLBODY_VIEW_PHRASES.front;
-  return `Photorealistic full-body studio portrait of ${t.name}${note}, ${phrase}. Calm composed expression, mouth closed, lips relaxed, eyes open, deadpan stoic face. Arms relaxed at sides, neutral upright standing posture, weight evenly distributed, feet shoulder-width apart, no performance gesture. Photorealistic studio portrait photograph, neutral seamless gray backdrop, soft even diffused lighting, full body in frame head to toe, full-bleed image filling the entire frame edge to edge, no border, no white frame, no matte, no text, no caption, no label, no watermark.`;
+  return `Photorealistic full-body studio portrait of ${t.name}${note}, ${phrase}. ${WARDROBE_LOCK} Calm composed expression, mouth closed, lips relaxed, eyes open, deadpan stoic face. Arms relaxed at sides, neutral upright standing posture, weight evenly distributed, feet shoulder-width apart, no performance gesture. Photorealistic studio portrait photograph, neutral seamless gray backdrop, soft even diffused lighting, full body in frame head to toe, full-bleed image filling the entire frame edge to edge, no border, no white frame, no matte, no text, no caption, no label, no watermark.`;
 }
 
 export function locationPrompt(l) {
