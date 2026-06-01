@@ -6503,7 +6503,7 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
           "ELEMENTS / HERO PROPS (each gets its own product shot):",
           "- Only call out HERO items the camera will actually feature (the Pepsi can, the Air Force 1s, the iPhone). Each one will be generated as a separate product reference.",
           "- DON'T name minor background dressing like 'string lights' or 'terracotta planters' — those waste the pipeline's effort and clutter the asset list. Let those exist in the prose without being singled out as props.",
-          "- Use the brand's actual product name when the user implied a brand.",
+          "- Refer to any product/brand EXACTLY as the user wrote it. Do NOT substitute a more specific sub-brand, variant, flavor, or SKU they didn't ask for — if they wrote 'Pepsi', keep it 'Pepsi' (never 'Pepsi Zero Sugar', 'Pepsi Wild Cherry', etc.). Only use a more specific product name if the user explicitly named that variant.",
           "",
           "MOOD + LIGHTING:",
           "- Specific color palette (named hues, not 'warm'), lighting setup (key/fill/rim, practical sources), atmosphere, pacing/music feel.",
