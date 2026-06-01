@@ -78,8 +78,27 @@ const KNOWN_BRANDS = {
   },
 };
 
+// Common nicknames / variants → canonical KNOWN_BRANDS key. Lets "Coke" resolve
+// to Coca-Cola instead of web-searching to the corporate site (which serves an
+// off-brand logo + muted colors).
+const BRAND_ALIASES = {
+  coke: 'cocacola',
+  cocacolacompany: 'cocacola',
+  thecocacolacompany: 'cocacola',
+  pepsico: 'pepsi',
+};
+
 function normalizeBrandName(value = '') {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Resolve to a KNOWN_BRANDS key space-insensitively ("Coca-Cola" → "cocacola")
+// and via aliases ("Coke" → "cocacola"). Returns null if not a known brand.
+function resolveKnownKey(brand) {
+  const despaced = normalizeBrandName(brand).replace(/\s+/g, '');
+  if (!despaced) return null;
+  const canonical = BRAND_ALIASES[despaced] || despaced;
+  return KNOWN_BRANDS[canonical] ? canonical : null;
 }
 
 function logoUrlForDomain(domain) {
@@ -164,7 +183,8 @@ export default async function handler(req, res) {
   const key = normalizeBrandName(brand);
   if (!key) return res.status(400).json({ error: 'Brand is required' });
 
-  const known = KNOWN_BRANDS[key];
+  const canonicalKey = resolveKnownKey(brand);
+  const known = canonicalKey ? KNOWN_BRANDS[canonicalKey] : null;
   if (known) {
     res.json({ ...known, logoUrl: logoUrlForDomain(known.domain), lookup: 'known-brand' });
     return;
