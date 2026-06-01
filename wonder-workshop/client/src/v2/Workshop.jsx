@@ -2730,84 +2730,14 @@ function LocationDropdown({ label, value, locations, onChange }) {
   };
 
   return (
-    <div style={{ marginBottom: 14 }} ref={ref}>
-      {label && <label style={lbl}>{label}</label>}
-      <div style={{ position: "relative" }}>
-        <div
-          onClick={() => setOpen(!open)}
-          style={{
-            width: "100%", background: "var(--warm-06)", border: "1px solid var(--warm-08)",
-            borderRadius: 8, padding: "8px 36px 8px 10px", color: "var(--warm)", fontSize: 13,
-            fontWeight: 500, fontFamily: "var(--f)", boxSizing: "border-box",
-            letterSpacing: "-0.01em", transition: "border-color 0.2s ease",
-            cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
-            borderColor: open ? "var(--warm-20)" : "var(--warm-08)",
-          }}
-        >
-          {selected ? (
-            <>
-              <LocationThumb loc={selected} size={24} borderRadius={4} />
-              <span>{selected.name}</span>
-            </>
-          ) : (
-            <span style={{ color: "var(--warm-30)" }}>None</span>
-          )}
-        </div>
-        <div style={{
-          position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-          pointerEvents: "none", display: "flex", alignItems: "center",
-        }}>
-          <SectionIcon name="chevron-down" size={14} color="var(--warm-35)" />
-        </div>
-
-        {open && (
-          <div style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-            background: "var(--popover-bg)", border: "1px solid var(--warm-10)", borderRadius: 10,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)", overflow: "hidden",
-            animation: "fadeIn 0.15s ease", maxHeight: 240, overflowY: "auto",
-          }}>
-            <div
-              onClick={() => { onChange(null); setOpen(false); }}
-              style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
-                cursor: "pointer", transition: "background 0.1s ease",
-                background: !value ? "rgba(255,255,255,0.06)" : "transparent",
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-              onMouseLeave={e => e.currentTarget.style.background = !value ? "rgba(255,255,255,0.06)" : "transparent"}
-            >
-              <div style={{
-                width: 24, height: 24, borderRadius: 4, background: "var(--warm-06)",
-                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-              }}>
-                <span style={{ fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-20)" }}>{"—"}</span>
-              </div>
-              <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-30)" }}>None</span>
-            </div>
-            {locations.map(loc => (
-              <div
-                key={loc.id}
-                onClick={() => { onChange(loc.id); setOpen(false); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
-                  cursor: "pointer", transition: "background 0.1s ease",
-                  background: value === loc.id ? "rgba(255,255,255,0.06)" : "transparent",
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-                onMouseLeave={e => e.currentTarget.style.background = value === loc.id ? "rgba(255,255,255,0.06)" : "transparent"}
-              >
-                <LocationThumb loc={loc} size={24} borderRadius={4} />
-                <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, color: "var(--warm)" }}>{loc.name}</span>
-                <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-20)", marginLeft: "auto" }}>
-                  {loc.type === "ai" ? "AI" : "Ref"}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <RootMenuDropdown
+      label={label}
+      value={selectedValue}
+      options={options}
+      onChange={v => onChange(v || null)}
+      renderIcon={renderLocationIcon}
+      triggerSize="lg"
+    />
   );
 }
 
