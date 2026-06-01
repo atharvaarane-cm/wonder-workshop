@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext, useId } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LockIcon, LockOpenIcon, MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
+import { MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
 
 // Shared spring config — used across press/hover feedback so the whole
 // app feels physically coherent. Tuned to feel snappy on click without
@@ -41,8 +41,11 @@ import iconAspectUrl from "../assets/icon-aspect.svg";
 import iconClockUrl from "../assets/icon-clock.svg";
 import iconDropfilesUrl from "../assets/icon-dropfiles.svg";
 import iconFolderUrl from "../assets/icon-folder.svg";
+import iconLockedSvg from "../assets/icon-locked.svg?raw";
+import iconRegenerateSvg from "../assets/icon-regenerate.svg?raw";
 import iconSparkleUrl from "../assets/icon-sparkle.svg";
 import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
+import iconUnlockedSvg from "../assets/icon-unlocked.svg?raw";
 import iconNavCharSvg from "../assets/icon-nav-char.svg?raw";
 import iconNavElementsSvg from "../assets/icon-nav-elements.svg?raw";
 import iconNavLocationSvg from "../assets/icon-nav-location.svg?raw";
@@ -1716,6 +1719,31 @@ function ChatSuggestionIcon({ name }) {
   );
 }
 
+function RawSvgIcon({ svg }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 0 }}
+      dangerouslySetInnerHTML={{ __html: svg || "" }}
+    />
+  );
+}
+
+function LockToggleButton({ locked, onClick, unlockedLabel = "Lock", title }) {
+  return (
+    <Button
+      variant="outline"
+      size="xs"
+      onClick={onClick}
+      aria-pressed={locked}
+      title={title || (locked ? "Unlock" : unlockedLabel)}
+    >
+      <RawSvgIcon svg={locked ? iconLockedSvg : iconUnlockedSvg} />
+      {locked ? "Locked" : unlockedLabel}
+    </Button>
+  );
+}
+
 function RootMenuDropdown({ label, value, options, onChange, renderIcon, triggerIcon, triggerLabel, popupClassName, style, triggerSize = "lg", sideOffset = 4 }) {
   const selected = options.find(o => o.type !== "separator" && o.value === value);
   const selectedLabel = triggerLabel || selected?.triggerLabel || selected?.label || value;
@@ -2571,19 +2599,24 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch, data }) {
             versions={data?.versionHistory?.[`mood.${m.id}`] || []}
           />
         ))}
-        <button
-          ref={addBtnRef}
-          onClick={() => dispatch({ type: "ADD_MOOD", data: {} })}
-          style={{
-            aspectRatio: "1/1", borderRadius: 8, cursor: "pointer",
-            background: "transparent", border: "1px dashed var(--warm-10)",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-            color: "var(--warm-25)", outline: "none",
-          }}
-        >
-          <SectionIcon name="plus" size={14} color="var(--warm-25)" />
-          <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, letterSpacing: "0.02em" }}>Add reference</span>
-        </button>
+        <div style={{ position: "relative" }}>
+          <button
+            ref={addBtnRef}
+            onClick={() => dispatch({ type: "ADD_MOOD", data: {} })}
+            style={{
+              width: "100%", aspectRatio: "1/1", borderRadius: 8, cursor: "pointer",
+              background: "transparent", border: "1px dashed var(--warm-10)",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+              color: "var(--warm-25)", outline: "none",
+            }}
+          >
+            <SectionIcon name="plus" size={14} color="var(--warm-25)" />
+            <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, letterSpacing: "0.02em" }}>Add reference</span>
+          </button>
+          <div aria-hidden="true" style={{ width: "100%", marginTop: 4, fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, padding: "3px 5px", visibility: "hidden" }}>
+            Caption…
+          </div>
+        </div>
       </div>
       {moodBoard.length === 0 && (
         <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 400, color: "var(--warm-25)", textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>
@@ -2911,21 +2944,12 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
             {character.role || "Supporting"} · {character.handle}
           </div>
         </div>
-        <button
+        <LockToggleButton
+          locked={character.locked}
           onClick={() => dispatch({ type: "TOGGLE_TALENT_LOCK", id: character.id })}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 10px", borderRadius: 7, cursor: "pointer",
-            background: character.locked ? "var(--warm-12)" : "transparent",
-            border: "1px solid var(--warm-12)",
-            color: character.locked ? "var(--warm)" : "var(--warm-40)",
-            outline: "none",
-            fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-            letterSpacing: "0.06em", textTransform: "uppercase",
-          }}
-        >
-          {character.locked ? "🔒 Locked" : "Lock character"}
-        </button>
+          unlockedLabel="Lock Character"
+          title={character.locked ? "Unlock this character" : "Lock this character"}
+        />
       </div>
 
       {/* Description */}
@@ -3035,15 +3059,16 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
         <div style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em" }}>
           {label}
         </div>
-        <PremiumButton
-          variant="secondary"
+        <Button
+          variant="outline"
+          size="xs"
           onClick={handlePopulateAll}
           disabled={locked || populating}
-          style={{ fontSize: 10, padding: "5px 10px" }}
+          title={hasAny ? "Regenerate all 4 views" : "Generate all 4 views"}
         >
-          <SectionIcon name="sparkle" size={11} color="var(--warm-40)" />
-          {populating ? "Populating…" : (hasAny ? "Repopulate all" : "Populate all")}
-        </PremiumButton>
+          <RawSvgIcon svg={iconRegenerateSvg} />
+          {populating ? (hasAny ? "Regenerating..." : "Generating...") : (hasAny ? "Regenerate All" : "Generate All")}
+        </Button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         {views.map(view => (
@@ -3708,7 +3733,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         locked={effLocked}
         onToggleLock={() => dispatch({ type: "TOGGLE_LOCATION_LOCK", id: location.id })}
         onRename={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "name", value: v })}
-        lockLabel="Lock location"
+        lockLabel="Lock Location"
       />
       <DescriptionField
         label="Description"
@@ -3891,7 +3916,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
         locked={effLocked}
         onToggleLock={() => dispatch({ type: "TOGGLE_PRODUCT_LOCK", id: product.id })}
         onRename={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "name", value: v })}
-        lockLabel="Lock element"
+        lockLabel="Lock Element"
       />
       <div>
         <SectionLabel>Category</SectionLabel>
@@ -3962,21 +3987,12 @@ function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, 
           </div>
         )}
       </div>
-      <button
+      <LockToggleButton
+        locked={locked}
         onClick={onToggleLock}
-        style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "6px 10px", borderRadius: 7, cursor: "pointer",
-          background: locked ? "var(--warm-12)" : "transparent",
-          border: "1px solid var(--warm-12)",
-          color: locked ? "var(--warm)" : "var(--warm-40)",
-          outline: "none",
-          fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-          letterSpacing: "0.06em", textTransform: "uppercase",
-        }}
-      >
-        {locked ? "🔒 Locked" : lockLabel}
-      </button>
+        unlockedLabel={lockLabel}
+        title={locked ? `Unlock ${name}` : lockLabel}
+      />
     </div>
   );
 }
@@ -4028,15 +4044,12 @@ function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, gen
             {generating ? "Generating…" : autoGenerateLabel}
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="xs"
+        <LockToggleButton
+          locked={locked}
           onClick={onToggleLock}
-          aria-pressed={locked}
-        >
-          {locked ? <LockIcon aria-hidden="true" className="size-3.5" /> : <LockOpenIcon aria-hidden="true" className="size-3.5" />}
-          {locked ? "Locked" : "Lock section"}
-        </Button>
+          unlockedLabel={`Lock ${title}`}
+          title={locked ? `Unlock ${title}` : `Lock ${title}`}
+        />
       </div>
     </div>
   );

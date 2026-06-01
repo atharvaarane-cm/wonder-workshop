@@ -29,7 +29,10 @@ function ShimmerOverlay({ label = "Generating..." }) {
   return (
     <div
       className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center bg-[length:200%_100%] animate-[shimmer_1.5s_infinite_linear]"
-      style={{ backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%)" }}
+      style={{
+        backgroundImage:
+          "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%)",
+      }}
     >
       <span className="rounded-full bg-black/40 px-2 py-[3px] font-semibold text-[9px] uppercase tracking-[0.06em] text-[color:var(--warm-50)] backdrop-blur-md">
         {label}
@@ -62,9 +65,9 @@ function FrameDuration({ duration, onChange }) {
       <input
         autoFocus
         value={value}
-        onChange={e => setValue(e.target.value)}
+        onChange={(e) => setValue(e.target.value)}
         onBlur={commit}
-        onKeyDown={e => {
+        onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
             e.currentTarget.blur();
@@ -75,7 +78,7 @@ function FrameDuration({ duration, onChange }) {
             setValue(duration || "");
           }
         }}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
         className="w-[42px] rounded-md border border-[#363636] bg-[#191919]/80 px-1 py-0.5 text-center text-xs font-medium leading-5 text-white/70 outline-none"
       />
     );
@@ -83,7 +86,7 @@ function FrameDuration({ duration, onChange }) {
 
   return (
     <span
-      onClick={e => {
+      onClick={(e) => {
         e.stopPropagation();
         setEditing(true);
       }}
@@ -114,21 +117,23 @@ function StoryboardFrameCardComponent({
   renderMentions,
 }) {
   const [hovered, setHovered] = useState(false);
-  const loc = data.locations.find(l => l.id === frame.locationId);
+  const loc = data.locations.find((l) => l.id === frame.locationId);
 
   const handleImageError = () => {
     dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
   };
 
   const frameCardClassName = cn(
-    "relative flex h-full cursor-pointer flex-col overflow-hidden rounded-[12px] border border-[#363636] bg-[#202020] text-white",
-    "shadow-[0px_-1px_0px_0px_rgba(255,255,255,0.06),0px_1px_2px_0px_rgba(0,0,0,0.42)] transition-[border-color,box-shadow,opacity]",
+    "relative flex h-full cursor-pointer flex-col overflow-hidden rounded-[12px] border border-white/25 bg-[#202020] text-white before:hidden",
+    "shadow-[0px_1px_2px_0px_rgba(0,0,0,0.42)] transition-[border-color,box-shadow,opacity]",
     isDragSrc ? "cursor-grabbing opacity-[0.15]" : "cursor-pointer opacity-100",
     selected && "border-[#43a3fd] ring-1 ring-[#43a3fd]/60",
-    highlighted && "ring-1 ring-[#43a3fd]/40 animate-[highlightPulse_1.5s_ease]",
-    hovered && !selected && "border-white/25",
+    highlighted &&
+      "ring-1 ring-[#43a3fd]/40 animate-[highlightPulse_1.5s_ease]",
+    hovered && !selected && "border-white/50",
   );
-  const movementLabel = MOVEMENT_TYPES.find(m => m.value === frame.movement)?.label || "Static";
+  const movementLabel =
+    MOVEMENT_TYPES.find((m) => m.value === frame.movement)?.label || "Static";
 
   return (
     <Card
@@ -137,8 +142,8 @@ function StoryboardFrameCardComponent({
       layout
       layoutId={`frame-${frame.id}`}
       draggable
-      onDragStart={e => onDragStart(e, frame.id)}
-      onDragOver={e => onDragOver(e, index)}
+      onDragStart={(e) => onDragStart(e, frame.id)}
+      onDragOver={(e) => onDragOver(e, index)}
       onDragLeave={onDragLeave}
       onDragEnd={onDragEnd}
       onDrop={onDrop}
@@ -154,7 +159,7 @@ function StoryboardFrameCardComponent({
         <img
           alt=""
           src="/figma-assets/storyboard-card-header-gradient.png"
-          className="absolute inset-0 h-full w-full object-cover opacity-10"
+          className="absolute inset-0 h-full w-full object-cover opacity-[0.07]"
         />
       </div>
 
@@ -168,22 +173,35 @@ function StoryboardFrameCardComponent({
         </span>
         <span className="flex min-w-0 items-center gap-1 text-xs font-medium leading-5 text-white/60">
           <span className="shrink-0 font-['SF_Pro'] font-medium">{`\u{1008AF}`}</span>
-          <span className="truncate">{frame.shotType} {"\xB7"} {movementLabel}</span>
+          <span className="truncate">
+            {frame.shotType} {"\xB7"} {movementLabel}
+          </span>
         </span>
         <FrameDuration
           duration={frame.duration}
-          onChange={v => dispatch?.({ type: "UPDATE_FRAME", frameId: frame.id, field: "duration", value: v })}
+          onChange={(v) =>
+            dispatch?.({
+              type: "UPDATE_FRAME",
+              frameId: frame.id,
+              field: "duration",
+              value: v,
+            })
+          }
         />
       </div>
 
-      <div className="relative mx-[-1px] flex flex-1 flex-col overflow-hidden rounded-[12px] border border-[#363636] bg-[#191919] shadow-[inset_0px_0px_0px_2px_rgba(255,255,255,0.15)]">
+      <div className="relative mx-[-1px] flex flex-1 flex-col overflow-hidden rounded-none border-x border-b border-[#363636] bg-[#191919] shadow-[inset_0px_0px_0px_2px_rgba(255,255,255,0.15)]">
         <div
           className="relative shrink-0 overflow-hidden"
           style={{ aspectRatio: aspectCSS }}
         >
           <div
             className="absolute inset-0"
-            style={{ background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length] }}
+            style={{
+              background: frame.uploadedImage
+                ? "transparent"
+                : FILM[index % FILM.length],
+            }}
           />
           {frame.uploadedImage && (
             <img
@@ -196,24 +214,30 @@ function StoryboardFrameCardComponent({
           {!frame.uploadedImage && (
             <div
               className="absolute inset-0"
-              style={{ background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }}
+              style={{
+                background:
+                  "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)",
+              }}
             />
           )}
           {frame.imageStatus === "generating" && <ShimmerOverlay />}
-          {!frame.uploadedImage && frame.imageStatus !== "generating" && frame.imageStatus !== "error" && onRetry && (
-            <div className="absolute inset-0 z-[3] flex items-center justify-center bg-black/20 p-2.5">
-              <button
-                type="button"
-                onClick={e => {
-                  e.stopPropagation();
-                  onRetry(frame.id);
-                }}
-                className="cursor-pointer rounded-full border border-white/40 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-[0.04em] text-white backdrop-blur-md"
-              >
-                Generate
-              </button>
-            </div>
-          )}
+          {!frame.uploadedImage &&
+            frame.imageStatus !== "generating" &&
+            frame.imageStatus !== "error" &&
+            onRetry && (
+              <div className="absolute inset-0 z-[3] flex items-center justify-center bg-black/20 p-2.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRetry(frame.id);
+                  }}
+                  className="cursor-pointer rounded-full border border-white/40 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-[0.04em] text-white backdrop-blur-md"
+                >
+                  Generate
+                </button>
+              </div>
+            )}
           {frame.imageStatus === "error" && !frame.uploadedImage && (
             <div className="absolute inset-0 z-[3] flex flex-col items-center justify-center gap-2 bg-black/40 p-2.5">
               <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-white/90">
@@ -222,7 +246,7 @@ function StoryboardFrameCardComponent({
               {onRetry && (
                 <button
                   type="button"
-                  onClick={e => {
+                  onClick={(e) => {
                     e.stopPropagation();
                     onRetry(frame.id);
                   }}
@@ -253,7 +277,9 @@ function StoryboardFrameCardComponent({
             }}
           />
           <div className="relative line-clamp-3 text-sm font-medium leading-[24.39px] text-white">
-            {renderMentions ? renderMentions(frame.brief, data, { variant: "figmaCard" }) : frame.brief}
+            {renderMentions
+              ? renderMentions(frame.brief, data, { variant: "figmaCard" })
+              : frame.brief}
           </div>
         </div>
       </div>
