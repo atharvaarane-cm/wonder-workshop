@@ -178,8 +178,11 @@ export function V2Lightbox({
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
             rows={8}
-            disabled={improving || generating}
+            readOnly={improving || generating}
+            aria-readonly={improving || generating}
             placeholder="Describe what you want — subject, setting, lighting, framing, mood…"
+            onMouseDown={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
             style={{
               width: "100%", boxSizing: "border-box",
               fontFamily: "var(--f)", fontSize: 13, fontWeight: 300,
@@ -188,6 +191,7 @@ export function V2Lightbox({
               border: "1px solid rgba(255,255,255,0.12)",
               color: "#fff", outline: "none", resize: "vertical",
               lineHeight: 1.6, opacity: (improving || generating) ? 0.6 : 1,
+              userSelect: "text", WebkitUserSelect: "text", cursor: "text",
             }}
           />
         </div>

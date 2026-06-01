@@ -11,7 +11,7 @@ import { blobGet, blobSet, blobSetSync, blobDelete } from "./blobStore.js";
 //   ww_v2_projects        — array of { id, name, updatedAt, folder }
 //   ww_v2_active          — id of the currently active project
 //   ww_v2_project_<id>    — { data, savedAt, version } for each project
-//   ww_v2_state           — LEGACY single-project key, migrated on load
+//   ww_v2_state           — removed legacy single-project key
 //
 // Folders are tracked alongside each project's metadata (folder: string
 // or null). The folder list is derived from metadata; empty folders
@@ -21,7 +21,13 @@ const PROJECTS_KEY = "ww_v2_projects";
 const ACTIVE_KEY = "ww_v2_active";
 const PROJECT_PREFIX = "ww_v2_project_";
 const FOLDERS_KEY = "ww_v2_folders"; // list of empty folder names (folders with no projects yet)
-const LEGACY_KEY = "ww_v2_state";
+const LEGACY_KEYS = [
+  "ww_projects",
+  "ww_active_project",
+  "ww_extra_folders",
+  "ww_recents",
+  "ww_v2_state",
+];
 
 let storageOk = null;
 function storageAvailable() {
@@ -110,35 +116,35 @@ function writeProjectsList(list) {
   try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(list)); } catch {}
 }
 
-// Save project — full data goes to IndexedDB (no quota worry), only
-// the lightweight metadata list goes to localStorage. We also kick a
-// best-effort localStorage fallback write with the stripped (no
-// data:URL) version so a project at least has SOMETHING durable on
-// browsers that block IndexedDB.
-export function saveProject(id, data, opts = {}) {
-  if (!storageAvailable() || !id || !data) return false;
+function applyProjectListName(id, data) {
+  if (!id || !data) return data;
+  const meta = listProjects().find(p => p.id === id);
+  if (!meta?.name || data?.meta?.title === meta.name) return data;
+  return {
+    ...data,
+    meta: {
+      ...(data.meta || {}),
+      title: meta.name,
+    },
+  };
+}
 
-  // Primary write — IndexedDB. Async but fire-and-forget here; the
-  // caller's "Saved" toast comes from this returning true (which it
-  // does optimistically — actual write is monitored via the next
-  // saveProjectAsync entrypoint when caller wants confirmation).
-  blobSet(id, data).catch(e => console.warn("[persistence] IndexedDB write failed", e));
-
-  // Lightweight fallback — strip data:URLs so a project at least
-  // round-trips on browsers where IndexedDB is blocked. If even the
-  // stripped version doesn't fit we silently skip; IndexedDB is
-  // the source of truth.
+function writeProjectFallback(id, data) {
   try {
     const stripped = stripBigImages(data);
     localStorage.setItem(projectKey(id), JSON.stringify({
       data: stripped, savedAt: Date.now(), stripped: true, version: 2,
     }));
+    return true;
   } catch (e) {
     // Quota even on stripped data is rare but possible — drop the
     // localStorage fallback for this project. IndexedDB is still good.
     try { localStorage.removeItem(projectKey(id)); } catch {}
+    return false;
   }
+}
 
+function writeProjectMetadata(id, data, opts = {}) {
   // Update metadata. Preserve existing folder + name if not overridden.
   const list = listProjects();
   const idx = list.findIndex(p => p.id === id);
@@ -155,7 +161,26 @@ export function saveProject(id, data, opts = {}) {
   const next = [...list];
   if (idx >= 0) next[idx] = meta; else next.unshift(meta);
   writeProjectsList(next);
+}
+
+// Save project — full data goes to IndexedDB (no quota worry), only
+// the lightweight metadata list goes to localStorage. The sync entry
+// point keeps older call sites simple, but callers that need a truthful
+// save indicator should use saveProjectAsync().
+export function saveProject(id, data, opts = {}) {
+  if (!storageAvailable() || !id || !data) return false;
+  blobSet(id, data).catch(e => console.warn("[persistence] IndexedDB write failed", e));
+  writeProjectFallback(id, data);
+  writeProjectMetadata(id, data, opts);
   return true;
+}
+
+export async function saveProjectAsync(id, data, opts = {}) {
+  if (!storageAvailable() || !id || !data) return false;
+  const idbOk = await blobSet(id, data);
+  const fallbackOk = writeProjectFallback(id, data);
+  writeProjectMetadata(id, data, opts);
+  return idbOk || fallbackOk;
 }
 
 // beforeunload flush — synchronous best-effort. IndexedDB writes
@@ -165,18 +190,8 @@ export function saveProject(id, data, opts = {}) {
 export function saveProjectSync(id, data, opts = {}) {
   if (!storageAvailable() || !id || !data) return false;
   blobSetSync(id, data);
-  try {
-    const stripped = stripBigImages(data);
-    localStorage.setItem(projectKey(id), JSON.stringify({
-      data: stripped, savedAt: Date.now(), stripped: true, version: 2,
-    }));
-  } catch {}
-  const list = listProjects();
-  const idx = list.findIndex(p => p.id === id);
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], updatedAt: Date.now() };
-    writeProjectsList(list);
-  }
+  writeProjectFallback(id, data);
+  writeProjectMetadata(id, data, opts);
   return true;
 }
 
@@ -186,7 +201,7 @@ export function saveProjectSync(id, data, opts = {}) {
 export async function loadProjectAsync(id) {
   if (!id) return null;
   const fromIdb = await blobGet(id);
-  if (fromIdb) return fromIdb;
+  if (fromIdb) return applyProjectListName(id, fromIdb);
   // Legacy fallback — read the lightweight localStorage copy.
   return loadProject(id);
 }
@@ -201,7 +216,7 @@ export function loadProject(id) {
     const raw = localStorage.getItem(projectKey(id));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.data || null;
+    return applyProjectListName(id, parsed?.data || null);
   } catch { return null; }
 }
 
@@ -218,11 +233,47 @@ export function deleteProject(id) {
 
 export function renameProject(id, newName) {
   if (!storageAvailable() || !id) return;
+  const cleaned = (newName || "").trim() || "Untitled";
   const list = listProjects();
   const idx = list.findIndex(p => p.id === id);
   if (idx < 0) return;
-  list[idx] = { ...list[idx], name: newName || "Untitled", updatedAt: Date.now() };
+  list[idx] = { ...list[idx], name: cleaned, updatedAt: Date.now() };
   writeProjectsList(list);
+
+  try {
+    const raw = localStorage.getItem(projectKey(id));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.data) {
+        const data = {
+          ...parsed.data,
+          meta: {
+            ...(parsed.data.meta || {}),
+            title: cleaned,
+          },
+        };
+        localStorage.setItem(projectKey(id), JSON.stringify({
+          ...parsed,
+          data,
+          savedAt: Date.now(),
+          version: 2,
+        }));
+      }
+    }
+  } catch {}
+
+  blobGet(id)
+    .then(data => {
+      if (!data) return null;
+      return blobSet(id, {
+        ...data,
+        meta: {
+          ...(data.meta || {}),
+          title: cleaned,
+        },
+      });
+    })
+    .catch(() => {});
 }
 
 export function setProjectFolder(id, folder) {
@@ -301,21 +352,39 @@ export function deleteFolder(name) {
   saveExtraFolders(loadExtraFolders().filter(n => n !== cleaned));
 }
 
-// One-time migration: the previous version saved to a single
-// ww_v2_state key. If that exists on first load of the multi-project
-// system, promote it into a real project, mark it active, and clean
-// up the legacy key.
-export function migrateLegacyState() {
-  if (!storageAvailable()) return null;
+export function renameFolder(oldName, newName) {
+  const from = (oldName || "").trim();
+  const to = (newName || "").trim();
+  if (!storageAvailable() || !from || !to) return false;
+  if (from === to) return true;
+
+  const list = listProjects();
+  let changed = false;
+  const nextProjects = list.map(p => {
+    if (p.folder !== from) return p;
+    changed = true;
+    return { ...p, folder: to, updatedAt: Date.now() };
+  });
+  if (changed) writeProjectsList(nextProjects);
+
+  const extras = loadExtraFolders();
+  const nextExtras = [];
+  for (const folder of extras) {
+    const nextName = folder === from ? to : folder;
+    if (!nextExtras.includes(nextName)) nextExtras.push(nextName);
+  }
+  if (!nextExtras.includes(to) && !changed) nextExtras.push(to);
+  saveExtraFolders(nextExtras.filter(n => n !== from));
+
+  return true;
+}
+
+export function purgeLegacyV1Storage() {
+  if (!storageAvailable()) return;
+  for (const key of LEGACY_KEYS) {
+    try { localStorage.removeItem(key); } catch {}
+  }
   try {
-    const raw = localStorage.getItem(LEGACY_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.data) return null;
-    const id = newProjectId();
-    saveProject(id, parsed.data, { name: parsed.data?.meta?.title || "Untitled" });
-    setActiveProjectId(id);
-    localStorage.removeItem(LEGACY_KEY);
-    return id;
-  } catch { return null; }
+    if (typeof indexedDB !== "undefined") indexedDB.deleteDatabase("ww-images");
+  } catch {}
 }

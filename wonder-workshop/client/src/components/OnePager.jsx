@@ -1,9 +1,8 @@
-import { useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../utils/characterPrompts.js'
 import { expandMentions } from '../utils/mentions.js'
 import { exportPptx } from '../utils/pptxExport.js'
 import { generateTreatmentFromShots, getCachedTreatment, cacheTreatment } from '../utils/treatment.js'
-import { ProjectContext } from '../hooks/useProject.js'
 
 // Resolve a generated image src by trying the stable slot ID first, then
 // falling back to the legacy prompt-keyed entry. Mirrors ImageSlot's own
@@ -141,7 +140,7 @@ function CharacterSheet({ character, characterKey, images, mode }) {
 //     No full-body grid, no brand-asset chrome.
 //   - full: detail sheet for the video-gen pipeline. Adds full-body
 //     grids + the full description text.
-export default function OnePager({ brief, images = {}, onClose }) {
+export default function OnePager({ brief, images = {}, onClose, projectId = null }) {
   const cd    = brief?.creativeDirection || {}
   const pi    = brief?.projectInfo || {}
   const shots = brief?.shotList || []
@@ -151,7 +150,6 @@ export default function OnePager({ brief, images = {}, onClose }) {
 
   const [mode, setMode] = useState('production')
   const [exportingPptx, setExportingPptx] = useState(false)
-  const project = useContext(ProjectContext)
   const [treatment, setTreatment] = useState('')
   const [treatmentLoading, setTreatmentLoading] = useState(false)
 
@@ -225,7 +223,7 @@ export default function OnePager({ brief, images = {}, onClose }) {
   useEffect(() => {
     let aborted = false
     const controller = new AbortController()
-    const cached = getCachedTreatment(project?.id, shots)
+    const cached = getCachedTreatment(projectId, shots)
     if (cached) {
       setTreatment(cached)
       return () => { aborted = true; controller.abort() }
@@ -241,12 +239,12 @@ export default function OnePager({ brief, images = {}, onClose }) {
         if (aborted) return
         setTreatment(text)
         setTreatmentLoading(false)
-        if (text) cacheTreatment(project?.id, shots, text)
+        if (text) cacheTreatment(projectId, shots, text)
       })
       .catch(() => { if (!aborted) setTreatmentLoading(false) })
     return () => { aborted = true; controller.abort() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, shots.length, shots.map(s => `${s.framing || ''}|${s.description || ''}`).join('::')])
+  }, [projectId, shots.length, shots.map(s => `${s.framing || ''}|${s.description || ''}`).join('::')])
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
