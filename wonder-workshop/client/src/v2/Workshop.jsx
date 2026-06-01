@@ -4463,11 +4463,9 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
               onClick={e => e.stopPropagation()}
             >
           <div style={{
-            position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 0,
             display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 20,
             background: "#006dd4", border: "1px solid #43a3fd",
             boxShadow: "0 4px 14px rgba(0,0,0,0.32)",
-            zIndex: 50,
           }} onClick={e => e.stopPropagation()}>
             <HoverBarBtn title="Download" onClick={handleDownload}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
