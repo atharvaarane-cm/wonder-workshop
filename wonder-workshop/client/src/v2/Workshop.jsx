@@ -274,22 +274,38 @@ function buildReconcileContext(d, assets) {
   return { frames, assets: enriched };
 }
 
+// Whole-word match so a name isn't counted via a coincidental substring
+// ("ball" inside "volleyball", "Sam" inside "sample").
+function mentionsName(text, name) {
+  if (!name) return false;
+  try { return new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(text); }
+  catch { return text.toLowerCase().includes(name.toLowerCase()); }
+}
+
 function assetReconcileStatus(asset, type, data) {
-  const brief = String(data?.meta?.treatment || "").toLowerCase();
-  const name = String(asset?.name || "").toLowerCase().trim();
+  const brief = String(data?.meta?.treatment || "");
+  const briefL = brief.toLowerCase();
+  const name = String(asset?.name || "").trim();
   const handle = String(asset?.handle || "").toLowerCase().trim();
-  const inBrief = (!!name && brief.includes(name)) || (!!handle && brief.includes(handle));
+  const inBrief = (!!name && mentionsName(brief, name)) || (!!handle && briefL.includes(handle));
   const frames = data?.frames || [];
   const idKey = type === "talent" ? "talentIds" : type === "products" ? "productIds" : null;
   const inStoryboard = frames.some(f => {
-    const fb = String(f?.brief || "").toLowerCase();
-    if (handle && fb.includes(handle)) return true;
-    // Also match by NAME — a location often has no @handle (and locations
-    // aren't @-linked to frames the way talent/products are), so without this
-    // a location woven into a frame's text could never count as "in storyboard".
-    if (name && fb.includes(name)) return true;
-    if (type === "locations") return f.locationId === asset.id;
-    if (idKey) return (f[idKey] || []).includes(asset.id);
+    const fb = String(f?.brief || "");
+    const fbL = fb.toLowerCase();
+    // Talent / products count as "in the storyboard" only via a REAL structured
+    // reference — the @handle in a frame, or an id link. A loose prose mention
+    // of the name does NOT count (it isn't @-tagged, so image-gen won't attach
+    // its reference). This is why a just-added element whose name happens to
+    // appear in the brief still flags until it's properly woven in.
+    if (handle && fbL.includes(handle)) return true;
+    if (idKey && (f[idKey] || []).includes(asset.id)) return true;
+    // Locations have no @handle and aren't id-tagged in prose, so they DO match
+    // by name (plus the locationId set by AUTO_DETECT once they're woven in).
+    if (type === "locations") {
+      if (f.locationId === asset.id) return true;
+      if (name && mentionsName(fb, name)) return true;
+    }
     return false;
   });
   return { inBrief, inStoryboard, needs: !inBrief || !inStoryboard };
