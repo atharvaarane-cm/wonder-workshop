@@ -3957,10 +3957,11 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      {/* Detail header — cycle arrows flank the name to step through
-          characters (‹ prev / next ›); the left-nav "Characters" tab
-          still returns to the grid. Falls back to ‹ Back if no siblings. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      {/* Detail header — cycle arrows FLANK the name (‹ Leo ›) so they're
+          both right beside it; the lock button is pushed to the far right via
+          marginLeft:auto. The left-nav "Characters" tab still returns to the
+          grid. Falls back to ‹ Back if no siblings. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {onPrev || onNext ? (
           <CycleArrow dir="prev" onClick={onPrev} title="Previous character" />
         ) : (
@@ -3974,7 +3975,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
             <span>‹</span> Back
           </button>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ minWidth: 0, flexShrink: 1 }}>
           <EditableText
             value={character.name}
             onChange={v => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "name", value: v })}
@@ -3988,6 +3989,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
         <button
           onClick={() => dispatch({ type: "TOGGLE_TALENT_LOCK", id: character.id })}
           style={{
+            marginLeft: "auto",
             display: "flex", alignItems: "center", gap: 6,
             padding: "6px 10px", borderRadius: 7, cursor: "pointer",
             background: character.locked ? "var(--warm-12)" : "transparent",
@@ -5167,7 +5169,7 @@ function CycleArrow({ dir, onClick, title }) {
 
 function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, lockLabel = "Lock", onPrev, onNext }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       {onPrev || onNext ? (
         <CycleArrow dir="prev" onClick={onPrev} title="Previous" />
       ) : (
@@ -5179,7 +5181,7 @@ function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, 
           fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
         }}>‹ Back</button>
       )}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ minWidth: 0, flexShrink: 1 }}>
         <EditableText
           value={name}
           onChange={onRename}
@@ -5195,6 +5197,7 @@ function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, 
       <button
         onClick={onToggleLock}
         style={{
+          marginLeft: "auto",
           display: "flex", alignItems: "center", gap: 6,
           padding: "6px 10px", borderRadius: 7, cursor: "pointer",
           background: locked ? "var(--warm-12)" : "transparent",
