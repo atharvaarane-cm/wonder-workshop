@@ -74,6 +74,7 @@ export function ProjectSidebar({
   onAssetTabChange,
   onBackToProjects,
   assetCounts = {},
+  homeBackdrop = false,
 }) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
@@ -182,8 +183,10 @@ export function ProjectSidebar({
   return (
     <div style={{
       width: 256, flexShrink: 0,
-      borderRight: "1px solid var(--warm-06)",
-      background: "rgba(0,0,0,0.72)",
+      borderRight: homeBackdrop ? "1px solid rgba(255,255,255,0.08)" : "1px solid var(--warm-06)",
+      background: homeBackdrop ? "rgba(0,0,0,0.46)" : "rgba(0,0,0,0.72)",
+      backdropFilter: homeBackdrop ? "blur(20px) saturate(1.05)" : undefined,
+      WebkitBackdropFilter: homeBackdrop ? "blur(20px) saturate(1.05)" : undefined,
       display: "flex", flexDirection: "column",
       height: "100vh", overflow: "hidden",
     }}>

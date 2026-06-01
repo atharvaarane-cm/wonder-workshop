@@ -10,6 +10,13 @@ const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
 const HOVER_SCALE = 1.012;
 const TAP_SCALE = 0.985;
 import { generateBrief, chatWithTools, regenerateShotList } from "../hooks/useBrief.js";
+import {
+  V2_CHAT_TOOLS,
+  applyV2ChatActions,
+  buildV2ChatContext,
+  improveV2ChatInstruction,
+  summarizeV2ChatResult,
+} from "./aiChat.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
 import { Input } from "@/components/ui/input";
@@ -34,6 +41,13 @@ import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
 import { BriefSettingsCard } from "./components/BriefPanel.jsx";
 import { GenerateStoryboardButton } from "./components/GenerateStoryboardButton.jsx";
+import {
+  HOME_BACKGROUND_OPTIONS,
+  HOME_BACKGROUND_STORAGE_KEY,
+  HomeBackground,
+  HomeBackgroundSwitch,
+  normalizeHomeBackground,
+} from "./components/home/HomeBackground.jsx";
 import { StoryboardFrameCard } from "./components/storyboard/StoryboardFrameCard.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
@@ -989,465 +1003,6 @@ function DebugLogPanel() {
   );
 }
 
-// -- CHAT TOOL SCHEMA (real Gemini chat-with-tools) -----------
-// Used by handleSendMessage to turn user prompts into reducer
-// dispatches via Gemini function calling. Add new tools here +
-// matching dispatch logic in applyChatToolCall below.
-
-const V2_CHAT_TOOLS = [
-  {
-    name: "update_frame_brief",
-    description: "Replace a storyboard frame's shot description. Use this for any change to what a frame depicts. Pass the FULL new brief text — not just the modification.",
-    parameters: {
-      type: "object",
-      properties: {
-        frameNumber: { type: "string", description: "Zero-padded frame number, e.g. '01' or '06'." },
-        newBrief: { type: "string", description: "The complete replacement brief text. Use @handles to reference characters / locations / products." },
-      },
-      required: ["frameNumber", "newBrief"],
-    },
-  },
-  {
-    name: "update_frame_camera",
-    description: "Change a frame's camera settings — movement, height, lens, or angle. Any of the four fields can be omitted; only provided fields are updated.",
-    parameters: {
-      type: "object",
-      properties: {
-        frameNumber: { type: "string", description: "Zero-padded frame number." },
-        movement: { type: "string", enum: ["static", "pan", "track", "crane", "handheld", "steadicam"] },
-        cameraHeight: { type: "string", enum: ["worm", "low", "eye", "high", "bird"] },
-        lens: { type: "string", enum: ["wide", "normal", "telephoto"] },
-        cameraAngle: { type: "string", enum: ["front", "3qR", "right", "back", "left", "3qL"] },
-      },
-      required: ["frameNumber"],
-    },
-  },
-  {
-    name: "update_frame_shot_type",
-    description: "Change a frame's shot type (framing). Goes tighter (WIDE → MED → MCU → CU → ECU) or looser as the user asks.",
-    parameters: {
-      type: "object",
-      properties: {
-        frameNumber: { type: "string", description: "Zero-padded frame number." },
-        shotType: { type: "string", enum: ["WIDE", "MED", "MCU", "CU", "ECU", "OTS", "POV", "INSERT"] },
-      },
-      required: ["frameNumber", "shotType"],
-    },
-  },
-  {
-    name: "update_meta",
-    description: "Edit a project-level metadata field — title, treatment, client. Pass the FULL new value.",
-    parameters: {
-      type: "object",
-      properties: {
-        field: { type: "string", enum: ["title", "treatment", "client", "format", "aspect"] },
-        value: { type: "string" },
-      },
-      required: ["field", "value"],
-    },
-  },
-  {
-    name: "update_talent",
-    description: "Edit a character's name, role, or note. Find by current name (case-insensitive substring match).",
-    parameters: {
-      type: "object",
-      properties: {
-        talentName: { type: "string", description: "Current name of the character to find." },
-        field: { type: "string", enum: ["name", "role", "note"] },
-        value: { type: "string" },
-      },
-      required: ["talentName", "field", "value"],
-    },
-  },
-  {
-    name: "update_location",
-    description: "Edit a location's name or note. Find by current name.",
-    parameters: {
-      type: "object",
-      properties: {
-        locationName: { type: "string" },
-        field: { type: "string", enum: ["name", "note"] },
-        value: { type: "string" },
-      },
-      required: ["locationName", "field", "value"],
-    },
-  },
-  {
-    name: "update_product",
-    description: "Edit an element/product's name, category, or note. Find by current name.",
-    parameters: {
-      type: "object",
-      properties: {
-        productName: { type: "string" },
-        field: { type: "string", enum: ["name", "category", "note"] },
-        value: { type: "string" },
-      },
-      required: ["productName", "field", "value"],
-    },
-  },
-  {
-    name: "add_frame",
-    description: "Append a new frame to the storyboard. The frame starts with placeholder content the user can refine.",
-    parameters: { type: "object", properties: {} },
-  },
-  {
-    name: "create_talent",
-    description: "Create a new character (talent) in the project. By default also generates the primary headshot image — set generateImage:false to skip. Use this when the user asks to add a character, suggest a casting option, etc.",
-    parameters: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Full character name, e.g. 'Maya Chen'." },
-        role: { type: "string", description: "Lead | Supporting | Cameo | similar role label. Default 'Supporting'." },
-        note: { type: "string", description: "Physical / wardrobe description. Stick to appearance — age range, ethnicity, build, hair, wardrobe — and avoid expression / pose directions (they bias every generated frame)." },
-        generateImage: { type: "boolean", description: "Default true. Set false only if the user explicitly says 'don't generate an image'." },
-      },
-      required: ["name"],
-    },
-  },
-  {
-    name: "create_location",
-    description: "Create a new location in the project. By default also generates the establishing-shot reference image. Use this when the user asks to add a setting / place.",
-    parameters: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Short location name, e.g. 'Brooklyn Brownstone Rooftop'." },
-        note: { type: "string", description: "Time of day, weather, architecture, atmosphere." },
-        generateImage: { type: "boolean", description: "Default true." },
-      },
-      required: ["name"],
-    },
-  },
-  {
-    name: "create_product",
-    description: "Create a new product / element (props, branded items, hero objects). By default also generates the product photography reference.",
-    parameters: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Product / element name." },
-        category: { type: "string", description: "Footwear | Apparel | Beverage | Accessory | etc." },
-        note: { type: "string", description: "Color, material, shape, key details." },
-        generateImage: { type: "boolean", description: "Default true." },
-      },
-      required: ["name"],
-    },
-  },
-  {
-    name: "generate_asset_image",
-    description: "Generate (or regenerate) the image for an EXISTING asset — talent primary headshot, location reference, product reference. Use this when the user asks to 'remake' or 'try a different look for' an asset.",
-    parameters: {
-      type: "object",
-      properties: {
-        assetType: { type: "string", enum: ["talent", "location", "product"] },
-        assetName: { type: "string", description: "Current name of the asset (case-insensitive substring match)." },
-        promptOverride: { type: "string", description: "Optional custom prompt that replaces the base prompt. Leave blank to regenerate from the asset's existing description." },
-      },
-      required: ["assetType", "assetName"],
-    },
-  },
-  {
-    name: "generate_frame_image",
-    description: "Generate (or regenerate) the storyboard image for a frame. Uses the frame's brief + tagged @-handles as references.",
-    parameters: {
-      type: "object",
-      properties: {
-        frameNumber: { type: "string", description: "Zero-padded frame number." },
-        promptOverride: { type: "string", description: "Optional custom prompt." },
-      },
-      required: ["frameNumber"],
-    },
-  },
-];
-
-// Apply a single chat tool call to the v2 reducer. Returns metadata
-// about what happened so the chat UI can summarize + highlight.
-function applyChatToolCall(action, data, dispatch) {
-  const args = action.args || {};
-  const findFrameId = (num) => {
-    const norm = String(num || "").padStart(2, "0");
-    return data.frames.find(f => f.number === norm)?.id || null;
-  };
-  switch (action.name) {
-    case "update_frame_brief": {
-      const id = findFrameId(args.frameNumber);
-      if (!id || !args.newBrief) return null;
-      dispatch({ type: "UPDATE_FRAME", frameId: id, field: "brief", value: args.newBrief });
-      return { applied: true, kind: "frame", frameId: id, field: "brief" };
-    }
-    case "update_frame_camera": {
-      const id = findFrameId(args.frameNumber);
-      if (!id) return null;
-      const fields = {};
-      for (const k of ["movement", "cameraHeight", "lens", "cameraAngle"]) {
-        if (args[k]) fields[k] = args[k];
-      }
-      if (Object.keys(fields).length === 0) return null;
-      dispatch({ type: "UPDATE_FRAME_CAMERA", frameId: id, fields });
-      return { applied: true, kind: "camera", frameId: id, field: Object.keys(fields).join(",") };
-    }
-    case "update_frame_shot_type": {
-      const id = findFrameId(args.frameNumber);
-      if (!id || !args.shotType) return null;
-      dispatch({ type: "UPDATE_FRAME", frameId: id, field: "shotType", value: args.shotType });
-      return { applied: true, kind: "frame", frameId: id, field: "shotType" };
-    }
-    case "update_meta": {
-      if (!args.field || args.value == null) return null;
-      dispatch({ type: "UPDATE_META", field: args.field, value: args.value });
-      return { applied: true, kind: "meta", field: args.field };
-    }
-    case "update_talent": {
-      const target = (data.talent || []).find(t =>
-        t.name?.toLowerCase().includes((args.talentName || "").toLowerCase()),
-      );
-      if (!target || !args.field || args.value == null) return null;
-      dispatch({ type: "UPDATE_TALENT", id: target.id, field: args.field, value: args.value });
-      return { applied: true, kind: "talent", field: args.field };
-    }
-    case "update_location": {
-      const target = (data.locations || []).find(l =>
-        l.name?.toLowerCase().includes((args.locationName || "").toLowerCase()),
-      );
-      if (!target || !args.field || args.value == null) return null;
-      dispatch({ type: "UPDATE_LOCATION", id: target.id, field: args.field, value: args.value });
-      return { applied: true, kind: "location", field: args.field };
-    }
-    case "update_product": {
-      const target = (data.products || []).find(p =>
-        p.name?.toLowerCase().includes((args.productName || "").toLowerCase()),
-      );
-      if (!target || !args.field || args.value == null) return null;
-      dispatch({ type: "UPDATE_PRODUCT", id: target.id, field: args.field, value: args.value });
-      return { applied: true, kind: "product", field: args.field };
-    }
-    case "add_frame": {
-      dispatch({ type: "ADD_FRAME" });
-      return { applied: true, kind: "frame", field: "added" };
-    }
-    case "create_talent": {
-      if (!args.name) return null;
-      // Derive a unique @-handle from the first name. Reducer doesn't
-      // validate uniqueness so we do it here.
-      const firstWord = String(args.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-      const existingHandles = new Set((data.talent || []).map(t => (t.handle || "").toLowerCase()));
-      let handle = `@${firstWord || "char"}`;
-      let n = 2;
-      while (existingHandles.has(handle.toLowerCase())) { handle = `@${firstWord}${n++}`; }
-      const initials = String(args.name).trim().split(/\s+/).map(w => w[0] || "").join("").slice(0, 2).toUpperCase();
-      dispatch({ type: "ADD_TALENT", data: {
-        name: args.name,
-        handle,
-        role: args.role || "Supporting",
-        note: args.note || "",
-        initials,
-      }});
-      const wantImage = args.generateImage !== false;
-      return {
-        applied: true, kind: "talent", field: "created",
-        effect: wantImage ? { type: "generateTalentPrimary", talentName: args.name } : null,
-        message: `Created character ${args.name} ${handle}${wantImage ? " — generating headshot…" : ""}`,
-      };
-    }
-    case "create_location": {
-      if (!args.name) return null;
-      const firstWord = String(args.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-      const existingHandles = new Set((data.locations || []).map(l => (l.handle || "").toLowerCase()));
-      let handle = `@${firstWord || "loc"}`;
-      let n = 2;
-      while (existingHandles.has(handle.toLowerCase())) { handle = `@${firstWord}${n++}`; }
-      dispatch({ type: "ADD_LOCATION", data: {
-        name: args.name,
-        handle,
-        note: args.note || "",
-        type: "ai",
-      }});
-      const wantImage = args.generateImage !== false;
-      return {
-        applied: true, kind: "location", field: "created",
-        effect: wantImage ? { type: "generateLocationImage", locationName: args.name } : null,
-        message: `Created location ${args.name} ${handle}${wantImage ? " — generating reference…" : ""}`,
-      };
-    }
-    case "create_product": {
-      if (!args.name) return null;
-      const firstWord = String(args.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-      const existingHandles = new Set((data.products || []).map(p => (p.handle || "").toLowerCase()));
-      let handle = `@${firstWord || "prod"}`;
-      let n = 2;
-      while (existingHandles.has(handle.toLowerCase())) { handle = `@${firstWord}${n++}`; }
-      dispatch({ type: "ADD_PRODUCT", data: {
-        name: args.name,
-        handle,
-        category: args.category || "Other",
-        note: args.note || "",
-      }});
-      const wantImage = args.generateImage !== false;
-      return {
-        applied: true, kind: "product", field: "created",
-        effect: wantImage ? { type: "generateProductImage", productName: args.name } : null,
-        message: `Created element ${args.name} ${handle}${wantImage ? " — generating reference…" : ""}`,
-      };
-    }
-    case "generate_asset_image": {
-      if (!args.assetType || !args.assetName) return null;
-      return {
-        applied: true, kind: args.assetType, field: "regenerating",
-        effect: {
-          type: "generateAssetImage",
-          assetType: args.assetType,
-          assetName: args.assetName,
-          promptOverride: args.promptOverride || null,
-        },
-        message: `Generating new ${args.assetType} image for ${args.assetName}…`,
-      };
-    }
-    case "generate_frame_image": {
-      const id = findFrameId(args.frameNumber);
-      if (!id) return null;
-      return {
-        applied: true, kind: "frame", frameId: id, field: "regenerating",
-        effect: {
-          type: "generateFrameImage",
-          frameId: id,
-          promptOverride: args.promptOverride || null,
-        },
-        message: `Generating new image for frame ${args.frameNumber}…`,
-      };
-    }
-    default:
-      return null;
-  }
-}
-
-// -- MOCK AI --------------------------------------------------
-
-function mockAI(command, state) {
-  const l = command.toLowerCase();
-  const changes = [];
-  let message = "";
-
-  if (l.includes("gritty") || l.includes("grittier") || l.includes("raw")) {
-    state.frames.forEach(f => {
-      if (f.movement === "static") changes.push({ type: "camera", id: f.id, fields: { movement: "handheld" } });
-    });
-    message = "Shifted tone toward grit. Camera loosened to handheld where static. @maya feels rawer now.";
-  } else if (l.includes("low angle") || l.includes("lower")) {
-    state.frames.forEach(f => {
-      if (f.cameraHeight === "eye") changes.push({ type: "camera", id: f.id, fields: { cameraHeight: "low" } });
-    });
-    message = "Dropped all eye-level cameras to low angle. More power in the frame.";
-  } else if (l.includes("wide lens") || l.includes("wider lens")) {
-    state.frames.forEach(f => {
-      if (f.lens !== "wide") changes.push({ type: "camera", id: f.id, fields: { lens: "wide" } });
-    });
-    message = "Switched all frames to wide lens (24mm). More context, more environment.";
-  } else if (l.includes("tracking") || l.includes("tracking shot")) {
-    state.frames.filter(f => f.movement === "static").forEach(f => {
-      changes.push({ type: "camera", id: f.id, fields: { movement: "track" } });
-    });
-    message = "Static shots converted to tracking. More kinetic energy.";
-  } else if (l.includes("flip") || l.includes("reverse angle")) {
-    state.frames.forEach(f => {
-      const flip = { front: "back", back: "front", left: "right", right: "left", "3qL": "3qR", "3qR": "3qL" };
-      changes.push({ type: "camera", id: f.id, fields: { cameraAngle: flip[f.cameraAngle] || "back" } });
-    });
-    message = "Flipped all camera angles. Reversed perspective across the board.";
-  } else if (l.includes("desert") || l.includes("highway")) {
-    state.frames.filter(f => f.locationId === "l1").forEach(f => {
-      const nb = f.brief.replace(/\.$/, "") + ". Later dawn, more amber warmth, distant mountains.";
-      changes.push({ type: "frame", id: f.id, field: "brief", value: nb, old: f.brief });
-    });
-    message = "Desert frames updated. Later dawn, more amber warmth, distant mountains.";
-  } else if (l.includes("maya") || l.includes("talent")) {
-    state.frames.filter(f => f.talentIds.includes("t1")).forEach(f => {
-      const nb = f.brief.replace(/\.$/, "") + ". Less performative, more internal.";
-      changes.push({ type: "frame", id: f.id, field: "brief", value: nb, old: f.brief });
-    });
-    message = "Adjusted @maya's performance across all frames. More internal intensity, less performative.";
-  } else if ((l.includes("swap") || l.includes("reorder") || l.includes("move")) && state.frames.length >= 3) {
-    const ids = state.frames.map(f => f.id);
-    const tmp = ids[1]; ids[1] = ids[2]; ids[2] = tmp;
-    changes.push({ type: "reorder", orderedIds: ids });
-    message = "Swapped frames 02 and 03. Narrative stakes shifted.";
-  } else if (l.includes("add") || l.includes("insert") || l.includes("new frame")) {
-    return { changes: [], message: "Added new frame at end of sequence.", addFrame: true };
-  } else if (l.includes("product") || l.includes("shoe") || l.includes("boost")) {
-    state.frames.filter(f => f.productIds.length > 0).forEach(f => {
-      changes.push({ type: "frame", id: f.id, field: "brief", value: f.brief + " Light catches @ultra.", old: f.brief });
-    });
-    message = "Product emphasis adjusted. @ultra gets more intentional placement.";
-  } else {
-    message = "Applied. Continuity verified across all frames.";
-  }
-  return { changes, message };
-}
-
-function mockFrameAI(command, frame, state) {
-  const l = command.toLowerCase();
-  const changes = [];
-  let message = "";
-  const talents = state.talent.filter(t => frame.talentIds.includes(t.id));
-  const talentMention = talents.length > 0 ? talents[0].handle : "";
-
-  if (l.includes("morning") || l.includes("dawn") || l.includes("sunrise")) {
-    changes.push({ type: "frame", id: frame.id, field: "brief", value: frame.brief.replace(/\.$/, "") + ". Early morning light rakes across the scene, long shadows, golden warmth.", old: frame.brief });
-    message = "Shifted to morning. Golden hour light, long shadows." + (talentMention ? " " + talentMention + " bathed in warm light." : "");
-  } else if (l.includes("night") || l.includes("dark") || l.includes("evening")) {
-    changes.push({ type: "frame", id: frame.id, field: "brief", value: frame.brief.replace(/\.$/, "") + ". Night. Sodium vapor pools of light. Everything else falls to black.", old: frame.brief });
-    message = "Shifted to night. Sodium vapor, pooled light, deep blacks.";
-  } else if (l.includes("close") || l.includes("closer") || l.includes("tighter")) {
-    const t = { WIDE: "MED", MED: "MCU", MCU: "CU", CU: "ECU", OTS: "CU", POV: "CU", INSERT: "ECU" };
-    const ns = t[frame.shotType] || "CU";
-    changes.push({ type: "frame", id: frame.id, field: "shotType", value: ns, old: frame.shotType });
-    message = "Tightened from " + frame.shotType + " to " + ns + ". More intimacy.";
-  } else if (l.includes("wide") || l.includes("wider") || l.includes("pull back")) {
-    const t = { ECU: "CU", CU: "MCU", MCU: "MED", MED: "WIDE", OTS: "WIDE", POV: "WIDE", INSERT: "MED" };
-    const ns = t[frame.shotType] || "WIDE";
-    changes.push({ type: "frame", id: frame.id, field: "shotType", value: ns, old: frame.shotType });
-    message = "Pulled back from " + frame.shotType + " to " + ns + ". More context.";
-  } else if (l.includes("dramatic") || l.includes("intense") || l.includes("epic")) {
-    changes.push({ type: "camera", id: frame.id, fields: { cameraHeight: "low", movement: "steadicam" } });
-    message = "Cranked the drama. Low angle, steadicam, epic feel.";
-  } else if (l.includes("calm") || l.includes("quiet") || l.includes("still") || l.includes("peaceful")) {
-    changes.push({ type: "camera", id: frame.id, fields: { movement: "static", cameraHeight: "eye" } });
-    message = "Brought it down. Static camera, stillness.";
-  } else if (l.includes("handheld") || l.includes("shaky") || l.includes("doc")) {
-    changes.push({ type: "camera", id: frame.id, fields: { movement: "handheld" } });
-    message = "Switched to handheld. Documentary feel.";
-  } else if (l.includes("low angle") || l.includes("lower")) {
-    changes.push({ type: "camera", id: frame.id, fields: { cameraHeight: "low" } });
-    message = "Dropped to low angle. More power in the frame.";
-  } else if (l.includes("high angle") || l.includes("overhead") || l.includes("bird")) {
-    changes.push({ type: "camera", id: frame.id, fields: { cameraHeight: "bird" } });
-    message = "Raised to bird's eye. Vulnerability from above.";
-  } else if (l.includes("flip") || l.includes("reverse")) {
-    const flip = { front: "back", back: "front", left: "right", right: "left", "3qL": "3qR", "3qR": "3qL" };
-    changes.push({ type: "camera", id: frame.id, fields: { cameraAngle: flip[frame.cameraAngle] || "back" } });
-    message = "Flipped the angle. New perspective on the scene.";
-  } else if (l.includes("rain") || l.includes("wet") || l.includes("storm")) {
-    changes.push({ type: "frame", id: frame.id, field: "brief", value: frame.brief.replace(/\.$/, "") + ". Rain hammers the pavement. Every surface reflects.", old: frame.brief });
-    message = "Added rain. Wet surfaces, reflections, thunder underscore.";
-  } else {
-    changes.push({ type: "frame", id: frame.id, field: "brief", value: frame.brief.replace(/\.$/, "") + ". " + command.charAt(0).toUpperCase() + command.slice(1) + ".", old: frame.brief });
-    message = "Applied to frame " + frame.number + ".";
-  }
-  return { changes, message };
-}
-
-// -- MOCK IMPROVE WITH AI -------------------------------------
-
-function mockImproveText(text, hasImage) {
-  if (hasImage) {
-    return text.replace(/\.$/, "") + ". Cinematic depth of field, volumetric lighting, photorealistic detail. 8K resolution, anamorphic lens flare.";
-  }
-  const enhancements = [
-    "with visceral texture and emotional weight",
-    "through a lens of raw authenticity",
-    "where every frame breathes with intention",
-  ];
-  const pick = enhancements[Math.floor(Math.random() * enhancements.length)];
-  return text.replace(/\.$/, "") + " — " + pick + ".";
-}
-
 // -- LOCATION THUMBNAIL COMPONENT -----------------------------
 
 function LocationThumb({ loc, size = 32, borderRadius = 6, style = {} }) {
@@ -2152,9 +1707,7 @@ function CameraControlStrip({ frame, dispatch }) {
 
 // -- PRODUCTION VIEW (Hero image + dropdowns + collapsible Camera Info) --
 
-function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev, hasNext, onDeleteFrame, onFocusChat }) {
-  const [genLoading, setGenLoading] = useState(false);
-  const [genComplete, setGenComplete] = useState(false);
+function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev, hasNext, onDeleteFrame, onFocusChat, onRegenerateFrame }) {
   const [cameraInfoOpen, setCameraInfoOpen] = useState(false);
   const [heroHovered, setHeroHovered] = useState(false);
   const fileInputRef = useRef(null);
@@ -2169,15 +1722,10 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
     dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
   };
 
-  const handleGenerate = () => {
-    setGenLoading(true);
-    dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: frame.id, status: "generating" });
-    setTimeout(() => {
-      setGenLoading(false);
-      setGenComplete(true);
-      dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: frame.id, status: "generated" });
-      setTimeout(() => setGenComplete(false), 2000);
-    }, 2000);
+  const handleGenerate = async () => {
+    if (onRegenerateFrame) {
+      await onRegenerateFrame(frame.id);
+    }
   };
 
   const handleFileUpload = (file) => {
@@ -2239,8 +1787,32 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
               <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
             )}
             {frame.imageStatus === "generating" && (
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontFamily: "var(--f)", fontSize: 14, color: "var(--warm-25)", animation: "pulse 1.5s ease infinite" }}>Generating...</span>
+              <div style={{
+                position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                background: "linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(255,255,255,0.07) 50%, rgba(0,0,0,0) 100%)",
+                backgroundSize: "200% 100%",
+                animation: "shimmer 1.5s infinite linear",
+                pointerEvents: "none",
+              }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  fontFamily: "var(--f)", fontSize: 13, fontWeight: 600,
+                  color: "#fff", letterSpacing: 0,
+                  background: "rgba(0,0,0,0.64)",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.32)",
+                  padding: "8px 13px", borderRadius: 999,
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                }}>
+                  <span style={{
+                    width: 6, height: 6, borderRadius: 999,
+                    background: "var(--accent)",
+                    boxShadow: "0 0 12px var(--accent)",
+                    flexShrink: 0,
+                  }} />
+                  <span style={{ animation: "pulse 1.5s ease infinite" }}>Generating...</span>
+                </span>
               </div>
             )}
             {frame.imageStatus === "generated" && !heroHovered && (
@@ -5020,20 +4592,28 @@ function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, 
   const send = () => {
     if (!val.trim() || chatBusy) return;
     const frame = selectedFrame;
-    onSendMessage(val.trim(), selectedFrameId, frame ? frame.number : null);
+    onSendMessage(val.trim(), selectedFrameId, frame ? frame.number : null, assetContextResolved);
     setVal("");
     setMentionOpen(false);
   };
 
-  const handleImproveWithAI = () => {
+  const handleImproveWithAI = async () => {
     if (!val.trim() || improving) return;
     setImproving(true);
     const hasImageContext = selectedFrame && selectedFrame.uploadedImage;
-    setTimeout(() => {
-      setVal(mockImproveText(val.trim(), !!hasImageContext));
+    try {
+      const improved = await improveV2ChatInstruction(val.trim(), {
+        hasImageContext,
+        selectedFrame,
+        assetContext: assetContextResolved,
+      });
+      setVal(improved);
+    } catch (e) {
+      toast(`Couldn't improve that prompt: ${e?.message?.slice(0, 100) || "unknown error"}`, { kind: "error" });
+    } finally {
       setImproving(false);
       setTimeout(() => inputRef.current?.focus(), 10);
-    }, 600);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -5057,7 +4637,7 @@ function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, 
 
   const handleSuggestion = (text) => {
     const frame = selectedFrame;
-    onSendMessage(text, selectedFrameId, frame ? frame.number : null);
+    onSendMessage(text, selectedFrameId, frame ? frame.number : null, assetContextResolved);
   };
 
   // Auto-expand textarea height
@@ -5705,16 +5285,14 @@ const BRIEF_RATIOS = [
   { id: "4:3",  label: "4:3 - Classic" },
   { id: "2:1",  label: "2:1 - Wide Banner" },
 ];
-// Wonder Workshop brand backdrop — replaces the rotating cinematic
-// stills with a single signature mark. Kept as a single-element array
-// so the rest of the BriefForm code (pickHomeBackground) keeps working
-// if we ever want to rotate again.
-const HOME_BG_IMAGES = ["/landing-bg/wonder-w.png"];
-function pickHomeBackground() {
-  return HOME_BG_IMAGES[0];
-}
-
-function BriefForm({ onGenerate, generating = false, error = null, folders = [] }) {
+function BriefForm({
+  onGenerate,
+  generating = false,
+  error = null,
+  folders = [],
+  homeBackground,
+  onHomeBackgroundChange,
+}) {
   // Blank by default — no Nike/Long Run prefill anymore. v1's form
   // starts empty and so should v2. Length defaults to "30s" since
   // most spots are 30s; aspect defaults to "16:9" because most edits
@@ -5724,7 +5302,6 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
     format: "30", aspect: "16:9",
     treatment: "",
   });
-  const [bg] = useState(pickHomeBackground);
   const [files, setFiles] = useState([]);
   const [fileDragOver, setFileDragOver] = useState(false);
   const [improving, setImproving] = useState(false);
@@ -5819,26 +5396,12 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
 
   return (
     <div style={{ position: "relative", minHeight: "100%" }}>
-      {/* Cinematic backdrop — one of 8 pre-generated landing images
-          picked at random on mount. Matches v1's home page. Sits
-          ABSOLUTE inside the BriefForm's parent (the <main> column),
-          NOT fixed to the viewport, so the project sidebar stays
-          visible and clickable to the left. */}
-      <div style={{
-        position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
-        backgroundImage: `url(${bg})`,
-        backgroundSize: "cover", backgroundPosition: "center",
-        opacity: 0.55,
-      }} />
-      <div style={{
-        position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
-        background: "linear-gradient(180deg, rgba(10,10,10,0.4) 0%, rgba(10,10,10,0.7) 60%, rgba(10,10,10,0.95) 100%)",
-      }} />
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "5vh 5% 4vh", position: "relative", zIndex: 1 }}>
       <Reveal delay={30}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "3%" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "3%" }}>
             <WLogo color="rgba(224,224,224,0.25)" size={28} />
+            <HomeBackgroundSwitch value={homeBackground} onChange={onHomeBackgroundChange} />
           </div>
           <h1 style={{ fontFamily: "var(--f)", fontSize: 48, fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)", whiteSpace: "nowrap" }}>
             Welcome to the Workshop.
@@ -6101,6 +5664,10 @@ export default function WorkshopV2() {
   const [assetTabOpen, setAssetTabOpen] = useState("settings");
   const [chatFocusTrigger, setChatFocusTrigger] = useState(0);
   const [theme, setTheme] = useState("dark");
+  const [homeBackground, setHomeBackground] = useState(() => {
+    if (typeof window === "undefined") return HOME_BACKGROUND_OPTIONS.shader;
+    return normalizeHomeBackground(window.localStorage.getItem(HOME_BACKGROUND_STORAGE_KEY));
+  });
   const isDark = theme === "dark";
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
@@ -6382,10 +5949,12 @@ export default function WorkshopV2() {
       const lc = String(name || "").toLowerCase();
       return list.find(x => x.name?.toLowerCase().includes(lc)) || null;
     };
+    const findByIdOrName = (list, id, name) =>
+      (id ? list.find(x => x.id === id) : null) || findByName(list, name);
 
     switch (effect.type) {
       case "generateTalentPrimary": {
-        const t = findByName(current.talent || [], effect.talentName);
+        const t = findByIdOrName(current.talent || [], effect.talentId, effect.talentName);
         if (!t) return;
         markPending(`talent.${t.id}.primary`);
         markPending(`talent.${t.id}.headshots.front`);
@@ -6408,7 +5977,7 @@ export default function WorkshopV2() {
         return;
       }
       case "generateLocationImage": {
-        const l = findByName(current.locations || [], effect.locationName);
+        const l = findByIdOrName(current.locations || [], effect.locationId, effect.locationName);
         if (!l) return;
         const aspect = current.meta?.aspect || "16:9";
         markPending(`location.${l.id}`);
@@ -6428,7 +5997,7 @@ export default function WorkshopV2() {
         return;
       }
       case "generateProductImage": {
-        const p = findByName(current.products || [], effect.productName);
+        const p = findByIdOrName(current.products || [], effect.productId, effect.productName);
         if (!p) return;
         markPending(`product.${p.id}`);
         dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
@@ -6451,7 +6020,7 @@ export default function WorkshopV2() {
           : effect.assetType === "location" ? current.locations
           : effect.assetType === "product" ? current.products
           : [];
-        const asset = findByName(list, effect.assetName);
+        const asset = findByIdOrName(list, effect.assetId, effect.assetName);
         if (!asset) return;
         if (effect.assetType === "talent") {
           await runChatEffect({ type: "generateTalentPrimary", talentName: asset.name });
@@ -6734,6 +6303,7 @@ export default function WorkshopV2() {
   const selectFrame = useCallback((id) => {
     setSelectedFrameId(id);
     setProductionFrameId(id);
+    setChatAssetContext(null);
     if (!sidebarOpen) setSidebarOpen(true);
   }, [sidebarOpen]);
 
@@ -7110,63 +6680,16 @@ export default function WorkshopV2() {
     }
   }
 
-  // Real chat via Gemini + tool calls. Replaces the keyword-pattern
-  // mockAI / mockFrameAI. Sends the conversation history + a compact
-  // representation of the current project state + the tool schema;
-  // applies returned function calls to the reducer.
-  const handleSendMessage = useCallback(async (text, frameId, frameNumber) => {
+  // Real v2 chat via Gemini + tool calls. The v2-specific context,
+  // tool schemas, validation, and reducer application live in aiChat.js.
+  const handleSendMessage = useCallback(async (text, frameId, frameNumber, assetContext) => {
     setChatMessages(prev => [...prev, { id: Date.now(), role: "user", text, frameId, frameNumber }]);
     setChatBusy(true);
     const currentData = data;
-
-    // Compact state snapshot — keep token usage reasonable. Just the
-    // shape the model needs to reason about (names, ids, brief text,
-    // current camera settings), not image URLs or generationStatus.
-    const stateSnap = {
-      meta: currentData.meta,
-      talent: (currentData.talent || []).map(t => ({ id: t.id, name: t.name, handle: t.handle, role: t.role, note: t.note })),
-      locations: (currentData.locations || []).map(l => ({ id: l.id, name: l.name, handle: l.handle, type: l.type, note: l.note })),
-      products: (currentData.products || []).map(p => ({ id: p.id, name: p.name, handle: p.handle, category: p.category, note: p.note })),
-      frames: (currentData.frames || []).map(f => ({
-        id: f.id, number: f.number, shotType: f.shotType, brief: f.brief,
-        camera: f.camera, cameraAngle: f.cameraAngle, cameraHeight: f.cameraHeight,
-        lens: f.lens, movement: f.movement,
-        talentIds: f.talentIds, locationId: f.locationId, productIds: f.productIds,
-      })),
-    };
-
-    const focusedFrame = frameId ? currentData.frames.find(f => f.id === frameId) : null;
-
-    const systemPrompt = [
-      "You are a creative production assistant editing a storyboard.",
-      "Use the provided tools to make changes — DON'T just describe what you'd do, actually do it via tool calls.",
-      "",
-      "PROJECT VOCABULARY (so you understand what the user is referring to):",
-      "- The 'Brief' (or 'the brief', 'treatment', 'creative brief') is the project's top-level prose description of the spot. It lives at `meta.treatment` in state and is shown to the user in the 'Brief' panel at the top of the workshop. The Brief panel has its own Save → audit → regenerate flow, so you generally should NOT edit it via update_meta unless the user explicitly asks you to rewrite the brief; for everything else, propose changes to the talent / locations / products / frames that the brief implies.",
-      "- 'Frames' (or 'shots', 'storyboard') are individual storyboard images — each has its own brief field describing that shot.",
-      "- 'Talent' / 'Characters' / 'Cast' = `talent[]`. 'Locations' / 'Settings' = `locations[]`. 'Products' / 'Elements' / 'Hero items' = `products[]`.",
-      "- 'Brand' = `brand` (singular): the client's logo, URL, guidelines.",
-      "",
-      "Tool selection guide:",
-      "- 'Create a character / location / product' → use create_talent / create_location / create_product. These also generate the reference image by default.",
-      "- 'Make a new image / regenerate this' → use generate_asset_image or generate_frame_image.",
-      "- Editing existing fields → update_talent / update_location / update_product / update_frame_brief / update_frame_camera / update_meta.",
-      "",
-      "When creating a character: keep the `note` field to APPEARANCE only (age range, ethnicity, build, hair color/length, wardrobe). Do NOT put expression / pose / mood directions in the note — those bias every generated frame. The system will neutralize them but it's better not to add them.",
-      "",
-      "Prefer specific, narrow edits — change one frame at a time when possible, change every frame when the user explicitly asks for that scope ('all frames', 'every shot', etc.).",
-      focusedFrame ? `The user has frame ${focusedFrame.number} selected — prefer edits to that frame unless they say otherwise.` : "No frame is selected — global / multi-frame edits are appropriate.",
-      "After making changes, briefly explain what you changed in 1-2 sentences. Don't restate every tool call.",
-      "",
-      "THE CURRENT BRIEF (meta.treatment):",
-      currentData.meta?.treatment || "(no brief written yet)",
-      "",
-      "Current project state (JSON):",
-      JSON.stringify(stateSnap, null, 2),
-    ].join("\n");
+    const chatContext = buildV2ChatContext(currentData, frameId, assetContext, text);
 
     const history = [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: chatContext.systemPrompt },
       ...chatMessages.filter(m => m.role === "user" || m.role === "ai").map(m => ({
         role: m.role === "ai" ? "assistant" : "user",
         content: m.text,
@@ -7176,35 +6699,24 @@ export default function WorkshopV2() {
 
     try {
       const { text: replyText, actions } = await chatWithTools(history, V2_CHAT_TOOLS);
-
-      const applied = [];
-      const highlights = new Set();
-      const effects = [];
-      for (const action of (actions || [])) {
-        const result = applyChatToolCall(action, currentData, dispatch);
-        if (result?.applied) applied.push(result);
-        if (result?.frameId) highlights.add(result.frameId);
-        if (result?.effect) effects.push(result.effect);
-      }
-      if (highlights.size > 0) setHighlightedFrames(highlights);
-
-      const summary = replyText
-        || (applied.length > 0 ? `Applied ${applied.length} change${applied.length === 1 ? "" : "s"}.` : "I'm not sure what to change here — try being more specific.");
+      const result = applyV2ChatActions(actions, { data: currentData, dispatch });
+      if (result.highlights.size > 0) setHighlightedFrames(result.highlights);
+      const summary = summarizeV2ChatResult(replyText, result);
 
       setChatMessages(prev => [...prev, {
         id: Date.now(),
         role: "ai",
         text: summary,
-        changes: applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field })),
+        changes: result.applied.map(a => ({ type: a.kind, id: a.frameId, field: a.field })),
       }]);
 
       // Fire async side-effects (image generation for newly created
       // assets, etc). Each effect resolves against the latest data
       // via dataRef, so it sees the asset the reducer just added.
-      if (effects.length > 0) {
+      if (result.effects.length > 0) {
         // Give React a tick to flush the dispatches so dataRef updates.
         await new Promise(r => setTimeout(r, 50));
-        for (const eff of effects) {
+        for (const eff of result.effects) {
           runChatEffect(eff).catch(e => console.error("[chat effect]", eff.type, e));
         }
       }
@@ -7231,12 +6743,17 @@ export default function WorkshopV2() {
     // Toggle the appropriate asset tab
     const typeMap = { talent: "talent", product: "products", location: "locations" };
     const tabKey = typeMap[asset._type] || "talent";
+    setProductionFrameId(null);
+    setSelectedFrameId(null);
+    setChatAssetContext(null);
     setAssetTabOpen(tabKey);
   }, []);
 
   const handleAssetAIAssist = useCallback((item, category) => {
     const type = { talent: "talent", products: "product", locations: "location" }[category];
     setChatAssetContext({ type, id: item.id });
+    setSelectedFrameId(null);
+    setProductionFrameId(null);
     setSidebarOpen(true);
   }, []);
 
@@ -7251,6 +6768,9 @@ export default function WorkshopV2() {
   // listen and pop back to its tile grid. Matches Logan's request
   // that clicking the tab name returns to the grid.
   const handleToggleAssetTab = useCallback((tabKey) => {
+    setProductionFrameId(null);
+    setSelectedFrameId(null);
+    setChatAssetContext(null);
     setAssetTabOpen(prev => {
       if (prev === tabKey) {
         window.dispatchEvent(new CustomEvent("ww-asset-tab-reset", { detail: { tab: tabKey } }));
@@ -7263,11 +6783,18 @@ export default function WorkshopV2() {
   const prodFrame = productionFrameId ? data.frames.find(f => f.id === productionFrameId) : null;
   const prodIdx = prodFrame ? data.frames.indexOf(prodFrame) : -1;
 
+  const updateHomeBackground = useCallback((nextBackground) => {
+    const normalizedBackground = normalizeHomeBackground(nextBackground);
+    setHomeBackground(normalizedBackground);
+    window.localStorage.setItem(HOME_BACKGROUND_STORAGE_KEY, normalizedBackground);
+  }, []);
+
   return (
     <UIProvider>
     <div className={isDark ? "dark" : undefined} style={{
       ...getThemeVars(isDark),
       background: "transparent",
+      position: "relative",
       minHeight: "100vh", fontFamily: "var(--f)", color: "var(--warm)",
       opacity: ready ? 1 : 0, transition: "opacity 0.8s ease, background 0.4s ease, color 0.4s ease",
     }}>
@@ -7355,6 +6882,7 @@ export default function WorkshopV2() {
         }
       `}</style>
 
+      {!built && <HomeBackground mode={homeBackground} />}
       <div className="grain" />
       {exportOpen && (() => {
         // v2 export uses the proven v1 OnePager component instead of v2's
@@ -7475,9 +7003,10 @@ export default function WorkshopV2() {
         </div>
       )}
 
-      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden" }}>
+      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden", position: "relative", zIndex: 1 }}>
         {/* Left: project sidebar (full-height multi-project nav) */}
         <ProjectSidebar
+          homeBackdrop={!built}
           mode={built && activeProjectId ? "project" : "root"}
           projects={projects}
           folders={folders}
@@ -7544,7 +7073,8 @@ export default function WorkshopV2() {
         display: "grid", gridTemplateColumns: "minmax(0, 1fr) max-content", columnGap: 16, alignItems: "center",
         padding: "0 24px",
         background: "transparent",
-        backdropFilter: "blur(24px) saturate(1.3)", WebkitBackdropFilter: "blur(24px) saturate(1.3)",
+        backdropFilter: built ? "blur(24px) saturate(1.3)" : "none",
+        WebkitBackdropFilter: built ? "blur(24px) saturate(1.3)" : "none",
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -7614,7 +7144,16 @@ export default function WorkshopV2() {
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* Main */}
         <main style={{ flex: 1, overflowY: "auto", minWidth: 0, background: "transparent" }}>
-          {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} folders={folders} />}
+          {!built && (
+            <BriefForm
+              onGenerate={handleGenerate}
+              generating={generating}
+              error={generationError}
+              folders={folders}
+              homeBackground={homeBackground}
+              onHomeBackgroundChange={updateHomeBackground}
+            />
+          )}
           {built && !productionFrameId && (
             <OneSheetWorkspace data={data} selectedFrameId={selectedFrameId}
               highlightedFrames={highlightedFrames} onSelectFrame={selectFrame}
@@ -7633,6 +7172,7 @@ export default function WorkshopV2() {
               hasPrev={prodIdx > 0} hasNext={prodIdx < data.frames.length - 1}
               onDeleteFrame={handleDeleteFrame}
               onFocusChat={handleFocusChat}
+              onRegenerateFrame={regenerateOneFrame}
             />
           )}
         </main>

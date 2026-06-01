@@ -65,6 +65,7 @@ export default async function handler(req, res) {
         : []
       res.json({
         message: { content: text },
+        actions: functionCalls.map(c => ({ name: c.name, arguments: c.args || {} })),
         functionCalls,
       })
     }

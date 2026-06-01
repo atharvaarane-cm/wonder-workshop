@@ -90,6 +90,7 @@ app.post('/api/chat', async (req, res) => {
 
     res.json({
       message: { content: text, role: 'assistant' },
+      functionCalls: actions.map(a => ({ name: a.name, args: a.arguments })),
       actions,
     });
   } catch (err) {
