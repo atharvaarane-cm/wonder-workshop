@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { usePending } from "../../Workshop.jsx";
 
 const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
 const HOVER_SCALE = 1.012;
@@ -115,6 +116,13 @@ function StoryboardFrameCardComponent({
 }) {
   const [hovered, setHovered] = useState(false);
   const loc = data.locations.find(l => l.id === frame.locationId);
+  // Watch the pending bus: bulk/auto-gen marks every frame pending up-front but
+  // only flips imageStatus to "generating" as each reaches the worker pool. So
+  // a frame can be QUEUED (pending, waiting its turn) before it's generating —
+  // show that instead of a dead "Generate" button so the user knows it's coming.
+  const isPending = usePending(`frame.${frame.id}`);
+  const isGenerating = frame.imageStatus === "generating";
+  const isQueued = isPending && !isGenerating && !frame.uploadedImage && frame.imageStatus !== "error";
 
   const handleImageError = () => {
     dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
@@ -199,8 +207,8 @@ function StoryboardFrameCardComponent({
               style={{ background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }}
             />
           )}
-          {frame.imageStatus === "generating" && <ShimmerOverlay />}
-          {!frame.uploadedImage && frame.imageStatus !== "generating" && frame.imageStatus !== "error" && onRetry && (
+          {(isGenerating || isQueued) && <ShimmerOverlay label={isGenerating ? "Generating…" : "Queued"} />}
+          {!frame.uploadedImage && !isGenerating && !isQueued && frame.imageStatus !== "error" && onRetry && (
             <div className="absolute inset-0 z-[3] flex items-center justify-center bg-black/20 p-2.5">
               <button
                 type="button"

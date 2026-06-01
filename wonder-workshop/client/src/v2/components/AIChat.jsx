@@ -18,6 +18,7 @@ import {
   CHAT_SUGGESTIONS,
   mockImproveText,
   AssetContext,
+  usePendingStats,
 } from "../Workshop.jsx";
 
 // Slide-in wrapper — subtle 6px rise + fade, spring settle. MUST live at
@@ -372,6 +373,10 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
   }, []);
   useEffect(() => { autoResize(); }, [val, autoResize]);
 
+  // Live generation progress — drives the "N/M generated" strip below so the
+  // user always knows how much of a bulk generation is left.
+  const genStats = usePendingStats();
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Messages — bottom-aligned like text messages, centered when empty */}
@@ -416,6 +421,23 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
 
       {/* Bottom: helper hint + context cards + input */}
       <div style={{ borderTop: "1px solid var(--warm-06)", padding: "10px 16px 14px", flexShrink: 0 }}>
+        {/* Generation progress — "N/M generated" + bar while a batch is in flight. */}
+        {genStats.pending > 0 && genStats.total > 0 && (
+          <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: "var(--warm-04)", border: "1px solid var(--warm-08)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm-50)" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#43a3fd", animation: "pulse 1.2s ease infinite" }} />
+                Generating…
+              </span>
+              <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, color: "var(--warm-60)", fontVariantNumeric: "tabular-nums" }}>
+                {genStats.done}/{genStats.total}
+              </span>
+            </div>
+            <div style={{ height: 3, borderRadius: 2, background: "var(--warm-08)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${Math.round((genStats.done / genStats.total) * 100)}%`, background: "#43a3fd", borderRadius: 2, transition: "width 0.3s ease" }} />
+            </div>
+          </div>
+        )}
         {/* Reconcile notice — sits above the composer, covers nothing. */}
         {reconcileCount > 0 && (
           <div style={{

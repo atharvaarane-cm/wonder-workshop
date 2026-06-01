@@ -8,7 +8,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@/components/ui/menu";
-import { SectionIcon, WLogo, timeAgo, uiConfirm, toast } from "../../Workshop.jsx";
+import { SectionIcon, WLogo, timeAgo, uiConfirm, toast, useCategoryPending } from "../../Workshop.jsx";
 import iconNavBrandSvg from "../../../assets/icon-nav-brand.svg?raw";
 import iconNavCharSvg from "../../../assets/icon-nav-char.svg?raw";
 import iconNavElementsSvg from "../../../assets/icon-nav-elements.svg?raw";
@@ -395,15 +395,22 @@ export function ProjectSidebar({
   );
 }
 
+const GEN_PREFIX = { talent: "talent.", products: "product.", locations: "location.", mood: "mood." };
+
 function ProjectSectionRow({ tab, count, isActive, onClick, needsReconcile = false }) {
   const bg = isActive ? "var(--warm-08)" : "transparent";
   const accent = "var(--warm)";
+  // Shimmer the whole row while anything in this section is being generated, so
+  // the user can see at a glance which category the tool is currently working on.
+  const generating = useCategoryPending(GEN_PREFIX[tab.key] || "");
 
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
+        position: "relative",
+        overflow: "hidden",
         display: "flex",
         alignItems: "center",
         gap: 7,
@@ -423,6 +430,14 @@ function ProjectSectionRow({ tab, count, isActive, onClick, needsReconcile = fal
         transition: "background 0.15s ease",
       }}
     >
+      {generating && (
+        <span aria-hidden="true" style={{
+          position: "absolute", inset: 0, pointerEvents: "none", borderRadius: 12,
+          backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0) 100%)",
+          backgroundSize: "600px 100%", backgroundRepeat: "no-repeat",
+          animation: "shimmer 1.4s infinite linear",
+        }} />
+      )}
       <ProjectNavIcon name={tab.icon} color={accent} />
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tab.label}</span>
       {needsReconcile && (

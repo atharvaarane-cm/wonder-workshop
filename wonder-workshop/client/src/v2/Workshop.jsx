@@ -1159,12 +1159,18 @@ const uiBus = {
 //   mood.<index>
 //   frame.<id>
 const _pending = new Set();
+// High-water-mark for the current batch: total distinct keys queued since the
+// pending set was last empty. Lets usePendingStats() report "done / total"
+// (e.g. 12/43) without each call site tracking its own counts.
+let _pendingTotal = 0;
 const _pendingListeners = new Set();
 function _notifyPending() { for (const fn of _pendingListeners) fn(); }
 export function markPending(key) {
   if (!key) return;
   if (_pending.has(key)) return;
+  if (_pending.size === 0) _pendingTotal = 0; // empty → start a fresh batch
   _pending.add(key);
+  _pendingTotal++;
   _notifyPending();
 }
 export function markDone(key) {
@@ -1176,9 +1182,10 @@ export function markDone(key) {
 export function clearAllPending() {
   if (_pending.size === 0) return;
   _pending.clear();
+  _pendingTotal = 0;
   _notifyPending();
 }
-function usePending(key) {
+export function usePending(key) {
   const [, force] = useReducer(x => x + 1, 0);
   useEffect(() => {
     _pendingListeners.add(force);
@@ -1186,6 +1193,30 @@ function usePending(key) {
   }, []);
   if (!key) return false;
   return _pending.has(key);
+}
+
+// True if ANY pending key starts with prefix — drives the per-section shimmer
+// on the left-nav tabs ("talent.", "product.", "location.", "mood.", "frame.").
+export function useCategoryPending(prefix) {
+  const [, force] = useReducer(x => x + 1, 0);
+  useEffect(() => {
+    _pendingListeners.add(force);
+    return () => { _pendingListeners.delete(force); };
+  }, []);
+  if (!prefix) return false;
+  for (const k of _pending) if (k.startsWith(prefix)) return true;
+  return false;
+}
+
+// Batch progress for the global "N/M generated" counter. total =
+// high-water-mark since the pending set was last empty.
+export function usePendingStats() {
+  const [, force] = useReducer(x => x + 1, 0);
+  useEffect(() => {
+    _pendingListeners.add(force);
+    return () => { _pendingListeners.delete(force); };
+  }, []);
+  return { pending: _pending.size, total: _pendingTotal, done: Math.max(0, _pendingTotal - _pending.size) };
 }
 
 // True whenever ANY generation/regeneration is in flight (any pending key).
