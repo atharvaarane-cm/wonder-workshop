@@ -3663,6 +3663,10 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
+    const ids = data.talent.map(t => t.id);
+    const idx = ids.indexOf(viewingId);
+    const goPrev = ids.length > 1 ? () => setViewingId(ids[(idx - 1 + ids.length) % ids.length]) : undefined;
+    const goNext = ids.length > 1 ? () => setViewingId(ids[(idx + 1) % ids.length]) : undefined;
     return (
       <CharacterDetailView
         character={character}
@@ -3670,6 +3674,8 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
         dispatch={dispatch}
         sectionLocked={locked}
         onBack={() => setViewingId(null)}
+        onPrev={goPrev}
+        onNext={goNext}
       />
     );
   }
@@ -3847,7 +3853,7 @@ function AddCharacterTile({ onClick }) {
   );
 }
 
-function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack }) {
+function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack, onPrev, onNext }) {
   const VIEWS = ["front", "side", "threeQuarter", "back"];
   const VIEW_LABEL = { front: "FRONT", side: "SIDE", threeQuarter: "3/4 ANGLE", back: "BACK" };
   // Effective lock = section lock OR per-character lock. Either blocks regen.
@@ -3930,17 +3936,23 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      {/* Detail header — back button, name, role, LOCK CHARACTER pill */}
+      {/* Detail header — cycle arrows flank the name to step through
+          characters (‹ prev / next ›); the left-nav "Characters" tab
+          still returns to the grid. Falls back to ‹ Back if no siblings. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <button onClick={onBack} style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "5px 9px", borderRadius: 6, cursor: "pointer",
-          background: "transparent", border: "1px solid var(--warm-08)",
-          color: "var(--warm-40)", outline: "none",
-          fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-        }}>
-          <span>‹</span> Back
-        </button>
+        {onPrev || onNext ? (
+          <CycleArrow dir="prev" onClick={onPrev} title="Previous character" />
+        ) : (
+          <button onClick={onBack} style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "5px 9px", borderRadius: 6, cursor: "pointer",
+            background: "transparent", border: "1px solid var(--warm-08)",
+            color: "var(--warm-40)", outline: "none",
+            fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+          }}>
+            <span>‹</span> Back
+          </button>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <EditableText
             value={character.name}
@@ -3951,6 +3963,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
             {character.role || "Supporting"} · {character.handle}
           </div>
         </div>
+        {(onPrev || onNext) && <CycleArrow dir="next" onClick={onNext} title="Next character" />}
         <button
           onClick={() => dispatch({ type: "TOGGLE_TALENT_LOCK", id: character.id })}
           style={{
@@ -4671,7 +4684,11 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
-    return <LocationDetailView location={loc} data={data} dispatch={dispatch} sectionLocked={locked} aspect={aspect} onBack={() => setViewingId(null)} />;
+    const ids = data.locations.map(l => l.id);
+    const idx = ids.indexOf(viewingId);
+    const goPrev = ids.length > 1 ? () => setViewingId(ids[(idx - 1 + ids.length) % ids.length]) : undefined;
+    const goNext = ids.length > 1 ? () => setViewingId(ids[(idx + 1) % ids.length]) : undefined;
+    return <LocationDetailView location={loc} data={data} dispatch={dispatch} sectionLocked={locked} aspect={aspect} onBack={() => setViewingId(null)} onPrev={goPrev} onNext={goNext} />;
   }
 
   async function bulkRegenerate() {
@@ -4799,7 +4816,7 @@ function LocationTile({ location, onClick, aspectCSS = "16/9" }) {
   );
 }
 
-function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = "16:9", onBack }) {
+function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = "16:9", onBack, onPrev, onNext }) {
   const effLocked = sectionLocked || location.locked;
   const versions = data?.versionHistory?.[`location.${location.id}`] || [];
   async function regenerateReference(opts) {
@@ -4816,6 +4833,8 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <DetailHeader
         onBack={onBack}
+        onPrev={onPrev}
+        onNext={onNext}
         name={location.name}
         subtitle={`${location.type === "ai" ? "AI generated" : "Reference"} · ${location.handle}`}
         locked={effLocked}
@@ -4889,7 +4908,11 @@ function ElementTab({ data, dispatch, onFocusAsset }) {
       setTimeout(() => setViewingId(null), 0);
       return null;
     }
-    return <ElementDetailView product={prod} data={data} dispatch={dispatch} sectionLocked={locked} onBack={() => setViewingId(null)} />;
+    const ids = data.products.map(p => p.id);
+    const idx = ids.indexOf(viewingId);
+    const goPrev = ids.length > 1 ? () => setViewingId(ids[(idx - 1 + ids.length) % ids.length]) : undefined;
+    const goNext = ids.length > 1 ? () => setViewingId(ids[(idx + 1) % ids.length]) : undefined;
+    return <ElementDetailView product={prod} data={data} dispatch={dispatch} sectionLocked={locked} onBack={() => setViewingId(null)} onPrev={goPrev} onNext={goNext} />;
   }
 
   async function bulkRegenerate() {
@@ -5001,7 +5024,7 @@ function ElementTile({ product, onClick }) {
   );
 }
 
-function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
+function ElementDetailView({ product, data, dispatch, sectionLocked, onBack, onPrev, onNext }) {
   const effLocked = sectionLocked || product.locked;
   const versions = data?.versionHistory?.[`product.${product.id}`] || [];
   async function regenerateReference(opts) {
@@ -5018,6 +5041,8 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <DetailHeader
         onBack={onBack}
+        onPrev={onPrev}
+        onNext={onNext}
         name={product.name}
         subtitle={`${product.focus || "Medium"} focus · ${product.handle}`}
         locked={effLocked}
@@ -5105,16 +5130,36 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
 // Header (back button, editable name, subtitle, lock pill) and small
 // reusable bits used by Location/Element/Character detail views.
 
-function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, lockLabel = "Lock" }) {
+// Cycle arrow used in the detail-view headers — ‹ / › flanking the name
+// to step through the siblings in the current section (characters /
+// elements / locations) with wraparound. Replaces the old "‹ Back" button;
+// clicking the section name in the left nav still returns to the grid.
+function CycleArrow({ dir, onClick, title }) {
+  return (
+    <button onClick={onClick} title={title || (dir === "prev" ? "Previous" : "Next")} style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      width: 32, height: 32, borderRadius: 8, cursor: "pointer", flexShrink: 0,
+      background: "transparent", border: "1px solid var(--warm-08)",
+      color: "var(--warm-40)", outline: "none",
+      fontFamily: "var(--f)", fontSize: 18, fontWeight: 500, lineHeight: 1,
+    }}>{dir === "prev" ? "‹" : "›"}</button>
+  );
+}
+
+function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, lockLabel = "Lock", onPrev, onNext }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <button onClick={onBack} style={{
-        display: "flex", alignItems: "center", gap: 6,
-        padding: "5px 9px", borderRadius: 6, cursor: "pointer",
-        background: "transparent", border: "1px solid var(--warm-08)",
-        color: "var(--warm-40)", outline: "none",
-        fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-      }}>‹ Back</button>
+      {onPrev || onNext ? (
+        <CycleArrow dir="prev" onClick={onPrev} title="Previous" />
+      ) : (
+        <button onClick={onBack} style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 9px", borderRadius: 6, cursor: "pointer",
+          background: "transparent", border: "1px solid var(--warm-08)",
+          color: "var(--warm-40)", outline: "none",
+          fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
+        }}>‹ Back</button>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <EditableText
           value={name}
@@ -5127,6 +5172,7 @@ function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, 
           </div>
         )}
       </div>
+      {(onPrev || onNext) && <CycleArrow dir="next" onClick={onNext} title="Next" />}
       <button
         onClick={onToggleLock}
         style={{
@@ -7886,15 +7932,22 @@ export default function WorkshopV2() {
     // headshots × N talent + locations + products + mood) and half
     // were dropping silently.
     const IMG_CONCURRENCY = 3;
-    async function withRetry(task) {
-      try {
-        return await task();
-      } catch (err) {
-        if (err?.status === 429 || (err?.status >= 500 && err?.status < 600) || !err?.status) {
-          await new Promise(r => setTimeout(r, 1500));
+    // Up to 3 retries with exponential backoff (1.5s → 3s → 6s) on
+    // rate-limits / transient 5xx. Gemini rate-limits hard under a ~50-call
+    // batch, and a single retry left too many calls dropping both attempts
+    // (empty full-body SIDE slots, failed frames). More attempts + longer
+    // backoff lets the per-minute window recover before giving up.
+    async function withRetry(task, attempts = 3) {
+      let delay = 1500;
+      for (let i = 0; ; i++) {
+        try {
           return await task();
+        } catch (err) {
+          const retryable = err?.status === 429 || (err?.status >= 500 && err?.status < 600) || !err?.status;
+          if (!retryable || i >= attempts) throw err;
+          await new Promise(r => setTimeout(r, delay));
+          delay *= 2;
         }
-        throw err;
       }
     }
     async function runPool(tasks, concurrency = IMG_CONCURRENCY) {
@@ -7932,7 +7985,10 @@ export default function WorkshopV2() {
       phaseA1.push((async () => {
         dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
         try {
-          const url = await generateImage(talentPrompt(t), { ratio: "1:1" });
+          // Retry here too — the primary is the prerequisite for ALL of a
+          // character's other 7 views, so a single dropped 429 here used to
+          // wipe out the whole character (this was why Zoe generated nothing).
+          const url = await withRetry(() => generateImage(talentPrompt(t), { ratio: "1:1" }));
           generated.talent.set(t.id, url);
           dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
           // The primary also fills the FRONT headshot slot in the
