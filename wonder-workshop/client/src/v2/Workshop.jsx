@@ -76,6 +76,74 @@ function autoHandle(name) {
   return "@" + (name || "").split(" ")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// Edit an asset's @tag. If the OLD tag is referenced in the brief/frames, ask
+// whether to rename it EVERYWHERE (propagate) or undo. Returns true if changed.
+async function renameAssetTag({ type, id, rawHandle, data, dispatch }) {
+  const list = type === "talent" ? data.talent : type === "products" ? data.products : data.locations;
+  const asset = (list || []).find(a => a.id === id);
+  if (!asset) return false;
+  const oldHandle = (asset.handle || "").toLowerCase();
+  let h = String(rawHandle || "").trim().replace(/^@+/, "");
+  h = "@" + h.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (h === "@" || h === oldHandle) return false;
+  const others = [...(data.talent || []), ...(data.products || []), ...(data.locations || [])].filter(a => a.id !== id);
+  if (others.some(a => (a.handle || "").toLowerCase() === h)) {
+    toast(`The tag ${h} is already used by another item — pick a different one.`, { kind: "error" });
+    return false;
+  }
+  const updateType = type === "talent" ? "UPDATE_TALENT" : type === "products" ? "UPDATE_PRODUCT" : "UPDATE_LOCATION";
+  const briefHas = oldHandle && (data.meta?.treatment || "").toLowerCase().includes(oldHandle);
+  const usedFrames = (data.frames || []).filter(f => oldHandle && (f.brief || "").toLowerCase().includes(oldHandle));
+  if (briefHas || usedFrames.length) {
+    const where = [briefHas && "the brief", usedFrames.length && `${usedFrames.length} frame${usedFrames.length === 1 ? "" : "s"}`].filter(Boolean).join(" and ");
+    const ok = await uiConfirm({
+      title: `Rename ${oldHandle} → ${h} everywhere?`,
+      message: `${oldHandle} is used in ${where}. Renaming updates every reference to ${h}. Choose Undo to discard your edit and keep ${oldHandle}.`,
+      confirmLabel: "Rename everywhere",
+      cancelLabel: "Undo",
+      danger: false,
+    });
+    if (!ok) return false;
+    const re = new RegExp(oldHandle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    if (briefHas) dispatch({ type: "UPDATE_META", field: "treatment", value: (data.meta.treatment || "").replace(re, h) });
+    for (const f of usedFrames) dispatch({ type: "UPDATE_FRAME", frameId: f.id, field: "brief", value: (f.brief || "").replace(re, h) });
+    dispatch({ type: updateType, id, field: "handle", value: h });
+    setTimeout(() => dispatch({ type: "AUTO_DETECT_MENTIONS" }), 0);
+    toast(`Renamed ${oldHandle} → ${h} everywhere.`, { kind: "success" });
+    return true;
+  }
+  dispatch({ type: updateType, id, field: "handle", value: h });
+  toast(`Tag set to ${h}.`, { kind: "success" });
+  return true;
+}
+
+// Inline editor for an asset's @tag. Commits on Enter/blur; reverts if the
+// rename was declined (Undo) or invalid.
+function TagEditor({ handle, onCommit }) {
+  const [val, setVal] = useState(handle || "");
+  useEffect(() => { setVal(handle || ""); }, [handle]);
+  async function commit() {
+    const v = val.trim();
+    if (!v || v === (handle || "")) { setVal(handle || ""); return; }
+    const applied = await onCommit(v);
+    if (!applied) setVal(handle || "");
+  }
+  return (
+    <input
+      value={val}
+      onChange={e => setVal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } if (e.key === "Escape") { setVal(handle || ""); e.currentTarget.blur(); } }}
+      spellCheck={false}
+      style={{
+        fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em",
+        color: "var(--warm-50)", background: "var(--warm-04)", border: "1px solid var(--warm-10)",
+        borderRadius: 6, padding: "4px 8px", outline: "none", width: 160,
+      }}
+    />
+  );
+}
+
 // Make a handle unique across ALL assets (handles share the frame-text
 // namespace). Without this, every freshly-added asset got the same "@new"
 // (from the default "New …" name), so once one "@new" was woven into a frame,
@@ -3917,6 +3985,13 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         </div>
       </div>
 
+      {/* Tag — editable @handle. Renaming a tag used elsewhere prompts to
+          propagate the rename across the brief + frames, or undo. */}
+      <div>
+        <SectionLabel>Tag</SectionLabel>
+        <TagEditor handle={character.handle} onCommit={(v) => renameAssetTag({ type: "talent", id: character.id, rawHandle: v, data, dispatch })} />
+      </div>
+
       {/* Description */}
       <DescriptionField
         label="Description"
@@ -4691,6 +4766,10 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         onRename={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "name", value: v })}
         lockLabel="Lock location"
       />
+      <div>
+        <SectionLabel>Tag</SectionLabel>
+        <TagEditor handle={location.handle} onCommit={(v) => renameAssetTag({ type: "locations", id: location.id, rawHandle: v, data, dispatch })} />
+      </div>
       <DescriptionField
         label="Description"
         value={location.note || ""}
@@ -4920,6 +4999,10 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
             );
           })}
         </div>
+      </div>
+      <div>
+        <SectionLabel>Tag</SectionLabel>
+        <TagEditor handle={product.handle} onCommit={(v) => renameAssetTag({ type: "products", id: product.id, rawHandle: v, data, dispatch })} />
       </div>
       <DescriptionField
         label="Description"
