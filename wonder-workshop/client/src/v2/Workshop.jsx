@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useReducer, createContext, useContext, useId } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LockIcon, LockOpenIcon, MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
+import { MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
 
 // Shared spring config — used across press/hover feedback so the whole
 // app feels physically coherent. Tuned to feel snappy on click without
@@ -34,7 +34,15 @@ import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
 import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { AIChatPanel, AIChatTab } from "./components/AIChat.jsx";
+import { BriefSettingsCard } from "./components/BriefPanel.jsx";
 import { GenerateStoryboardButton } from "./components/GenerateStoryboardButton.jsx";
+import {
+  HOME_BACKGROUND_OPTIONS,
+  HOME_BACKGROUND_STORAGE_KEY,
+  HomeBackground,
+  HomeBackgroundSwitch,
+  normalizeHomeBackground,
+} from "./components/home/HomeBackground.jsx";
 import { StoryboardFrameCard } from "./components/storyboard/StoryboardFrameCard.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
@@ -42,11 +50,16 @@ import iconAspectUrl from "../assets/icon-aspect.svg";
 import iconClockUrl from "../assets/icon-clock.svg";
 import iconDropfilesUrl from "../assets/icon-dropfiles.svg";
 import iconFolderUrl from "../assets/icon-folder.svg";
+import iconLockedSvg from "../assets/icon-locked.svg?raw";
+import iconRegenerateSvg from "../assets/icon-regenerate.svg?raw";
 import iconSparkleUrl from "../assets/icon-sparkle.svg";
 import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
+import iconUnlockedSvg from "../assets/icon-unlocked.svg?raw";
+import iconNavBrandSvg from "../assets/icon-nav-brand.svg?raw";
 import iconNavCharSvg from "../assets/icon-nav-char.svg?raw";
 import iconNavElementsSvg from "../assets/icon-nav-elements.svg?raw";
 import iconNavLocationSvg from "../assets/icon-nav-location.svg?raw";
+import iconNavMoodSvg from "../assets/icon-nav-mood.svg?raw";
 import ratioIcon169Svg from "../assets/ratio-icon-16-9.svg?raw";
 import ratioIcon916Svg from "../assets/ratio-icon-9-16.svg?raw";
 import ratioIcon11Svg from "../assets/ratio-icon-1-1.svg?raw";
@@ -745,16 +758,10 @@ function applyAction(state, action) {
       // the incoming meta with existing meta lets the BriefForm's
       // typed-in fields (title, client, treatment) override anything
       // the model might guess differently.
-      //
-      // Also sanitize any in-flight statuses ("generating" / "uploading")
-      // back to "error" — if the data was persisted mid-generation and
-      // the worker that owns those statuses is long gone (page reload,
-      // tab close, deploy), we'd otherwise restore the shimmer forever.
-      // This is the bug that stranded Maya during kickoff.
-      return sanitizeStuckStatuses({
-        ...action.data,
+      return {
+        ...clearStaleGenerationState(action.data),
         meta: { ...action.data.meta, ...(action.metaOverrides || {}) },
-      });
+      };
     case "SET_META":
       return { ...state, meta: { ...state.meta, ...action.meta } };
     case "UPDATE_META":
@@ -1077,6 +1084,35 @@ function countImageUrls(data) {
   }
   if (data.brand?.logo) n++;
   return n;
+}
+
+function clearStaleGenerationState(data) {
+  if (!data) return data;
+  let changed = false;
+  const next = {
+    ...data,
+    frames: (data.frames || []).map(f => {
+      if (f.imageStatus !== "generating") return f;
+      changed = true;
+      return { ...f, imageStatus: f.uploadedImage ? "uploaded" : "error" };
+    }),
+    talent: (data.talent || []).map(t => {
+      if (t.generationStatus !== "generating") return t;
+      changed = true;
+      return { ...t, generationStatus: t.headshot ? "complete" : "error" };
+    }),
+    products: (data.products || []).map(p => {
+      if (p.generationStatus !== "generating") return p;
+      changed = true;
+      return { ...p, generationStatus: p.referenceImage ? "complete" : "error" };
+    }),
+    locations: (data.locations || []).map(l => {
+      if (l.generationStatus !== "generating") return l;
+      changed = true;
+      return { ...l, generationStatus: (l.generatedImage || l.referenceImage) ? "complete" : "error" };
+    }),
+  };
+  return changed ? next : data;
 }
 
 // -- SHARE / EXPORT HELPERS -----------------------------------
@@ -2567,6 +2603,15 @@ const CHAT_SUGGESTION_ICON_SVGS = {
   elements: iconNavElementsSvg,
 };
 
+const SECTION_HEADER_ICON_SVGS = {
+  Brand: iconNavBrandSvg,
+  "Project Settings": iconNavBrandSvg,
+  Characters: iconNavCharSvg,
+  Elements: iconNavElementsSvg,
+  Locations: iconNavLocationSvg,
+  Mood: iconNavMoodSvg,
+};
+
 function ChatSuggestionIcon({ name }) {
   const svg = CHAT_SUGGESTION_ICON_SVGS[name]
     ?.replace("<svg ", '<svg class="size-5" ');
@@ -2577,6 +2622,39 @@ function ChatSuggestionIcon({ name }) {
       style={{ color: "currentColor", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 0 }}
       dangerouslySetInnerHTML={{ __html: svg || "" }}
     />
+  );
+}
+
+function RawSvgIcon({ svg }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 0 }}
+      dangerouslySetInnerHTML={{ __html: svg || "" }}
+    />
+  );
+}
+
+function BackArrowIcon() {
+  return (
+    <svg width="13" height="11" viewBox="0 0 13 11" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M3.84863 6.03613L2.25586 5.94043L4.27246 7.78613L5.80371 9.33789C5.94043 9.46777 6.02246 9.65234 6.02246 9.86426C6.02246 10.2744 5.71484 10.582 5.28418 10.582C5.09961 10.582 4.91504 10.5068 4.75098 10.3496L0.246094 5.84473C0.0888672 5.69434 0 5.49609 0 5.29102C0 5.08594 0.0888672 4.88086 0.246094 4.7373L4.7373 0.239258C4.91504 0.0683594 5.09961 0 5.28418 0C5.71484 0 6.02246 0.300781 6.02246 0.710938C6.02246 0.922852 5.94043 1.10742 5.80371 1.24414L4.27246 2.7959L2.25586 4.63477L3.84863 4.5459H12.1611C12.6055 4.5459 12.9199 4.84668 12.9199 5.29102C12.9199 5.72852 12.6055 6.03613 12.1611 6.03613H3.84863Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function LockToggleButton({ locked, onClick, unlockedLabel = "Lock", title }) {
+  return (
+    <Button
+      variant="outline"
+      size="xs"
+      onClick={onClick}
+      aria-pressed={locked}
+      title={title || (locked ? "Unlock" : unlockedLabel)}
+    >
+      <RawSvgIcon svg={locked ? iconLockedSvg : iconUnlockedSvg} />
+      {locked ? "Locked" : unlockedLabel}
+    </Button>
   );
 }
 
@@ -2814,12 +2892,21 @@ function ConfirmAction({ label, onConfirm, variant = "danger", style = {} }) {
     return (
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <span style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-30)" }}>Confirm?</span>
-        <PremiumButton variant="danger" onClick={() => { onConfirm(); setConfirming(false); }} style={{ padding: "4px 10px", fontSize: 10 }}>Yes, Delete</PremiumButton>
-        <PremiumButton variant="ghost" onClick={() => setConfirming(false)} style={{ padding: "4px 10px", fontSize: 10 }}>Cancel</PremiumButton>
+        <Button variant="destructive-outline" size="xs" onClick={() => { onConfirm(); setConfirming(false); }}>
+          <SectionIcon name="trash" size={12} color="#ff6b6b" />
+          Yes, Delete
+        </Button>
+        <Button variant="outline" size="xs" onClick={() => setConfirming(false)}>Cancel</Button>
       </div>
     );
   }
-  return <PremiumButton variant={variant} onClick={() => setConfirming(true)} style={style}>{label}</PremiumButton>;
+  const buttonVariant = variant === "danger" ? "destructive-outline" : variant;
+  return (
+    <Button variant={buttonVariant} size="xs" onClick={() => setConfirming(true)} style={style}>
+      {variant === "danger" && <SectionIcon name="trash" size={12} color="#ff6b6b" />}
+      {label}
+    </Button>
+  );
 }
 
 // -- ASSET CONTEXT (for AI chat) ------------------------------
@@ -3120,9 +3207,10 @@ function CameraControlStrip({ frame, dispatch, onStageChange }) {
 
 // -- PRODUCTION VIEW (Hero image + dropdowns + collapsible Camera Info) --
 
-function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev, hasNext, onDeleteFrame, onFocusChat, onStageChange }) {
+function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev, hasNext, onDeleteFrame, onFocusChat, onStageChange, onRegenerateFrame }) {
   const [genLoading, setGenLoading] = useState(false);
   const [genComplete, setGenComplete] = useState(false);
+  const [cameraInfoOpen, setCameraInfoOpen] = useState(false);
   const [heroHovered, setHeroHovered] = useState(false);
   const fileInputRef = useRef(null);
   const fIdx = data.frames.findIndex(f => f.id === frame.id);
@@ -3135,15 +3223,10 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
     dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
   };
 
-  const handleGenerate = () => {
-    setGenLoading(true);
-    dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: frame.id, status: "generating" });
-    setTimeout(() => {
-      setGenLoading(false);
-      setGenComplete(true);
-      dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: frame.id, status: "generated" });
-      setTimeout(() => setGenComplete(false), 2000);
-    }, 2000);
+  const handleGenerate = async () => {
+    if (onRegenerateFrame) {
+      await onRegenerateFrame(frame.id);
+    }
   };
 
   const handleFileUpload = (file) => {
@@ -3170,7 +3253,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const isPortrait = aspNum < 1;
 
   return (
-    <div style={{ padding: "0 24px 32px", maxWidth: isPortrait ? 1100 : 960, margin: "0 auto" }}>
+    <div style={{ padding: "0 24px 32px", maxWidth: isPortrait ? 1100 : 960, margin: "0 auto", background: "transparent" }}>
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0 20px" }}>
         <PremiumButton variant="ghost" onClick={onBack} style={{ gap: 6, padding: "6px 12px" }}>
@@ -3281,7 +3364,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
 
         {/* === FIELDS (right column in portrait, below in landscape) === */}
         <div>
-        <Card className="mb-5 rounded-xl px-6 py-5">
+        <Card className="mb-5 px-6 py-5">
           {/* Description (renamed from Brief) */}
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Description</label>
@@ -3482,6 +3565,7 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <SectionHeader
         title="Brand"
+        count={0}
         locked={sectionLocked}
         generating={refetching}
         onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "brand" })}
@@ -3622,19 +3706,24 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch, data }) {
             versions={data?.versionHistory?.[`mood.${m.id}`] || []}
           />
         ))}
-        <button
-          ref={addBtnRef}
-          onClick={() => dispatch({ type: "ADD_MOOD", data: {} })}
-          style={{
-            aspectRatio: "1/1", borderRadius: 8, cursor: "pointer",
-            background: "transparent", border: "1px dashed var(--warm-10)",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-            color: "var(--warm-25)", outline: "none",
-          }}
-        >
-          <SectionIcon name="plus" size={14} color="var(--warm-25)" />
-          <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, letterSpacing: "0.02em" }}>Add reference</span>
-        </button>
+        <div style={{ position: "relative" }}>
+          <button
+            ref={addBtnRef}
+            onClick={() => dispatch({ type: "ADD_MOOD", data: {} })}
+            style={{
+              width: "100%", aspectRatio: "1/1", borderRadius: 8, cursor: "pointer",
+              background: "transparent", border: "1px dashed var(--warm-10)",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+              color: "var(--warm-25)", outline: "none",
+            }}
+          >
+            <SectionIcon name="plus" size={14} color="var(--warm-25)" />
+            <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, letterSpacing: "0.02em" }}>Add reference</span>
+          </button>
+          <div aria-hidden="true" style={{ width: "100%", marginTop: 4, fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, padding: "3px 5px", visibility: "hidden" }}>
+            Caption…
+          </div>
+        </div>
       </div>
       {moodBoard.length === 0 && (
         <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 400, color: "var(--warm-25)", textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>
@@ -4031,22 +4120,14 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
           </div>
         </div>
         {(onPrev || onNext) && <CycleArrow dir="next" onClick={onNext} title="Next character" />}
-        <button
-          onClick={() => dispatch({ type: "TOGGLE_TALENT_LOCK", id: character.id })}
-          style={{
-            marginLeft: "auto",
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 10px", borderRadius: 7, cursor: "pointer",
-            background: character.locked ? "var(--warm-12)" : "transparent",
-            border: "1px solid var(--warm-12)",
-            color: character.locked ? "var(--warm)" : "var(--warm-40)",
-            outline: "none",
-            fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-            letterSpacing: "0.06em", textTransform: "uppercase",
-          }}
-        >
-          {character.locked ? "🔒 Locked" : "Lock character"}
-        </button>
+        <div style={{ marginLeft: "auto" }}>
+          <LockToggleButton
+            locked={character.locked}
+            onClick={() => dispatch({ type: "TOGGLE_TALENT_LOCK", id: character.id })}
+            unlockedLabel="Lock Character"
+            title={character.locked ? "Unlock this character" : "Lock this character"}
+          />
+        </div>
       </div>
 
       {/* Role — Lead / Supporting / Extra. Drives how much weight the brief
@@ -4182,7 +4263,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
         <ConfirmAction label="Delete character" onConfirm={() => {
           dispatch({ type: "DELETE_TALENT", id: character.id });
           onBack();
-        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+        }} variant="danger" />
       </div>
     </div>
   );
@@ -4215,15 +4296,16 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
         <div style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em" }}>
           {label}
         </div>
-        <PremiumButton
-          variant="secondary"
+        <Button
+          variant="outline"
+          size="xs"
           onClick={handlePopulateAll}
           disabled={locked || populating}
-          style={{ fontSize: 10, padding: "5px 10px" }}
+          title={hasAny ? "Regenerate all 4 views" : "Generate all 4 views"}
         >
-          <SectionIcon name="sparkle" size={11} color="var(--warm-40)" />
-          {populating ? "Populating…" : (hasAny ? "Repopulate all" : "Populate all")}
-        </PremiumButton>
+          <RawSvgIcon svg={iconRegenerateSvg} />
+          {populating ? (hasAny ? "Regenerating..." : "Generating...") : (hasAny ? "Regenerate All" : "Generate All")}
+        </Button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         {views.map(view => (
@@ -4916,7 +4998,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         locked={effLocked}
         onToggleLock={() => dispatch({ type: "TOGGLE_LOCATION_LOCK", id: location.id })}
         onRename={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "name", value: v })}
-        lockLabel="Lock location"
+        lockLabel="Lock Location"
       />
       <div>
         <SectionLabel>Tag</SectionLabel>
@@ -4960,7 +5042,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         <ConfirmAction label="Delete location" onConfirm={() => {
           dispatch({ type: "DELETE_LOCATION", id: location.id });
           onBack();
-        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+        }} variant="danger" />
       </div>
     </div>
   );
@@ -5125,7 +5207,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack, onP
         locked={effLocked}
         onToggleLock={() => dispatch({ type: "TOGGLE_PRODUCT_LOCK", id: product.id })}
         onRename={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "name", value: v })}
-        lockLabel="Lock element"
+        lockLabel="Lock Element"
       />
       {/* Focus — High / Medium / Low. Drives how prominently the storyboard
           features this element (High = hero/close-up, Low = supporting).
@@ -5197,7 +5279,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack, onP
         <ConfirmAction label="Delete element" onConfirm={() => {
           dispatch({ type: "DELETE_PRODUCT", id: product.id });
           onBack();
-        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+        }} variant="danger" />
       </div>
     </div>
   );
@@ -5395,12 +5477,37 @@ function DescriptionField({ label, value, onChange, placeholder, improveContext,
 // + Lock section toggle. Both buttons are real: auto-generate runs a
 // caller-supplied function, lock toggles data.locks[section].
 
+function SectionTitle({ title, count }) {
+  const svg = SECTION_HEADER_ICON_SVGS[title];
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      minWidth: 0,
+      fontFamily: "var(--f)",
+      fontSize: 14,
+      fontWeight: 500,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      color: "var(--warm)",
+    }}>
+      <span
+        aria-hidden="true"
+        style={{ color: "var(--warm)", width: 24, height: 24, display: "inline-flex", flexShrink: 0, lineHeight: 0 }}
+        dangerouslySetInnerHTML={{ __html: svg || "" }}
+      />
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {title}{count !== undefined ? ` - ${count}` : ""}
+      </span>
+    </div>
+  );
+}
+
 function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, generating, autoGenerateLabel = "Auto-generate", reconcileCount = 0, onReconcileAll }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
-        {title}{count !== undefined ? ` · ${count}` : ""}
-      </div>
+      <SectionTitle title={title} count={count} />
       <div style={{ display: "flex", gap: 6 }}>
         {reconcileCount > 0 && onReconcileAll && (
           <button
@@ -5430,15 +5537,12 @@ function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, gen
             {generating ? "Generating…" : autoGenerateLabel}
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="xs"
+        <LockToggleButton
+          locked={locked}
           onClick={onToggleLock}
-          aria-pressed={locked}
-        >
-          {locked ? <LockIcon aria-hidden="true" className="size-3.5" /> : <LockOpenIcon aria-hidden="true" className="size-3.5" />}
-          {locked ? "Locked" : "Lock section"}
-        </Button>
+          unlockedLabel={`Lock ${title}`}
+          title={locked ? `Unlock ${title}` : `Lock ${title}`}
+        />
       </div>
     </div>
   );
@@ -5530,7 +5634,23 @@ function HoverBarBtn({ children, title, onClick, disabled, danger, active, accen
 
 // -- ASSET EXPANDED PANEL (scrollable with fade hints) ----------
 
-function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist, onFocusAsset }) {
+function ProjectSettingsPanel({ data, dispatch, onUpdateMeta, onRunRegeneration }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18, animation: "fadeIn 0.2s ease" }}>
+      <Card className="p-5 shadow-md" style={{ background: "#222222" }}>
+        <BrandPanel brand={data.brand} sectionLocked={!!data.locks?.brand} dispatch={dispatch} />
+      </Card>
+      <BriefSettingsCard
+        value={data.meta?.treatment || ""}
+        onUpdateMeta={onUpdateMeta}
+        data={data}
+        onRunRegeneration={onRunRegeneration}
+      />
+    </div>
+  );
+}
+
+function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist, onUpdateMeta, onRunRegeneration, onFocusAsset }) {
   const scrollRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -5559,11 +5679,14 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   // generic array-of-cards layout used by Products / Locations).
   // Branch before the items map so the legacy rendering stays
   // untouched for the unbranched tabs.
-  if (activeTab === "brand") {
+  if (activeTab === "settings" || activeTab === "brand") {
     return (
-      <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <BrandPanel brand={data.brand} sectionLocked={!!data.locks?.brand} dispatch={dispatch} />
-      </div>
+      <ProjectSettingsPanel
+        data={data}
+        dispatch={dispatch}
+        onUpdateMeta={onUpdateMeta}
+        onRunRegeneration={onRunRegeneration}
+      />
     );
   }
   if (activeTab === "mood") {
@@ -5595,7 +5718,7 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
     );
   }
 
-  // All known tabs (brand / talent / locations / products / mood) are
+  // All known tabs (settings / talent / locations / products / mood) are
   // branched above. This fallback should never fire in practice — keep
   // a safe empty list so the render doesn't crash if a new tab is
   // added without a panel handler.
@@ -5648,15 +5771,41 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
 // right. Brand Info opens by default. Clicking a tab switches the
 // right pane (no toggle-to-close — something is always selected).
 
-function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onFocusAsset }) {
+function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onFocusAsset, onUpdateMeta, onRunRegeneration }) {
   const [expanded, setExpanded] = useState(null);
-  const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
+  const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", settings: "BRAND", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
+  const tintByTab = {
+    talent: "rgba(193, 21, 21, 0.08)",
+    products: "rgba(47, 193, 21, 0.08)",
+    locations: "rgba(193, 133, 21, 0.08)",
+    mood: "rgba(21, 118, 193, 0.08)",
+  };
+  const cardBackground = tintByTab[activeTab]
+    ? `linear-gradient(0deg, ${tintByTab[activeTab]}, ${tintByTab[activeTab]}), #222222`
+    : "#222222";
+
+  if (activeTab === "settings" || activeTab === "brand") {
+    return (
+      <div style={{ marginTop: 20, paddingTop: 16 }}>
+        <AssetExpandedPanel
+          activeTab={activeTab}
+          data={data}
+          dispatch={dispatch}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          typeKey={typeKey}
+          onAIAssist={onAIAssist}
+          onUpdateMeta={onUpdateMeta}
+          onRunRegeneration={onRunRegeneration}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div id="ww-asset-rail" style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16, scrollMarginTop: 12 }}>
-      <Card className="rounded-xl p-5" style={{
-        background: "var(--panel-bg)",
-        border: "1px solid var(--panel-border)",
+    <div style={{ marginTop: 20, paddingTop: 16 }}>
+      <Card className="p-5 shadow-md" style={{
+        background: cardBackground,
         minHeight: 220,
         maxHeight: 800,
         overflowY: "auto",
@@ -5670,6 +5819,8 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onFocusAsset }) {
           typeKey={typeKey}
           onAIAssist={onAIAssist}
           onFocusAsset={onFocusAsset}
+          onUpdateMeta={onUpdateMeta}
+          onRunRegeneration={onRunRegeneration}
         />
       </Card>
     </div>
@@ -5763,43 +5914,50 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
     setTimeout(() => { didDrag.current = false; }, 50);
   };
   const clickF = (id) => { if (!didDrag.current) onSelectFrame(id); };
+  const isProjectSettings = assetTabOpen === "settings" || assetTabOpen === "brand";
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 24px 32px" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 24px 32px", background: "transparent" }}>
       <Reveal>
         <div>
           {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <SectionIcon name="film" size={11} color="var(--warm-25)" />
-                <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.15em", textTransform: "uppercase" }}>Storyboard</span>
-              </div>
-              <EditableText value={data.meta.title} onChange={v => onUpdateMeta("title", v)}
-                style={{ fontFamily: "var(--f)", fontSize: 32, fontWeight: 700, color: "var(--warm)", letterSpacing: "-0.03em", display: "block", lineHeight: 1.1 }} />
-            </div>
-            <div style={{ paddingTop: 6 }}>
-              <EditBriefDialog
-                value={data.meta.treatment || ""}
-                onUpdateMeta={onUpdateMeta}
-                data={data}
-                onRunRegeneration={onRunRegeneration}
-              />
-            </div>
-          </div>
+	          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+	            <div>
+	              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+	                {isProjectSettings ? (
+	                  <RawSvgIcon svg={iconNavBrandSvg} />
+	                ) : (
+	                  <SectionIcon name="film" size={11} color="var(--warm-25)" />
+	                )}
+	                <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+	                  {isProjectSettings ? "Project Settings" : "Storyboard"}
+	                </span>
+	              </div>
+	              {isProjectSettings ? (
+	                <div style={{ fontFamily: "var(--f)", fontSize: 32, fontWeight: 700, color: "var(--warm)", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+	                  Project Settings
+	                </div>
+	              ) : (
+	                <EditableText value={data.meta.title} onChange={v => onUpdateMeta("title", v)}
+	                  style={{ fontFamily: "var(--f)", fontSize: 32, fontWeight: 700, color: "var(--warm)", letterSpacing: "-0.03em", display: "block", lineHeight: 1.1 }} />
+	              )}
+	            </div>
+	          </div>
 
-          {/* Asset Tab Bar */}
-          <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
-            onAIAssist={onAIAssist} onFocusAsset={onFocusAsset} />
+	          {/* Asset Tab Bar */}
+	          <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
+	            onAIAssist={onAIAssist}
+	            onUpdateMeta={onUpdateMeta}
+	            onRunRegeneration={onRunRegeneration} />
 
-          {/* Frame Grid */}
-          {(() => {
+	          {/* Frame Grid */}
+	          {!isProjectSettings && (() => {
             const asp = data.meta.aspect;
             const aspNum = asp.includes(":") ? (() => { const [w,h] = asp.split(":").map(Number); return w/h; })() : parseFloat(asp);
             const aspCSS = asp.includes(":") ? asp.replace(":", "/") : `${asp}/1`;
             const cols = aspNum < 1 ? 4 : 3;
             return (
-          <div style={{ borderTop: "1px solid var(--warm-06)", paddingTop: 20, marginTop: 16 }}>
+          <div style={{ paddingTop: 20, marginTop: 16 }}>
             <div
               onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
               onDrop={onDr}
@@ -5882,7 +6040,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
           })()}
 
           {/* Footer */}
-          <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ marginTop: 20, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <WLogo color="var(--warm-10)" size={12} />
             <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, color: "var(--warm-15)" }}>Wonder AI</span>
           </div>
@@ -6487,16 +6645,14 @@ const BRIEF_RATIOS = [
   { id: "4:3",  label: "4:3 - Classic" },
   { id: "2:1",  label: "2:1 - Wide Banner" },
 ];
-// Wonder Workshop brand backdrop — replaces the rotating cinematic
-// stills with a single signature mark. Kept as a single-element array
-// so the rest of the BriefForm code (pickHomeBackground) keeps working
-// if we ever want to rotate again.
-const HOME_BG_IMAGES = ["/landing-bg/wonder-w.png"];
-function pickHomeBackground() {
-  return HOME_BG_IMAGES[0];
-}
-
-function BriefForm({ onGenerate, generating = false, error = null, folders = [] }) {
+function BriefForm({
+  onGenerate,
+  generating = false,
+  error = null,
+  folders = [],
+  homeBackground,
+  onHomeBackgroundChange,
+}) {
   // Blank by default — no Nike/Long Run prefill anymore. v1's form
   // starts empty and so should v2. Length defaults to "30s" since
   // most spots are 30s; aspect defaults to "16:9" because most edits
@@ -6506,7 +6662,6 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
     format: "30", aspect: "16:9",
     treatment: "",
   });
-  const [bg] = useState(pickHomeBackground);
   const [files, setFiles] = useState([]);
   const [fileDragOver, setFileDragOver] = useState(false);
   const [improving, setImproving] = useState(false);
@@ -6601,26 +6756,12 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
 
   return (
     <div style={{ position: "relative", minHeight: "100%" }}>
-      {/* Cinematic backdrop — one of 8 pre-generated landing images
-          picked at random on mount. Matches v1's home page. Sits
-          ABSOLUTE inside the BriefForm's parent (the <main> column),
-          NOT fixed to the viewport, so the project sidebar stays
-          visible and clickable to the left. */}
-      <div style={{
-        position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
-        backgroundImage: `url(${bg})`,
-        backgroundSize: "cover", backgroundPosition: "center",
-        opacity: 0.55,
-      }} />
-      <div style={{
-        position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
-        background: "linear-gradient(180deg, rgba(10,10,10,0.4) 0%, rgba(10,10,10,0.7) 60%, rgba(10,10,10,0.95) 100%)",
-      }} />
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "5vh 5% 4vh", position: "relative", zIndex: 1 }}>
       <Reveal delay={30}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "3%" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "3%" }}>
             <WLogo color="rgba(224,224,224,0.25)" size={28} />
+            <HomeBackgroundSwitch value={homeBackground} onChange={onHomeBackgroundChange} />
           </div>
           <h1 style={{ fontFamily: "var(--f)", fontSize: 48, fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)", whiteSpace: "nowrap" }}>
             Welcome to the Workshop.
@@ -6842,11 +6983,7 @@ export default function WorkshopV2() {
       // empty, the post-mount async effect (further below) hydrates
       // from IndexedDB. DON'T clear the active pointer here — the
       // data might be IDB-only after the persistence refactor.
-      let initialData = activeId ? loadProject(activeId) : null;
-      // Reset any in-flight "generating" statuses — the worker that
-      // owned them is gone (page reload). sanitizeStuckStatuses is a
-      // no-op for fresh projects with no stuck flags.
-      if (initialData) initialData = sanitizeStuckStatuses(initialData);
+      let initialData = activeId ? clearStaleGenerationState(loadProject(activeId)) : null;
       bootstrap.current = { activeId, data: initialData, shared: false };
     }
   }
@@ -6886,11 +7023,15 @@ export default function WorkshopV2() {
   const [exportOpen, setExportOpen] = useState(false);
   const [highlightedFrames, setHighlightedFrames] = useState(new Set());
   const [chatAssetContext, setChatAssetContext] = useState(null);
-  // Default to "brand" so the asset rail opens with Brand Info visible —
-  // per Logan's left-rail redesign, something is always selected.
-  const [assetTabOpen, setAssetTabOpen] = useState("brand");
+  // Default to Project Settings so project-level settings live away from
+  // the storyboard asset grids.
+  const [assetTabOpen, setAssetTabOpen] = useState("settings");
   const [chatFocusTrigger, setChatFocusTrigger] = useState(0);
   const [theme, setTheme] = useState("dark");
+  const [homeBackground, setHomeBackground] = useState(() => {
+    if (typeof window === "undefined") return HOME_BACKGROUND_OPTIONS.shader;
+    return normalizeHomeBackground(window.localStorage.getItem(HOME_BACKGROUND_STORAGE_KEY));
+  });
   const isDark = theme === "dark";
 
   // Reconciliation — which assets aren't yet in the brief + storyboard.
@@ -6969,9 +7110,10 @@ export default function WorkshopV2() {
     if (pendingSaveRef.current.debounce) clearTimeout(pendingSaveRef.current.debounce);
     pendingSaveRef.current.debounce = setTimeout(() => {
       const saveId = activeProjectId;
-      const saveData = data;
+      const saveSnapshot = data;
+      const saveData = clearStaleGenerationState(saveSnapshot);
       saveProjectAsync(saveId, saveData).then(ok => {
-        if (activeRef.current !== saveId || dataRef.current !== saveData) return;
+        if (activeRef.current !== saveId || dataRef.current !== saveSnapshot) return;
         if (ok) {
           setSaveStatus("saved");
           setLastSavedAt(Date.now());
@@ -6989,9 +7131,10 @@ export default function WorkshopV2() {
       pendingSaveRef.current.ceiling = setTimeout(() => {
         if (activeRef.current && builtRef.current) {
           const saveId = activeRef.current;
-          const saveData = dataRef.current;
+          const saveSnapshot = dataRef.current;
+          const saveData = clearStaleGenerationState(saveSnapshot);
           saveProjectAsync(saveId, saveData).then(ok => {
-            if (activeRef.current !== saveId || dataRef.current !== saveData) return;
+            if (activeRef.current !== saveId || dataRef.current !== saveSnapshot) return;
             if (ok) {
               setSaveStatus("saved");
               setLastSavedAt(Date.now());
@@ -7017,7 +7160,7 @@ export default function WorkshopV2() {
   useEffect(() => {
     function flushOnUnload() {
       if (activeRef.current && builtRef.current) {
-        saveProjectSync(activeRef.current, { ...dataRef.current, chatHistory: chatRef.current });
+        saveProjectSync(activeRef.current, clearStaleGenerationState({ ...dataRef.current, chatHistory: chatRef.current }));
       }
     }
     window.addEventListener("beforeunload", flushOnUnload);
@@ -7159,7 +7302,7 @@ export default function WorkshopV2() {
     if (!projectId) return;
     if (projectId === activeProjectId && built) return;
     if (activeProjectId && built && activeProjectId !== projectId) {
-      saveProject(activeProjectId, { ...data, chatHistory: chatMessages });
+      saveProject(activeProjectId, clearStaleGenerationState({ ...data, chatHistory: chatMessages }));
     }
     let next = loadProject(projectId);
     if (!next) {
@@ -7183,7 +7326,7 @@ export default function WorkshopV2() {
   // Start fresh — save current, clear active, show BriefForm.
   function startNewProject() {
     if (activeProjectId && built) {
-      saveProject(activeProjectId, { ...data, chatHistory: chatMessages });
+      saveProject(activeProjectId, clearStaleGenerationState({ ...data, chatHistory: chatMessages }));
     }
     setActiveProjectId(null);
     setActiveProjectIdState(null);
@@ -7195,7 +7338,7 @@ export default function WorkshopV2() {
 
   function handleBackToProjects() {
     if (activeProjectId && built) {
-      saveProject(activeProjectId, { ...data, chatHistory: chatMessages });
+      saveProject(activeProjectId, clearStaleGenerationState({ ...data, chatHistory: chatMessages }));
     }
     setBuilt(false);
     setProductionFrameId(null);
@@ -7334,10 +7477,12 @@ export default function WorkshopV2() {
       const lc = String(name || "").toLowerCase();
       return list.find(x => x.name?.toLowerCase().includes(lc)) || null;
     };
+    const findByIdOrName = (list, id, name) =>
+      (id ? list.find(x => x.id === id) : null) || findByName(list, name);
 
     switch (effect.type) {
       case "generateTalentPrimary": {
-        const t = findByName(current.talent || [], effect.talentName);
+        const t = findByIdOrName(current.talent || [], effect.talentId, effect.talentName);
         if (!t) return;
         const VIEWS = ["front", "side", "threeQuarter", "back"];
         markPending(`talent.${t.id}.primary`);
@@ -7390,7 +7535,7 @@ export default function WorkshopV2() {
         return;
       }
       case "generateLocationImage": {
-        const l = findByName(current.locations || [], effect.locationName);
+        const l = findByIdOrName(current.locations || [], effect.locationId, effect.locationName);
         if (!l) return;
         const aspect = current.meta?.aspect || "16:9";
         markPending(`location.${l.id}`);
@@ -7410,7 +7555,7 @@ export default function WorkshopV2() {
         return;
       }
       case "generateProductImage": {
-        const p = findByName(current.products || [], effect.productName);
+        const p = findByIdOrName(current.products || [], effect.productId, effect.productName);
         if (!p) return;
         markPending(`product.${p.id}`);
         dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
@@ -7433,7 +7578,7 @@ export default function WorkshopV2() {
           : effect.assetType === "location" ? current.locations
           : effect.assetType === "product" ? current.products
           : [];
-        const asset = findByName(list, effect.assetName);
+        const asset = findByIdOrName(list, effect.assetId, effect.assetName);
         if (!asset) return;
         if (effect.assetType === "talent") {
           await runChatEffect({ type: "generateTalentPrimary", talentName: asset.name });
@@ -7841,7 +7986,7 @@ export default function WorkshopV2() {
   const selectFrame = useCallback((id) => {
     setSelectedFrameId(id);
     setProductionFrameId(id);
-    setChatAssetContext(null); // selecting a frame clears any asset focus
+    setChatAssetContext(null);
     if (!sidebarOpen) setSidebarOpen(true);
   }, [sidebarOpen]);
 
@@ -8232,11 +8377,9 @@ export default function WorkshopV2() {
     }
   }
 
-  // Real chat via Gemini + tool calls. Replaces the keyword-pattern
-  // mockAI / mockFrameAI. Sends the conversation history + a compact
-  // representation of the current project state + the tool schema;
-  // applies returned function calls to the reducer.
-  const handleSendMessage = useCallback(async (text, frameId, frameNumber) => {
+  // Real v2 chat via Gemini + tool calls. The v2-specific context,
+  // tool schemas, validation, and reducer application live in aiChat.js.
+  const handleSendMessage = useCallback(async (text, frameId, frameNumber, assetContext) => {
     setChatMessages(prev => [...prev, { id: Date.now(), role: "user", text, frameId, frameNumber }]);
     setChatBusy(true);
     const currentData = data;
@@ -8375,7 +8518,7 @@ export default function WorkshopV2() {
     ].join("\n");
 
     const history = [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: chatContext.systemPrompt },
       ...chatMessages.filter(m => m.role === "user" || m.role === "ai").map(m => ({
         role: m.role === "ai" ? "assistant" : "user",
         content: m.text,
@@ -8470,12 +8613,17 @@ export default function WorkshopV2() {
     // Toggle the appropriate asset tab
     const typeMap = { talent: "talent", product: "products", location: "locations" };
     const tabKey = typeMap[asset._type] || "talent";
+    setProductionFrameId(null);
+    setSelectedFrameId(null);
+    setChatAssetContext(null);
     setAssetTabOpen(tabKey);
   }, []);
 
   const handleAssetAIAssist = useCallback((item, category) => {
     const type = { talent: "talent", products: "product", locations: "location" }[category];
     setChatAssetContext({ type, id: item.id });
+    setSelectedFrameId(null);
+    setProductionFrameId(null);
     setSidebarOpen(true);
   }, []);
 
@@ -8527,6 +8675,7 @@ export default function WorkshopV2() {
     // change off-screen state and nothing would visibly happen.
     setProductionFrameId(null);
     setSelectedFrameId(null);
+    setChatAssetContext(null);
     setAssetTabOpen(prev => {
       if (prev === tabKey) {
         window.dispatchEvent(new CustomEvent("ww-asset-tab-reset", { detail: { tab: tabKey } }));
@@ -8544,13 +8693,18 @@ export default function WorkshopV2() {
   const prodFrame = productionFrameId ? data.frames.find(f => f.id === productionFrameId) : null;
   const prodIdx = prodFrame ? data.frames.indexOf(prodFrame) : -1;
 
+  const updateHomeBackground = useCallback((nextBackground) => {
+    const normalizedBackground = normalizeHomeBackground(nextBackground);
+    setHomeBackground(normalizedBackground);
+    window.localStorage.setItem(HOME_BACKGROUND_STORAGE_KEY, normalizedBackground);
+  }, []);
+
   return (
     <UIProvider>
     <div className={isDark ? "dark" : undefined} style={{
       ...getThemeVars(isDark),
-      background: isDark
-        ? "radial-gradient(ellipse 80% 60% at 50% 40%, #111112 0%, #0A0A0A 100%)"
-        : "radial-gradient(ellipse 80% 60% at 50% 40%, #FFFFFF 0%, #F0EFED 100%)",
+      background: "transparent",
+      position: "relative",
       minHeight: "100vh", fontFamily: "var(--f)", color: "var(--warm)",
       opacity: ready ? 1 : 0, transition: "opacity 0.8s ease, background 0.4s ease, color 0.4s ease",
     }}>
@@ -8639,6 +8793,7 @@ export default function WorkshopV2() {
         }
       `}</style>
 
+      {!built && <HomeBackground mode={homeBackground} />}
       <div className="grain" />
       {exportOpen && (() => {
         // v2 export uses the proven v1 OnePager component instead of v2's
@@ -8759,19 +8914,20 @@ export default function WorkshopV2() {
         </div>
       )}
 
-      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden" }}>
+      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden", position: "relative", zIndex: 1 }}>
         {/* Left: project sidebar (full-height multi-project nav) */}
         <ProjectSidebar
+          homeBackdrop={!built}
           mode={built && activeProjectId ? "project" : "root"}
           projects={projects}
           folders={folders}
           activeProjectId={activeProjectId}
           activeProjectTitle={data.meta?.title || "Untitled"}
-          activeAssetTab={assetTabOpen}
+          activeAssetTab={assetTabOpen === "brand" ? "settings" : assetTabOpen}
           onAssetTabChange={handleToggleAssetTab}
           onBackToProjects={handleBackToProjects}
           assetCounts={{
-            brand: data.brand?.logo ? 1 : 0,
+            settings: data.brand?.logo ? 1 : 0,
             talent: data.talent.length,
             products: data.products.length,
             locations: data.locations.length,
@@ -8829,8 +8985,9 @@ export default function WorkshopV2() {
         position: "relative", zIndex: 100, height: 64, flexShrink: 0,
         display: "grid", gridTemplateColumns: "minmax(0, 1fr) max-content", columnGap: 16, alignItems: "center",
         padding: "0 24px",
-        borderBottom: "1px solid var(--warm-06)", background: "var(--surface)",
-        backdropFilter: "blur(24px) saturate(1.3)", WebkitBackdropFilter: "blur(24px) saturate(1.3)",
+        background: "transparent",
+        backdropFilter: built ? "blur(24px) saturate(1.3)" : "none",
+        WebkitBackdropFilter: built ? "blur(24px) saturate(1.3)" : "none",
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -8899,8 +9056,17 @@ export default function WorkshopV2() {
       {/* Content area */}
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* Main */}
-        <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
-          {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} folders={folders} />}
+        <main style={{ flex: 1, overflowY: "auto", minWidth: 0, background: "transparent" }}>
+          {!built && (
+            <BriefForm
+              onGenerate={handleGenerate}
+              generating={generating}
+              error={generationError}
+              folders={folders}
+              homeBackground={homeBackground}
+              onHomeBackgroundChange={updateHomeBackground}
+            />
+          )}
           {built && !productionFrameId && (
             <OneSheetWorkspace data={data} selectedFrameId={selectedFrameId}
               highlightedFrames={highlightedFrames} onSelectFrame={selectFrame}
@@ -8921,6 +9087,7 @@ export default function WorkshopV2() {
               onDeleteFrame={handleDeleteFrame}
               onFocusChat={handleFocusChat}
               onStageChange={handleStageFrameChange}
+              onRegenerateFrame={regenerateOneFrame}
             />
           )}
         </main>
@@ -8930,7 +9097,7 @@ export default function WorkshopV2() {
           <div style={{
             width: sidebarOpen ? 380 : 0, flexShrink: 0, overflow: "hidden",
             borderLeft: sidebarOpen ? "1px solid var(--warm-06)" : "none",
-            background: "var(--surface-solid)",
+            background: "transparent",
             backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
             transition: "width 0.35s cubic-bezier(0.22,1,0.36,1)",
           }}>

@@ -7,6 +7,7 @@
 // GEMINI_IMAGE_MODEL if Google ships a newer/cheaper one.
 
 const DEFAULT_MODEL = 'gemini-3-pro-image-preview'
+const GEMINI_TIMEOUT_MS = 135_000
 
 // Gemini accepts an aspectRatio hint via imageConfig; we map our common
 // ratios to the supported set. Anything unrecognised falls back to 1:1.
@@ -81,14 +82,22 @@ export default async function handler(req, res) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
 
   let geminiRes
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
   try {
     geminiRes = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: controller.signal,
     })
   } catch (err) {
+    if (err?.name === 'AbortError') {
+      return res.status(504).json({ error: `Gemini image request timed out after ${Math.round(GEMINI_TIMEOUT_MS / 1000)}s` })
+    }
     return res.status(502).json({ error: 'Gemini fetch failed', detail: String(err?.message || err) })
+  } finally {
+    clearTimeout(timeout)
   }
 
   const text = await geminiRes.text()

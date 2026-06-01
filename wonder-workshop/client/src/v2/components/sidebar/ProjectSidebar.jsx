@@ -22,11 +22,11 @@ import iconNavMoodSvg from "../../../assets/icon-nav-mood.svg?raw";
 // switch so no work is lost.
 
 const PROJECT_SECTION_TABS = [
-  { key: "brand", label: "Brand", icon: "brand" },
   { key: "talent", label: "Characters", icon: "characters" },
   { key: "products", label: "Elements", icon: "elements" },
   { key: "locations", label: "Locations", icon: "locations" },
   { key: "mood", label: "Mood", icon: "mood" },
+  { key: "settings", label: "Project Settings", icon: "brand" },
 ];
 
 const NAV_ICON_PATHS = {
@@ -70,12 +70,13 @@ export function ProjectSidebar({
   onRenameFolder,
   mode = "root",
   activeProjectTitle = "",
-  activeAssetTab = "brand",
+  activeAssetTab = "settings",
   onAssetTabChange,
   onBackToProjects,
   assetCounts = {},
   reconcileFlags = {},
   onCleanupDuplicates,
+  homeBackdrop = false,
 }) {
   // Count extra same-name project rows (anything beyond the first per name)
   // — these are almost always fork-orphans from the old "Regenerate All"
@@ -198,8 +199,10 @@ export function ProjectSidebar({
   return (
     <div style={{
       width: 256, flexShrink: 0,
-      borderRight: "1px solid var(--warm-06)",
-      background: "rgba(0,0,0,0.72)",
+      borderRight: homeBackdrop ? "1px solid rgba(255,255,255,0.08)" : "1px solid var(--warm-06)",
+      background: homeBackdrop ? "rgba(0,0,0,0.46)" : "rgba(0,0,0,0.72)",
+      backdropFilter: homeBackdrop ? "blur(20px) saturate(1.05)" : undefined,
+      WebkitBackdropFilter: homeBackdrop ? "blur(20px) saturate(1.05)" : undefined,
       display: "flex", flexDirection: "column",
       height: "100vh", overflow: "hidden",
     }}>

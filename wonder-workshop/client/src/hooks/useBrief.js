@@ -375,10 +375,17 @@ export async function chatWithTools(messages, tools, signal) {
 
   const data = await res.json()
   const text = data.message?.content ?? ''
-  const actions = (data.functionCalls || []).map(c => ({
-    name: c.name,
-    args: c.args || {},
-  }))
+  const rawCalls = Array.isArray(data.functionCalls)
+    ? data.functionCalls
+    : Array.isArray(data.actions)
+      ? data.actions
+      : []
+  const actions = rawCalls
+    .map(c => ({
+      name: c?.name,
+      args: c?.args || c?.arguments || {},
+    }))
+    .filter(c => c.name)
   return { text, actions }
 }
 
