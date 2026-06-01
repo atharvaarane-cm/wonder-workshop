@@ -1341,6 +1341,24 @@ textarea { font-family: var(--font); resize: none; }
   line-height: 1.55;
 }
 .topbar-desc-textarea:focus { border-color: rgba(124,92,252,0.5); box-shadow: 0 0 0 2px rgba(124,92,252,0.12); }
+
+/* Browser autofill forces -webkit-text-fill-color to black, which turns
+   autofilled input text invisible on the dark theme (selecting a saved
+   "Pepsi summer" title made the text disappear). Force it back to the theme
+   text color in both modes. The autofill *background* is already handled by
+   the Input component (has-autofill bg + the long background-color transition),
+   so we only need to fix the text color here. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--text) !important;
+  caret-color: var(--text);
+}
 .topbar-desc-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
 .topbar-desc-cancel {
   font-size: 12px; padding: 0 12px; height: 30px; border-radius: 7px;
