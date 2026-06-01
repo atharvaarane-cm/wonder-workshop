@@ -1655,28 +1655,14 @@ export function SectionIcon({ name, size = 14, color = "var(--warm-25)" }) {
 
 function ChevronDropdown({ label, value, options, onChange, style: extraStyle = {} }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      {label && <label style={lbl}>{label}</label>}
-      <div style={{ position: "relative" }}>
-        <select value={value} onChange={e => onChange(e.target.value)}
-          style={{
-            width: "100%", background: "var(--warm-06)", border: "1px solid var(--warm-08)",
-            borderRadius: 8, padding: "10px 36px 10px 14px", color: "var(--warm)", fontSize: 13,
-            fontWeight: 500, fontFamily: "var(--f)", outline: "none", boxSizing: "border-box",
-            letterSpacing: "-0.01em", transition: "border-color 0.2s ease",
-            appearance: "none", cursor: "pointer", ...extraStyle,
-          }}
-        >
-          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <div style={{
-          position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-          pointerEvents: "none", display: "flex", alignItems: "center",
-        }}>
-          <SectionIcon name="chevron-down" size={14} color="var(--warm-35)" />
-        </div>
-      </div>
-    </div>
+    <RootMenuDropdown
+      label={label}
+      value={value}
+      options={options}
+      onChange={onChange}
+      style={extraStyle}
+      triggerSize="lg"
+    />
   );
 }
 
@@ -1731,9 +1717,9 @@ function ChatSuggestionIcon({ name }) {
 }
 
 function RootMenuDropdown({ label, value, options, onChange, renderIcon, triggerIcon, triggerLabel, popupClassName, style, triggerSize = "lg", sideOffset = 4 }) {
-  const selected = options.find(o => !o.type && o.value === value);
+  const selected = options.find(o => o.type !== "separator" && o.value === value);
   const selectedLabel = triggerLabel || selected?.triggerLabel || selected?.label || value;
-  const menuClassName = popupClassName || "w-[var(--anchor-width)] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]";
+  const menuClassName = popupClassName || "w-[var(--anchor-width)]";
 
   return (
     <div style={{ marginBottom: 14, ...style }}>
@@ -1744,7 +1730,7 @@ function RootMenuDropdown({ label, value, options, onChange, renderIcon, trigger
             <Button
               variant="outline"
               size={triggerSize}
-              className="w-full justify-between dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_1px_2px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.045)] dark:hover:bg-[#181818] dark:data-pressed:bg-[#181818]"
+              className="w-full justify-between"
             />
           }
         >
@@ -1782,100 +1768,34 @@ function RootMenuDropdown({ label, value, options, onChange, renderIcon, trigger
   );
 }
 
-// -- LOCATION DROPDOWN (custom with thumbnail previews) --------
+// -- LOCATION DROPDOWN -----------------------------------------
 
 function LocationDropdown({ label, value, locations, onChange }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const selected = locations.find(l => l.id === value);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    if (open) document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  const options = [{ value: "", label: "None" }, ...locations.map(loc => ({ value: loc.id, label: loc.name, loc }))];
+  const selectedValue = value || "";
+  const renderLocationIcon = (locationId) => {
+    const loc = locations.find(l => l.id === locationId);
+    if (loc) return <LocationThumb loc={loc} size={18} borderRadius={4} />;
+    return (
+      <span style={{
+        width: 18, height: 18, borderRadius: 4, background: "var(--warm-06)",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-25)",
+      }}>
+        —
+      </span>
+    );
+  };
 
   return (
-    <div style={{ marginBottom: 14 }} ref={ref}>
-      {label && <label style={lbl}>{label}</label>}
-      <div style={{ position: "relative" }}>
-        <div
-          onClick={() => setOpen(!open)}
-          style={{
-            width: "100%", background: "var(--warm-06)", border: "1px solid var(--warm-08)",
-            borderRadius: 8, padding: "8px 36px 8px 10px", color: "var(--warm)", fontSize: 13,
-            fontWeight: 500, fontFamily: "var(--f)", boxSizing: "border-box",
-            letterSpacing: "-0.01em", transition: "border-color 0.2s ease",
-            cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
-            borderColor: open ? "var(--warm-20)" : "var(--warm-08)",
-          }}
-        >
-          {selected ? (
-            <>
-              <LocationThumb loc={selected} size={24} borderRadius={4} />
-              <span>{selected.name}</span>
-            </>
-          ) : (
-            <span style={{ color: "var(--warm-30)" }}>None</span>
-          )}
-        </div>
-        <div style={{
-          position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-          pointerEvents: "none", display: "flex", alignItems: "center",
-        }}>
-          <SectionIcon name="chevron-down" size={14} color="var(--warm-35)" />
-        </div>
-
-        {open && (
-          <div style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-            background: "#151517", border: "1px solid var(--warm-10)", borderRadius: 10,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)", overflow: "hidden",
-            animation: "fadeIn 0.15s ease", maxHeight: 240, overflowY: "auto",
-          }}>
-            <div
-              onClick={() => { onChange(null); setOpen(false); }}
-              style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
-                cursor: "pointer", transition: "background 0.1s ease",
-                background: !value ? "rgba(255,255,255,0.06)" : "transparent",
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-              onMouseLeave={e => e.currentTarget.style.background = !value ? "rgba(255,255,255,0.06)" : "transparent"}
-            >
-              <div style={{
-                width: 24, height: 24, borderRadius: 4, background: "var(--warm-06)",
-                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-              }}>
-                <span style={{ fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-20)" }}>{"—"}</span>
-              </div>
-              <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-30)" }}>None</span>
-            </div>
-            {locations.map(loc => (
-              <div
-                key={loc.id}
-                onClick={() => { onChange(loc.id); setOpen(false); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
-                  cursor: "pointer", transition: "background 0.1s ease",
-                  background: value === loc.id ? "rgba(255,255,255,0.06)" : "transparent",
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-                onMouseLeave={e => e.currentTarget.style.background = value === loc.id ? "rgba(255,255,255,0.06)" : "transparent"}
-              >
-                <LocationThumb loc={loc} size={24} borderRadius={4} />
-                <span style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, color: "var(--warm)" }}>{loc.name}</span>
-                <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-20)", marginLeft: "auto" }}>
-                  {loc.type === "ai" ? "AI" : "Ref"}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <RootMenuDropdown
+      label={label}
+      value={selectedValue}
+      options={options}
+      onChange={v => onChange(v || null)}
+      renderIcon={renderLocationIcon}
+      triggerSize="lg"
+    />
   );
 }
 
@@ -2410,17 +2330,19 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
               <CameraControlStrip frame={frame} dispatch={dispatch} />
             </div>
           </CollapsibleSection>
-        </Card>
 
-        {/* Delete frame */}
-        <Button
-          variant="destructive-outline"
-          size="xs"
-          className="mt-4 w-fit"
-          onClick={() => onDeleteFrame(frame.id)}
-        >
-          Delete Frame
-        </Button>
+          <div className="mt-5 flex border-t border-white/10 pt-5">
+            <Button
+              variant="destructive-outline"
+              size="xs"
+              className="w-fit gap-1.5"
+              onClick={() => onDeleteFrame(frame.id)}
+            >
+              <SectionIcon name="trash" size={12} color="#ff6b6b" />
+              Delete Frame
+            </Button>
+          </div>
+        </Card>
         </div>
         </div>{/* close portrait grid wrapper */}
       </Reveal>
@@ -5556,7 +5478,7 @@ function TargetDurationControl({ value, onChange }) {
         renderIcon={() => <DropdownAssetIcon src={iconClockUrl} size={18} />}
         style={{ marginBottom: 0 }}
         triggerSize="sm"
-        popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(360px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+        popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(360px,calc(100vw-32px))]"
       />
     </div>
   );
@@ -5580,7 +5502,7 @@ function AspectRatioControl({ value, onChange }) {
         renderIcon={(ratio) => <RatioIcon ratio={ratio} size={18} />}
         style={{ marginBottom: 0 }}
         triggerSize="sm"
-        popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+        popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))]"
       />
     </div>
   );
@@ -5820,7 +5742,7 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
                 ? <DropdownAssetIcon src={iconFolderUrl} size={size} />
                 : <span aria-hidden="true" style={{ display: "block", width: size, height: size, flexShrink: 0 }} />
               }
-              popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))] dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_12px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.045)]"
+              popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))]"
             />
             <RootMenuDropdown
               value={meta.format}
