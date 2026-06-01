@@ -3795,8 +3795,12 @@ function CharacterTile({ character, onClick }) {
     || character.headshots?.back
     || null;
   const status = character.generationStatus;
-  const externalPending = usePending(`talent.${character.id}.primary`);
+  // Watch ALL of this character's slots (primary + headshots + full-body), not
+  // just the primary, so the card keeps signalling through the whole generation
+  // process. Label mirrors the storyboard cards: Generating vs Queued.
+  const externalPending = useCategoryPending(`talent.${character.id}.`);
   const isPending = status === "generating" || externalPending;
+  const genLabel = status === "generating" ? "Generating…" : "Queued";
   return (
     <motion.button
       onClick={onClick}
@@ -3851,9 +3855,10 @@ function CharacterTile({ character, onClick }) {
             </div>
           </div>
         )}
-        {/* Only show shimmer when there's no image yet — once an image
-            lands, the shimmer would just smear over a real result. */}
-        {isPending && !img && <ShimmerOverlay />}
+        {/* Shimmer + Generating/Queued label whenever ANY of this character's
+            slots are generating — persists through the headshot/full-body phase
+            so the card shows where the tool is in the process. */}
+        {isPending && <ShimmerOverlay label={genLabel} />}
         {character.locked && (
           <div title="Locked" style={{
             position: "absolute", top: 4, right: 4, zIndex: 4,
@@ -4817,6 +4822,7 @@ function LocationTile({ location, onClick, aspectCSS = "16/9" }) {
   const status = location.generationStatus;
   const externalPending = usePending(`location.${location.id}`);
   const isPending = status === "generating" || externalPending;
+  const genLabel = status === "generating" ? "Generating…" : "Queued";
   return (
     <motion.button
       onClick={onClick}
@@ -4851,7 +4857,7 @@ function LocationTile({ location, onClick, aspectCSS = "16/9" }) {
           <SectionIcon name="map" size={24} color="var(--warm-25)" />
         </div>
       )}
-      {isPending && !img && <ShimmerOverlay />}
+      {isPending && <ShimmerOverlay label={genLabel} />}
       {/* Bottom gradient + name overlay — keeps the title legible without
           stealing vertical space from the image. */}
       <div style={{
@@ -5033,6 +5039,7 @@ function ElementTile({ product, onClick }) {
   const status = product.generationStatus;
   const externalPending = usePending(`product.${product.id}`);
   const isPending = status === "generating" || externalPending;
+  const genLabel = status === "generating" ? "Generating…" : "Queued";
   return (
     <motion.button
       onClick={onClick}
@@ -5065,7 +5072,7 @@ function ElementTile({ product, onClick }) {
         {!img && !isPending && (
           <SectionIcon name="box" size={20} color="var(--warm-25)" />
         )}
-        {isPending && !img && <ShimmerOverlay />}
+        {isPending && <ShimmerOverlay label={genLabel} />}
         {product.locked && (
           <div title="Locked" style={{
             position: "absolute", top: 4, right: 4, zIndex: 4,
