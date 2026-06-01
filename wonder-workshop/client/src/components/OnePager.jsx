@@ -1,8 +1,34 @@
 import { useEffect, useState } from 'react'
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../utils/characterPrompts.js'
 import { expandMentions } from '../utils/mentions.js'
 import { exportPptx } from '../utils/pptxExport.js'
 import { generateTreatmentFromShots, getCachedTreatment, cacheTreatment } from '../utils/treatment.js'
+
+const SECTION_OPTIONS = {
+  headerFooter: 'Header & Footer',
+  storyboard: 'Storyboard',
+  treatment: 'Treatment Brief',
+  talent: 'Talent',
+  locations: 'Locations',
+  elements: 'Elements',
+  mood: 'Mood',
+}
+
+const SECTION_VALUES = Object.keys(SECTION_OPTIONS)
+const DEFAULT_SECTIONS = ['headerFooter', 'storyboard', 'treatment', 'locations', 'talent']
+
+function renderSectionSelectValue(value) {
+  if (!value?.length) return 'No sections'
+  const first = SECTION_OPTIONS[value[0]] || ''
+  return value.length > 1 ? `${first} (+${value.length - 1} more)` : first
+}
 
 // Resolve a generated image src by trying the stable slot ID first, then
 // falling back to the legacy prompt-keyed entry. Mirrors ImageSlot's own
@@ -32,6 +58,7 @@ function charSlotId(key, kind, viewId) {
 function envSlotId(key) { return `env.${key}` }
 function productSlotId(idx) { return `product.${idx}` }
 function shotSlotId(shot, idx) { return `shot.${shot.id || `idx-${idx}`}` }
+function moodSlotId(item, idx) { return `mood.${item.id || `idx-${idx}`}` }
 
 function SectionLabel({ children }) {
   return <div className="op-section-label">{children}</div>
@@ -152,6 +179,8 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
   const [exportingPptx, setExportingPptx] = useState(false)
   const [treatment, setTreatment] = useState('')
   const [treatmentLoading, setTreatmentLoading] = useState(false)
+  const [visibleSections, setVisibleSections] = useState(DEFAULT_SECTIONS)
+  const isVisible = (section) => visibleSections.includes(section)
 
   // Storyboard frames — stable ID per shot.id, legacy prompt as fallback.
   const shotFrames = shots.map((shot, idx) => {
@@ -201,6 +230,20 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
       src: resolveSlot(images, productSlotId(i), legacyPrompt),
     }
   }).filter(e => e.product?.name || e.product?.description || e.src)
+
+  const moodItems = (brief?.moodBoard || []).map((item, i) => {
+    const caption = (item.caption || '').trim()
+    const brand = cd.brand || ''
+    const description = cd.description || ''
+    const legacyPrompt = caption
+      ? `${caption}, ${brand} ${description}, mood board reference, cinematic aesthetic, editorial`
+      : `mood-board:${item.id}`
+    return {
+      item,
+      caption,
+      src: resolveSlot(images, moodSlotId(item, i), legacyPrompt),
+    }
+  }).filter(m => m.caption || m.src)
 
   async function handleExportPptx() {
     if (exportingPptx) return
@@ -259,25 +302,44 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
         {/* Toolbar (hidden in print) */}
         <div className="onepager-toolbar no-print">
           <span className="onepager-toolbar-title">One Pager Preview</span>
-          <div className="op-mode-switch" role="tablist" aria-label="Sheet mode">
-            <button
-              role="tab"
-              aria-selected={mode === 'production'}
-              className={`op-mode-btn${mode === 'production' ? ' active' : ''}`}
-              onClick={() => setMode('production')}
-              title="Clean sheet for crew / DP — storyboard, talent, locations, elements"
+          <div className="onepager-toolbar-controls">
+            <div className="op-mode-switch" role="tablist" aria-label="Sheet mode">
+              <button
+                role="tab"
+                aria-selected={mode === 'production'}
+                className={`op-mode-btn${mode === 'production' ? ' active' : ''}`}
+                onClick={() => setMode('production')}
+                title="Clean sheet for crew / DP — storyboard, talent, locations, elements"
+              >
+                Production
+              </button>
+              <button
+                role="tab"
+                aria-selected={mode === 'full'}
+                className={`op-mode-btn${mode === 'full' ? ' active' : ''}`}
+                onClick={() => setMode('full')}
+                title="Full detail sheet for the video-gen pipeline — adds full-body rotations + full descriptions"
+              >
+                Full detail
+              </button>
+            </div>
+            <Select
+              aria-label="Select export sheet sections"
+              value={visibleSections}
+              onValueChange={setVisibleSections}
+              multiple
             >
-              Production
-            </button>
-            <button
-              role="tab"
-              aria-selected={mode === 'full'}
-              className={`op-mode-btn${mode === 'full' ? ' active' : ''}`}
-              onClick={() => setMode('full')}
-              title="Full detail sheet for the video-gen pipeline — adds full-body rotations + full descriptions"
-            >
-              Full detail
-            </button>
+              <SelectTrigger className="op-section-select-trigger" size="sm">
+                <SelectValue>{renderSectionSelectValue}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup alignItemWithTrigger={false}>
+                {SECTION_VALUES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {SECTION_OPTIONS[value]}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="onepager-print-btn" onClick={handleExportPptx} disabled={exportingPptx}>
@@ -307,25 +369,27 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
         <div className={`onepager-page onepager-page--${mode}`}>
 
           {/* ── Header ── */}
-          <div className="op-header">
-            <div className="op-header-left">
-              <div className="op-brand">{cd.brand || pi.clientName || '—'}</div>
-              <div className="op-campaign">{pi.brandCampaignName || brief?.title || ''}</div>
+          {isVisible('headerFooter') && (
+            <div className="op-header">
+              <div className="op-header-left">
+                <div className="op-brand">{cd.brand || pi.clientName || '—'}</div>
+                <div className="op-campaign">{pi.brandCampaignName || brief?.title || ''}</div>
+              </div>
+              <div className="op-header-right">
+                {pi.projectName && <div className="op-meta-row op-meta-row--project"><span>Project</span>{pi.projectName}</div>}
+                {pi.jobNumber   && <div className="op-meta-row op-meta-row--job"><span>Job #</span>{pi.jobNumber}</div>}
+                {cd.format      && <div className="op-meta-row op-meta-row--format"><span>Format</span>{cd.format}</div>}
+                {cd.duration    && <div className="op-meta-row op-meta-row--duration"><span>Duration</span>{cd.duration}</div>}
+                {cd.shots       && <div className="op-meta-row op-meta-row--shots"><span>Shots</span>{cd.shots}</div>}
+                {cd.location    && <div className="op-meta-row op-meta-row--location"><span>Location</span>{cd.location}</div>}
+              </div>
             </div>
-            <div className="op-header-right">
-              {pi.projectName && <div className="op-meta-row op-meta-row--project"><span>Project</span>{pi.projectName}</div>}
-              {pi.jobNumber   && <div className="op-meta-row op-meta-row--job"><span>Job #</span>{pi.jobNumber}</div>}
-              {cd.format      && <div className="op-meta-row op-meta-row--format"><span>Format</span>{cd.format}</div>}
-              {cd.duration    && <div className="op-meta-row op-meta-row--duration"><span>Duration</span>{cd.duration}</div>}
-              {cd.shots       && <div className="op-meta-row op-meta-row--shots"><span>Shots</span>{cd.shots}</div>}
-              {cd.location    && <div className="op-meta-row op-meta-row--location"><span>Location</span>{cd.location}</div>}
-            </div>
-          </div>
+          )}
 
           <div className="op-sheet-body">
             <div className="op-sheet-main">
               {/* ── Storyboard FIRST — the 95% conversation piece in production. */}
-              {shotFrames.length > 0 && (
+              {isVisible('storyboard') && shotFrames.length > 0 && (
                 <div className="op-section op-section--storyboard">
                   <SectionLabel>Storyboard</SectionLabel>
                   <div className="op-storyboard">
@@ -352,7 +416,7 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
                   captions. Present-tense short story used to pitch the spot.
                   Falls back to the brief's creative-direction prose if
                   generation fails or shots are absent. */}
-              {(treatment || treatmentLoading || cd.description) && (
+              {isVisible('treatment') && (treatment || treatmentLoading || cd.description) && (
                 <div className="op-section op-direction">
                   <SectionLabel>Treatment</SectionLabel>
                   {treatmentLoading && !treatment && (
@@ -370,7 +434,7 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
               {/* ── Talent. Production mode lays the characters out in a row;
                   full-detail stacks the full bio + headshots + full-body grids
                   per character. */}
-              {characters.length > 0 && (
+              {isVisible('talent') && characters.length > 0 && (
                 <div className="op-section op-section--talent">
                   <SectionLabel>Talent</SectionLabel>
                   <div className={mode === 'production' ? 'op-talent-row' : 'op-talent-stack'}>
@@ -388,7 +452,7 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
               )}
 
               {/* ── Locations ── */}
-              {locations.length > 0 && (
+              {isVisible('locations') && locations.length > 0 && (
                 <div className="op-section op-section--locations">
                   <SectionLabel>Locations</SectionLabel>
                   {locations.map(({ data, src }, i) => (
@@ -404,7 +468,7 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
               )}
 
               {/* ── Elements / Products ── */}
-              {elements.length > 0 && (
+              {isVisible('elements') && elements.length > 0 && (
                 <div className="op-section op-section--elements">
                   <SectionLabel>Elements</SectionLabel>
                   <div className="op-elements-grid">
@@ -423,14 +487,34 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
                   </div>
                 </div>
               )}
+
+              {/* ── Mood ── */}
+              {isVisible('mood') && moodItems.length > 0 && (
+                <div className="op-section op-section--mood">
+                  <SectionLabel>Mood</SectionLabel>
+                  <div className="op-mood-export-grid">
+                    {moodItems.map(({ item, caption, src }, i) => (
+                      <div key={item.id || i} className="op-mood-export-item">
+                        {src
+                          ? <img src={src} alt={caption || 'Mood reference'} className="op-mood-export-img" />
+                          : <div className="op-mood-export-empty" />
+                        }
+                        {caption && <div className="op-mood-export-caption">{caption}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="op-footer">
-            <span>WONDER WORKSHOP</span>
-            <span>{mode === 'full' ? 'Full Detail Sheet' : 'Production Sheet'}</span>
-            <span>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-          </div>
+          {isVisible('headerFooter') && (
+            <div className="op-footer">
+              <span>WONDER WORKSHOP</span>
+              <span>{mode === 'full' ? 'Full Detail Sheet' : 'Production Sheet'}</span>
+              <span>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1769,6 +1769,14 @@ function RawSvgIcon({ svg }) {
   );
 }
 
+function BackArrowIcon() {
+  return (
+    <svg width="13" height="11" viewBox="0 0 13 11" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M3.84863 6.03613L2.25586 5.94043L4.27246 7.78613L5.80371 9.33789C5.94043 9.46777 6.02246 9.65234 6.02246 9.86426C6.02246 10.2744 5.71484 10.582 5.28418 10.582C5.09961 10.582 4.91504 10.5068 4.75098 10.3496L0.246094 5.84473C0.0888672 5.69434 0 5.49609 0 5.29102C0 5.08594 0.0888672 4.88086 0.246094 4.7373L4.7373 0.239258C4.91504 0.0683594 5.09961 0 5.28418 0C5.71484 0 6.02246 0.300781 6.02246 0.710938C6.02246 0.922852 5.94043 1.10742 5.80371 1.24414L4.27246 2.7959L2.25586 4.63477L3.84863 4.5459H12.1611C12.6055 4.5459 12.9199 4.84668 12.9199 5.29102C12.9199 5.72852 12.6055 6.03613 12.1611 6.03613H3.84863Z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function LockToggleButton({ locked, onClick, unlockedLabel = "Lock", title }) {
   return (
     <Button
@@ -1948,12 +1956,21 @@ function ConfirmAction({ label, onConfirm, variant = "danger", style = {} }) {
     return (
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <span style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-30)" }}>Confirm?</span>
-        <PremiumButton variant="danger" onClick={() => { onConfirm(); setConfirming(false); }} style={{ padding: "4px 10px", fontSize: 10 }}>Yes, Delete</PremiumButton>
-        <PremiumButton variant="ghost" onClick={() => setConfirming(false)} style={{ padding: "4px 10px", fontSize: 10 }}>Cancel</PremiumButton>
+        <Button variant="destructive-outline" size="xs" onClick={() => { onConfirm(); setConfirming(false); }}>
+          <SectionIcon name="trash" size={12} color="#ff6b6b" />
+          Yes, Delete
+        </Button>
+        <Button variant="outline" size="xs" onClick={() => setConfirming(false)}>Cancel</Button>
       </div>
     );
   }
-  return <PremiumButton variant={variant} onClick={() => setConfirming(true)} style={style}>{label}</PremiumButton>;
+  const buttonVariant = variant === "danger" ? "destructive-outline" : variant;
+  return (
+    <Button variant={buttonVariant} size="xs" onClick={() => setConfirming(true)} style={style}>
+      {variant === "danger" && <SectionIcon name="trash" size={12} color="#ff6b6b" />}
+      {label}
+    </Button>
+  );
 }
 
 // -- ASSET CONTEXT (for AI chat) ------------------------------
@@ -2187,7 +2204,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const isPortrait = aspNum < 1;
 
   return (
-    <div style={{ padding: "0 24px 32px", maxWidth: isPortrait ? 1100 : 960, margin: "0 auto" }}>
+    <div style={{ padding: "0 24px 32px", maxWidth: isPortrait ? 1100 : 960, margin: "0 auto", background: "transparent" }}>
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0 20px" }}>
         <PremiumButton variant="ghost" onClick={onBack} style={{ gap: 6, padding: "6px 12px" }}>
@@ -2302,7 +2319,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
 
         {/* === FIELDS (right column in portrait, below in landscape) === */}
         <div>
-        <Card className="mb-5 rounded-xl px-6 py-5">
+        <Card className="mb-5 px-6 py-5">
           {/* Description (renamed from Brief) */}
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Description</label>
@@ -3074,7 +3091,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         <ConfirmAction label="Delete character" onConfirm={() => {
           dispatch({ type: "DELETE_TALENT", id: character.id });
           onBack();
-        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+        }} variant="danger" />
       </div>
     </div>
   );
@@ -3808,7 +3825,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         <ConfirmAction label="Delete location" onConfirm={() => {
           dispatch({ type: "DELETE_LOCATION", id: location.id });
           onBack();
-        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+        }} variant="danger" />
       </div>
     </div>
   );
@@ -3996,7 +4013,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
         <ConfirmAction label="Delete element" onConfirm={() => {
           dispatch({ type: "DELETE_PRODUCT", id: product.id });
           onBack();
-        }} variant="danger" style={{ padding: "5px 11px", fontSize: 10 }} />
+        }} variant="danger" />
       </div>
     </div>
   );
@@ -4008,25 +4025,24 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
 
 function DetailHeader({ onBack, name, subtitle, locked, onToggleLock, onRename, lockLabel = "Lock" }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <button onClick={onBack} style={{
-        display: "flex", alignItems: "center", gap: 6,
-        padding: "5px 9px", borderRadius: 6, cursor: "pointer",
-        background: "transparent", border: "1px solid var(--warm-08)",
-        color: "var(--warm-40)", outline: "none",
-        fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-      }}>‹ Back</button>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <EditableText
-          value={name}
-          onChange={onRename}
-          style={{ fontFamily: "var(--f)", fontSize: 20, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em", display: "block" }}
-        />
-        {subtitle && (
-          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>
-            {subtitle}
-          </div>
-        )}
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+        <Button variant="outline" size="xs" onClick={onBack} title="Back">
+          <BackArrowIcon />
+          Back
+        </Button>
+        <div style={{ minWidth: 0 }}>
+          <EditableText
+            value={name}
+            onChange={onRename}
+            style={{ fontFamily: "var(--f)", fontSize: 20, fontWeight: 600, color: "var(--warm)", letterSpacing: "-0.01em", display: "block" }}
+          />
+          {subtitle && (
+            <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, color: "var(--warm-25)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>
+              {subtitle}
+            </div>
+          )}
+        </div>
       </div>
       <LockToggleButton
         locked={locked}
@@ -4210,7 +4226,7 @@ function HoverBarBtn({ children, title, onClick, disabled, danger, active, accen
 function ProjectSettingsPanel({ data, dispatch, onUpdateMeta, onRunRegeneration }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, animation: "fadeIn 0.2s ease" }}>
-      <Card className="rounded-xl p-5 shadow-md" style={{ background: "#222222" }}>
+      <Card className="p-5 shadow-md" style={{ background: "#222222" }}>
         <BrandPanel brand={data.brand} sectionLocked={!!data.locks?.brand} dispatch={dispatch} />
       </Card>
       <BriefSettingsCard
@@ -4377,7 +4393,7 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onUpdateMeta, onRu
 
   return (
     <div style={{ marginTop: 20, paddingTop: 16 }}>
-      <Card className="rounded-xl p-5 shadow-md" style={{
+      <Card className="p-5 shadow-md" style={{
         background: cardBackground,
         minHeight: 220,
         maxHeight: 800,
@@ -7251,9 +7267,7 @@ export default function WorkshopV2() {
     <UIProvider>
     <div className={isDark ? "dark" : undefined} style={{
       ...getThemeVars(isDark),
-      background: isDark
-        ? "radial-gradient(ellipse 80% 60% at 50% 40%, #111112 0%, #0A0A0A 100%)"
-        : "radial-gradient(ellipse 80% 60% at 50% 40%, #FFFFFF 0%, #F0EFED 100%)",
+      background: "transparent",
       minHeight: "100vh", fontFamily: "var(--f)", color: "var(--warm)",
       opacity: ready ? 1 : 0, transition: "opacity 0.8s ease, background 0.4s ease, color 0.4s ease",
     }}>
@@ -7599,7 +7613,7 @@ export default function WorkshopV2() {
       {/* Content area */}
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* Main */}
-        <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
+        <main style={{ flex: 1, overflowY: "auto", minWidth: 0, background: "transparent" }}>
           {!built && <BriefForm onGenerate={handleGenerate} generating={generating} error={generationError} folders={folders} />}
           {built && !productionFrameId && (
             <OneSheetWorkspace data={data} selectedFrameId={selectedFrameId}
@@ -7628,7 +7642,7 @@ export default function WorkshopV2() {
           <div style={{
             width: sidebarOpen ? 380 : 0, flexShrink: 0, overflow: "hidden",
             borderLeft: sidebarOpen ? "1px solid var(--warm-06)" : "none",
-            background: "var(--surface-solid)",
+            background: "transparent",
             backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
             transition: "width 0.35s cubic-bezier(0.22,1,0.36,1)",
           }}>
