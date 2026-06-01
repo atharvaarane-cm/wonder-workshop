@@ -239,7 +239,7 @@ export function BriefSettingsCard({ value, onUpdateMeta, data, onRunRegeneration
 
   return (
     <>
-      <Card className="rounded-xl p-5">
+      <Card className="rounded-xl p-5 shadow-md" style={{ background: "#202020" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <SectionIcon name="edit" size={18} color="var(--warm)" />

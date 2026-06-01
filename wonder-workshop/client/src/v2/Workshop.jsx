@@ -4210,7 +4210,7 @@ function HoverBarBtn({ children, title, onClick, disabled, danger, active, accen
 function ProjectSettingsPanel({ data, dispatch, onUpdateMeta, onRunRegeneration }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, animation: "fadeIn 0.2s ease" }}>
-      <Card className="rounded-xl p-5" style={{ background: "transparent" }}>
+      <Card className="rounded-xl p-5 shadow-md" style={{ background: "#202020" }}>
         <BrandPanel brand={data.brand} sectionLocked={!!data.locks?.brand} dispatch={dispatch} />
       </Card>
       <BriefSettingsCard
@@ -4368,8 +4368,8 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onUpdateMeta, onRu
 
   return (
     <div style={{ marginTop: 20, paddingTop: 16 }}>
-      <Card className="rounded-xl p-5" style={{
-        background: "transparent",
+      <Card className="rounded-xl p-5 shadow-md" style={{
+        background: "#202020",
         minHeight: 220,
         maxHeight: 800,
         overflowY: "auto",
