@@ -76,6 +76,20 @@ function autoHandle(name) {
   return "@" + (name || "").split(" ")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// Make a handle unique across ALL assets (handles share the frame-text
+// namespace). Without this, every freshly-added asset got the same "@new"
+// (from the default "New …" name), so once one "@new" was woven into a frame,
+// the others looked "already in the storyboard" and never flagged for reconcile.
+function uniqueHandle(base, state, selfId) {
+  const taken = new Set([...(state.talent || []), ...(state.products || []), ...(state.locations || [])]
+    .filter(a => a.id !== selfId)
+    .map(a => (a.handle || "").toLowerCase()).filter(Boolean));
+  if (!base || !taken.has(base.toLowerCase())) return base;
+  let n = 2;
+  while (taken.has((base + n).toLowerCase())) n++;
+  return base + n;
+}
+
 // -- W LOGO ---------------------------------------------------
 
 export function WLogo({ color = "#fff", size = 18 }) {
@@ -748,7 +762,7 @@ function applyAction(state, action) {
     case "ADD_TALENT": {
       const mx = Math.max(0, ...state.talent.map(t => parseInt(t.id.slice(1))));
       const merged = { id: "t" + (mx + 1), name: "New Talent", role: "Supporting", initials: "NT", note: "", headshot: null, generatedAngles: null, generationStatus: "idle", ...action.data };
-      merged.handle = autoHandle(merged.name);
+      merged.handle = uniqueHandle(autoHandle(merged.name), state);
       return { ...state, talent: [...state.talent, merged] };
     }
     case "DELETE_TALENT": {
@@ -779,7 +793,7 @@ function applyAction(state, action) {
     case "ADD_PRODUCT": {
       const mx = Math.max(0, ...state.products.map(p => parseInt(p.id.slice(1))));
       const merged = { id: "p" + (mx + 1), name: "New Product", category: "Other", focus: "Medium", hue: "#888888", referenceImage: null, generationStatus: "idle", ...action.data };
-      merged.handle = autoHandle(merged.name);
+      merged.handle = uniqueHandle(autoHandle(merged.name), state);
       return { ...state, products: [...state.products, merged] };
     }
     case "DELETE_PRODUCT": {
@@ -810,7 +824,7 @@ function applyAction(state, action) {
     case "ADD_LOCATION": {
       const mx = Math.max(0, ...state.locations.map(l => parseInt(l.id.slice(1))));
       const merged = { id: "l" + (mx + 1), name: "New Location", handle: "", type: "ai", colors: ["#444", "#555", "#666", "#777"], referenceImage: null, generationStatus: "idle", generatedImage: null, ...action.data };
-      merged.handle = autoHandle(merged.name);
+      merged.handle = uniqueHandle(autoHandle(merged.name), state);
       return { ...state, locations: [...state.locations, merged] };
     }
     case "DELETE_LOCATION": {
@@ -3909,11 +3923,11 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         value={character.note || ""}
         onChange={v => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "note", value: v })}
         placeholder="Describe this character — age, look, energy, wardrobe…"
-        improveContext={{ kind: "character", name: character.name, brand: data.brand?.name }}
+        improveContext={{ kind: "character", name: character.name, brand: data.brand?.name, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== character.name) }}
         currentName={character.name}
         onName={(nm) => {
           dispatch({ type: "UPDATE_TALENT", id: character.id, field: "name", value: nm });
-          if (!character.handle || /^@new/i.test(character.handle)) dispatch({ type: "UPDATE_TALENT", id: character.id, field: "handle", value: deriveHandle(nm) });
+          if (!character.handle || /^@new/i.test(character.handle)) dispatch({ type: "UPDATE_TALENT", id: character.id, field: "handle", value: uniqueHandle(deriveHandle(nm), data, character.id) });
         }}
       />
 
@@ -4682,11 +4696,11 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         value={location.note || ""}
         onChange={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "note", value: v })}
         placeholder="Describe this location — time of day, weather, architecture, atmosphere…"
-        improveContext={{ kind: "location", name: location.name, brand: data.brand?.name }}
+        improveContext={{ kind: "location", name: location.name, brand: data.brand?.name, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== location.name) }}
         currentName={location.name}
         onName={(nm) => {
           dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "name", value: nm });
-          if (!location.handle || /^@new/i.test(location.handle)) dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "handle", value: deriveHandle(nm) });
+          if (!location.handle || /^@new/i.test(location.handle)) dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "handle", value: uniqueHandle(deriveHandle(nm), data, location.id) });
         }}
       />
       <div>
@@ -4912,11 +4926,11 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
         value={product.note || ""}
         onChange={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "note", value: v })}
         placeholder="Describe this element — color, material, shape, key details for product photography…"
-        improveContext={{ kind: "element", name: product.name, category: product.category, brand: data.brand?.name }}
+        improveContext={{ kind: "element", name: product.name, category: product.category, brand: data.brand?.name, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== product.name) }}
         currentName={product.name}
         onName={(nm) => {
           dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "name", value: nm });
-          if (!product.handle || /^@new/i.test(product.handle)) dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "handle", value: deriveHandle(nm) });
+          if (!product.handle || /^@new/i.test(product.handle)) dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "handle", value: uniqueHandle(deriveHandle(nm), data, product.id) });
         }}
       />
       <div>
@@ -5009,10 +5023,10 @@ function deriveHandle(name) {
 // Write/expand an asset's description AND propose a short name for it. Returns
 // { name, description }. Rules differ by kind so the output suits the image
 // pipeline (character = appearance only; location = place; element = prop).
-async function improveDescription({ kind, name, category, brand, current }) {
+async function improveDescription({ kind, name, category, brand, current, existingNames }) {
   const kindLabel = kind === "character" ? "character" : kind === "location" ? "location" : "element / hero prop";
   const rules = kind === "character"
-    ? "Describe APPEARANCE ONLY for a generated reference image: age range, ethnicity (or 'open casting'), build, hair (color/length/style), wardrobe with color + fabric, distinguishing features. Do NOT include expression, pose, mood, or actions — those bias every generated frame."
+    ? "PRESERVE the user's stated intent and spirit EXACTLY — keep their described role / activity / vibe (e.g. 'a runner', 'a surfer', 'a chef') word-for-word in meaning; never swap it for a different activity and never drop it. THEN add concrete appearance detail: age range, ethnicity (or 'open casting'), build, hair (color/length/style), wardrobe with color + fabric, distinguishing features. The character must remain unmistakably what the user described (a runner stays a runner)."
     : kind === "location"
     ? "Describe the place for an establishing shot: setting, architecture, time of day, lighting, weather, key environmental textures and signage. No people."
     : "Describe this hero prop/product for a clean product shot: material, color, shape, finish, branding, distinctive details.";
@@ -5027,7 +5041,7 @@ async function improveDescription({ kind, name, category, brand, current }) {
     parameters: {
       type: "object",
       properties: {
-        name: { type: "string", description: `A concise name — ${nameHint}. If a specific name is already provided, keep/refine it.` },
+        name: { type: "string", description: `A concise name — ${nameHint}. If a specific name is already provided, keep/refine it. Otherwise pick a FRESH, distinct name — never reuse a name already in this project, and avoid the overused defaults (Marcus, Maya, Alex, Chloe, Liam, Mary, Sarah). Draw from a wide range of names/cultures.` },
         description: { type: "string", description: "1-2 tight concrete sentences. No labels, no quotes, no filler adjectives." },
       },
       required: ["name", "description"],
@@ -5036,6 +5050,7 @@ async function improveDescription({ kind, name, category, brand, current }) {
   const messages = [
     { role: "system", content: [
       `You name and describe a ${kindLabel} for an AI image pipeline that generates a reference image from it.`,
+      "CRITICAL: you ENRICH the user's text — you NEVER remove, reverse, or contradict what they already wrote. Whatever role, activity, or intent they gave MUST survive in the result (if they wrote a runner, the output is still unmistakably a runner). You add detail; you do not rewrite their intent.",
       rules,
       `Also propose ${nameHint}.`,
       "Return via propose_asset_details.",
@@ -5045,6 +5060,7 @@ async function improveDescription({ kind, name, category, brand, current }) {
       category ? `Category: ${category}` : null,
       brand ? `Brand context: ${brand}` : null,
       current?.trim() ? `Improve/expand this existing description: ${current.trim()}` : "There's no description yet — write one from the name/category above.",
+      existingNames && existingNames.length ? `Names ALREADY used in this project — do NOT reuse any of these, pick a different one: ${existingNames.join(", ")}.` : null,
     ].filter(Boolean).join("\n") },
   ];
   const { actions } = await chatWithTools(messages, [TOOL]);
