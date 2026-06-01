@@ -22,11 +22,11 @@ import iconNavMoodSvg from "../../../assets/icon-nav-mood.svg?raw";
 // switch so no work is lost.
 
 const PROJECT_SECTION_TABS = [
-  { key: "brand", label: "Brand", icon: "brand" },
   { key: "talent", label: "Characters", icon: "characters" },
   { key: "products", label: "Elements", icon: "elements" },
   { key: "locations", label: "Locations", icon: "locations" },
   { key: "mood", label: "Mood", icon: "mood" },
+  { key: "settings", label: "Project Settings", icon: "brand" },
 ];
 
 const NAV_ICON_PATHS = {
@@ -70,7 +70,7 @@ export function ProjectSidebar({
   onRenameFolder,
   mode = "root",
   activeProjectTitle = "",
-  activeAssetTab = "brand",
+  activeAssetTab = "settings",
   onAssetTabChange,
   onBackToProjects,
   assetCounts = {},

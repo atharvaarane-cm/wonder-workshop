@@ -223,6 +223,72 @@ export function EditBriefDialog({ value, onUpdateMeta, data, onRunRegeneration }
   );
 }
 
+export function BriefSettingsCard({ value, onUpdateMeta, data, onRunRegeneration }) {
+  const [draft, setDraft] = useState(value || "");
+  const [auditOpen, setAuditOpen] = useState(false);
+
+  useEffect(() => { setDraft(value || ""); }, [value]);
+
+  const dirty = draft.trim() !== (value || "").trim();
+  const handleCancel = () => setDraft(value || "");
+  const handleSave = () => {
+    if (!dirty) return;
+    onUpdateMeta("treatment", draft);
+    setAuditOpen(true);
+  };
+
+  return (
+    <>
+      <Card className="rounded-xl p-5">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <SectionIcon name="edit" size={18} color="var(--warm)" />
+            <div style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 500, color: "var(--warm)", lineHeight: 1.2 }}>
+              Brief Settings
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <Button variant="ghost" onClick={handleCancel} disabled={!dirty}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!dirty}
+              onClick={handleSave}
+              title={dirty ? "Save brief and audit changes" : "Make a change to enable Save"}
+            >
+              {dirty ? "Save" : "No changes"}
+            </Button>
+          </div>
+        </div>
+        <label
+          className="mb-2 block font-semibold text-muted-foreground text-xs uppercase tracking-[0.14em]"
+          htmlFor="project-settings-brief"
+        >
+          Brief
+        </label>
+        <Textarea
+          id="project-settings-brief"
+          size="lg"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          placeholder="Write or paste the brief — the spot's setup, characters, tone, and intent."
+          style={{ minHeight: 220, resize: "vertical", lineHeight: 1.7 }}
+        />
+      </Card>
+      {auditOpen && (
+        <RegenerateAuditModal
+          oldBrief={value || ""}
+          newBrief={draft}
+          data={data}
+          onClose={() => setAuditOpen(false)}
+          onRun={(scope, plan) => { setAuditOpen(false); onRunRegeneration?.(scope, plan); }}
+        />
+      )}
+    </>
+  );
+}
+
 // Modal that asks Gemini "given the OLD brief, the NEW brief, and the
 // current project state, what should change?" and presents the result
 // with action buttons. Cancel leaves the brief edit committed but no

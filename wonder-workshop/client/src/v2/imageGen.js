@@ -14,6 +14,14 @@ const RATIO_DIMS = {
   "2.39": { width: 1024, height: 428 },
 };
 
+const IMAGE_REQUEST_TIMEOUT_MS = 140_000;
+
+function timeoutSignal(ms = IMAGE_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, clear: () => clearTimeout(timeout) };
+}
+
 export async function generateImage(prompt, opts = {}) {
   const { ratio = "16:9", referenceImages = [], provider = getImageProvider() } = opts;
   const dims = RATIO_DIMS[ratio] || RATIO_DIMS["16:9"];
@@ -28,11 +36,25 @@ export async function generateImage(prompt, opts = {}) {
         }
       : { prompt, ...dims };
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const timeout = timeoutSignal();
+    let res;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: timeout.signal,
+      });
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        const e = new Error(`Image gen timed out after ${Math.round(IMAGE_REQUEST_TIMEOUT_MS / 1000)}s`);
+        e.status = 408;
+        throw e;
+      }
+      throw err;
+    } finally {
+      timeout.clear();
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");

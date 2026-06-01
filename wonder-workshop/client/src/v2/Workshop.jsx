@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/popover";
 import OnePager from "../components/OnePager.jsx";
 import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
-import { EditBriefDialog } from "./components/BriefPanel.jsx";
+import { BriefSettingsCard } from "./components/BriefPanel.jsx";
 import { GenerateStoryboardButton } from "./components/GenerateStoryboardButton.jsx";
 import { StoryboardFrameCard } from "./components/storyboard/StoryboardFrameCard.jsx";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
@@ -46,9 +46,11 @@ import iconRegenerateSvg from "../assets/icon-regenerate.svg?raw";
 import iconSparkleUrl from "../assets/icon-sparkle.svg";
 import iconStoryboardTitleUrl from "../assets/icon-storyboard-title.svg";
 import iconUnlockedSvg from "../assets/icon-unlocked.svg?raw";
+import iconNavBrandSvg from "../assets/icon-nav-brand.svg?raw";
 import iconNavCharSvg from "../assets/icon-nav-char.svg?raw";
 import iconNavElementsSvg from "../assets/icon-nav-elements.svg?raw";
 import iconNavLocationSvg from "../assets/icon-nav-location.svg?raw";
+import iconNavMoodSvg from "../assets/icon-nav-mood.svg?raw";
 import ratioIcon169Svg from "../assets/ratio-icon-16-9.svg?raw";
 import ratioIcon916Svg from "../assets/ratio-icon-9-16.svg?raw";
 import ratioIcon11Svg from "../assets/ratio-icon-1-1.svg?raw";
@@ -302,7 +304,7 @@ function applyAction(state, action) {
       // typed-in fields (title, client, treatment) override anything
       // the model might guess differently.
       return {
-        ...action.data,
+        ...clearStaleGenerationState(action.data),
         meta: { ...action.data.meta, ...(action.metaOverrides || {}) },
       };
     case "SET_META":
@@ -606,6 +608,35 @@ function countImageUrls(data) {
   }
   if (data.brand?.logo) n++;
   return n;
+}
+
+function clearStaleGenerationState(data) {
+  if (!data) return data;
+  let changed = false;
+  const next = {
+    ...data,
+    frames: (data.frames || []).map(f => {
+      if (f.imageStatus !== "generating") return f;
+      changed = true;
+      return { ...f, imageStatus: f.uploadedImage ? "uploaded" : "error" };
+    }),
+    talent: (data.talent || []).map(t => {
+      if (t.generationStatus !== "generating") return t;
+      changed = true;
+      return { ...t, generationStatus: t.headshot ? "complete" : "error" };
+    }),
+    products: (data.products || []).map(p => {
+      if (p.generationStatus !== "generating") return p;
+      changed = true;
+      return { ...p, generationStatus: p.referenceImage ? "complete" : "error" };
+    }),
+    locations: (data.locations || []).map(l => {
+      if (l.generationStatus !== "generating") return l;
+      changed = true;
+      return { ...l, generationStatus: (l.generatedImage || l.referenceImage) ? "complete" : "error" };
+    }),
+  };
+  return changed ? next : data;
 }
 
 // -- SHARE / EXPORT HELPERS -----------------------------------
@@ -1706,6 +1737,15 @@ const CHAT_SUGGESTION_ICON_SVGS = {
   elements: iconNavElementsSvg,
 };
 
+const SECTION_HEADER_ICON_SVGS = {
+  Brand: iconNavBrandSvg,
+  "Project Settings": iconNavBrandSvg,
+  Characters: iconNavCharSvg,
+  Elements: iconNavElementsSvg,
+  Locations: iconNavLocationSvg,
+  Mood: iconNavMoodSvg,
+};
+
 function ChatSuggestionIcon({ name }) {
   const svg = CHAT_SUGGESTION_ICON_SVGS[name]
     ?.replace("<svg ", '<svg class="size-5" ');
@@ -2461,6 +2501,7 @@ function BrandPanel({ brand, sectionLocked, dispatch }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <SectionHeader
         title="Brand"
+        count={0}
         locked={sectionLocked}
         generating={refetching}
         onToggleLock={() => dispatch({ type: "TOGGLE_SECTION_LOCK", section: "brand" })}
@@ -4025,12 +4066,37 @@ function DescriptionField({ label, value, onChange, placeholder }) {
 // + Lock section toggle. Both buttons are real: auto-generate runs a
 // caller-supplied function, lock toggles data.locks[section].
 
+function SectionTitle({ title, count }) {
+  const svg = SECTION_HEADER_ICON_SVGS[title];
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      minWidth: 0,
+      fontFamily: "var(--f)",
+      fontSize: 14,
+      fontWeight: 500,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      color: "var(--warm)",
+    }}>
+      <span
+        aria-hidden="true"
+        style={{ color: "var(--warm)", width: 24, height: 24, display: "inline-flex", flexShrink: 0, lineHeight: 0 }}
+        dangerouslySetInnerHTML={{ __html: svg || "" }}
+      />
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {title}{count !== undefined ? ` - ${count}` : ""}
+      </span>
+    </div>
+  );
+}
+
 function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, generating, autoGenerateLabel = "Auto-generate" }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-30)" }}>
-        {title}{count !== undefined ? ` · ${count}` : ""}
-      </div>
+      <SectionTitle title={title} count={count} />
       <div style={{ display: "flex", gap: 6 }}>
         {onAutoGenerate && (
           <Button
@@ -4141,7 +4207,23 @@ function HoverBarBtn({ children, title, onClick, disabled, danger, active, accen
 
 // -- ASSET EXPANDED PANEL (scrollable with fade hints) ----------
 
-function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist }) {
+function ProjectSettingsPanel({ data, dispatch, onUpdateMeta, onRunRegeneration }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18, animation: "fadeIn 0.2s ease" }}>
+      <Card className="rounded-xl p-5" style={{ background: "transparent" }}>
+        <BrandPanel brand={data.brand} sectionLocked={!!data.locks?.brand} dispatch={dispatch} />
+      </Card>
+      <BriefSettingsCard
+        value={data.meta?.treatment || ""}
+        onUpdateMeta={onUpdateMeta}
+        data={data}
+        onRunRegeneration={onRunRegeneration}
+      />
+    </div>
+  );
+}
+
+function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, typeKey, onAIAssist, onUpdateMeta, onRunRegeneration }) {
   const scrollRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -4170,11 +4252,14 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
   // generic array-of-cards layout used by Products / Locations).
   // Branch before the items map so the legacy rendering stays
   // untouched for the unbranched tabs.
-  if (activeTab === "brand") {
+  if (activeTab === "settings" || activeTab === "brand") {
     return (
-      <div style={{ position: "relative", animation: "fadeIn 0.2s ease" }}>
-        <BrandPanel brand={data.brand} sectionLocked={!!data.locks?.brand} dispatch={dispatch} />
-      </div>
+      <ProjectSettingsPanel
+        data={data}
+        dispatch={dispatch}
+        onUpdateMeta={onUpdateMeta}
+        onRunRegeneration={onRunRegeneration}
+      />
     );
   }
   if (activeTab === "mood") {
@@ -4206,7 +4291,7 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
     );
   }
 
-  // All known tabs (brand / talent / locations / products / mood) are
+  // All known tabs (settings / talent / locations / products / mood) are
   // branched above. This fallback should never fire in practice — keep
   // a safe empty list so the render doesn't crash if a new tab is
   // added without a panel handler.
@@ -4259,14 +4344,32 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
 // right. Brand Info opens by default. Clicking a tab switches the
 // right pane (no toggle-to-close — something is always selected).
 
-function AssetTabBar({ data, dispatch, activeTab, onAIAssist }) {
+function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onUpdateMeta, onRunRegeneration }) {
   const [expanded, setExpanded] = useState(null);
-  const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
+  const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", settings: "BRAND", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
+
+  if (activeTab === "settings" || activeTab === "brand") {
+    return (
+      <div style={{ marginTop: 20, paddingTop: 16 }}>
+        <AssetExpandedPanel
+          activeTab={activeTab}
+          data={data}
+          dispatch={dispatch}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          typeKey={typeKey}
+          onAIAssist={onAIAssist}
+          onUpdateMeta={onUpdateMeta}
+          onRunRegeneration={onRunRegeneration}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 16 }}>
+    <div style={{ marginTop: 20, paddingTop: 16 }}>
       <Card className="rounded-xl p-5" style={{
-        background: "#141414",
+        background: "transparent",
         minHeight: 220,
         maxHeight: 800,
         overflowY: "auto",
@@ -4279,6 +4382,8 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist }) {
           setExpanded={setExpanded}
           typeKey={typeKey}
           onAIAssist={onAIAssist}
+          onUpdateMeta={onUpdateMeta}
+          onRunRegeneration={onRunRegeneration}
         />
       </Card>
     </div>
@@ -4372,43 +4477,50 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
     setTimeout(() => { didDrag.current = false; }, 50);
   };
   const clickF = (id) => { if (!didDrag.current) onSelectFrame(id); };
+  const isProjectSettings = assetTabOpen === "settings" || assetTabOpen === "brand";
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 24px 32px" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 24px 32px", background: "transparent" }}>
       <Reveal>
         <div>
           {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <SectionIcon name="film" size={11} color="var(--warm-25)" />
-                <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.15em", textTransform: "uppercase" }}>Storyboard</span>
-              </div>
-              <EditableText value={data.meta.title} onChange={v => onUpdateMeta("title", v)}
-                style={{ fontFamily: "var(--f)", fontSize: 32, fontWeight: 700, color: "var(--warm)", letterSpacing: "-0.03em", display: "block", lineHeight: 1.1 }} />
-            </div>
-            <div style={{ paddingTop: 6 }}>
-              <EditBriefDialog
-                value={data.meta.treatment || ""}
-                onUpdateMeta={onUpdateMeta}
-                data={data}
-                onRunRegeneration={onRunRegeneration}
-              />
-            </div>
-          </div>
+	          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+	            <div>
+	              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+	                {isProjectSettings ? (
+	                  <RawSvgIcon svg={iconNavBrandSvg} />
+	                ) : (
+	                  <SectionIcon name="film" size={11} color="var(--warm-25)" />
+	                )}
+	                <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+	                  {isProjectSettings ? "Project Settings" : "Storyboard"}
+	                </span>
+	              </div>
+	              {isProjectSettings ? (
+	                <div style={{ fontFamily: "var(--f)", fontSize: 32, fontWeight: 700, color: "var(--warm)", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+	                  Project Settings
+	                </div>
+	              ) : (
+	                <EditableText value={data.meta.title} onChange={v => onUpdateMeta("title", v)}
+	                  style={{ fontFamily: "var(--f)", fontSize: 32, fontWeight: 700, color: "var(--warm)", letterSpacing: "-0.03em", display: "block", lineHeight: 1.1 }} />
+	              )}
+	            </div>
+	          </div>
 
-          {/* Asset Tab Bar */}
-          <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
-            onAIAssist={onAIAssist} />
+	          {/* Asset Tab Bar */}
+	          <AssetTabBar data={data} dispatch={dispatch} activeTab={assetTabOpen}
+	            onAIAssist={onAIAssist}
+	            onUpdateMeta={onUpdateMeta}
+	            onRunRegeneration={onRunRegeneration} />
 
-          {/* Frame Grid */}
-          {(() => {
+	          {/* Frame Grid */}
+	          {!isProjectSettings && (() => {
             const asp = data.meta.aspect;
             const aspNum = asp.includes(":") ? (() => { const [w,h] = asp.split(":").map(Number); return w/h; })() : parseFloat(asp);
             const aspCSS = asp.includes(":") ? asp.replace(":", "/") : `${asp}/1`;
             const cols = aspNum < 1 ? 4 : 3;
             return (
-          <div style={{ borderTop: "1px solid var(--warm-06)", paddingTop: 20, marginTop: 16 }}>
+          <div style={{ paddingTop: 20, marginTop: 16 }}>
             <div
               onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
               onDrop={onDr}
@@ -4491,7 +4603,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
           })()}
 
           {/* Footer */}
-          <div style={{ borderTop: "1px solid var(--warm-06)", marginTop: 20, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ marginTop: 20, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <WLogo color="var(--warm-10)" size={12} />
             <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 500, color: "var(--warm-15)" }}>Wonder AI</span>
           </div>
@@ -5923,7 +6035,7 @@ export default function WorkshopV2() {
       // empty, the post-mount async effect (further below) hydrates
       // from IndexedDB. DON'T clear the active pointer here — the
       // data might be IDB-only after the persistence refactor.
-      let initialData = activeId ? loadProject(activeId) : null;
+      let initialData = activeId ? clearStaleGenerationState(loadProject(activeId)) : null;
       bootstrap.current = { activeId, data: initialData, shared: false };
     }
   }
@@ -5959,9 +6071,9 @@ export default function WorkshopV2() {
   const [exportOpen, setExportOpen] = useState(false);
   const [highlightedFrames, setHighlightedFrames] = useState(new Set());
   const [chatAssetContext, setChatAssetContext] = useState(null);
-  // Default to "brand" so the asset rail opens with Brand Info visible —
-  // per Logan's left-rail redesign, something is always selected.
-  const [assetTabOpen, setAssetTabOpen] = useState("brand");
+  // Default to Project Settings so project-level settings live away from
+  // the storyboard asset grids.
+  const [assetTabOpen, setAssetTabOpen] = useState("settings");
   const [chatFocusTrigger, setChatFocusTrigger] = useState(0);
   const [theme, setTheme] = useState("dark");
   const isDark = theme === "dark";
@@ -6031,9 +6143,10 @@ export default function WorkshopV2() {
     if (pendingSaveRef.current.debounce) clearTimeout(pendingSaveRef.current.debounce);
     pendingSaveRef.current.debounce = setTimeout(() => {
       const saveId = activeProjectId;
-      const saveData = data;
+      const saveSnapshot = data;
+      const saveData = clearStaleGenerationState(saveSnapshot);
       saveProjectAsync(saveId, saveData).then(ok => {
-        if (activeRef.current !== saveId || dataRef.current !== saveData) return;
+        if (activeRef.current !== saveId || dataRef.current !== saveSnapshot) return;
         if (ok) {
           setSaveStatus("saved");
           setLastSavedAt(Date.now());
@@ -6051,9 +6164,10 @@ export default function WorkshopV2() {
       pendingSaveRef.current.ceiling = setTimeout(() => {
         if (activeRef.current && builtRef.current) {
           const saveId = activeRef.current;
-          const saveData = dataRef.current;
+          const saveSnapshot = dataRef.current;
+          const saveData = clearStaleGenerationState(saveSnapshot);
           saveProjectAsync(saveId, saveData).then(ok => {
-            if (activeRef.current !== saveId || dataRef.current !== saveData) return;
+            if (activeRef.current !== saveId || dataRef.current !== saveSnapshot) return;
             if (ok) {
               setSaveStatus("saved");
               setLastSavedAt(Date.now());
@@ -6079,7 +6193,7 @@ export default function WorkshopV2() {
   useEffect(() => {
     function flushOnUnload() {
       if (activeRef.current && builtRef.current) {
-        saveProjectSync(activeRef.current, dataRef.current);
+        saveProjectSync(activeRef.current, clearStaleGenerationState(dataRef.current));
       }
     }
     window.addEventListener("beforeunload", flushOnUnload);
@@ -6105,7 +6219,7 @@ export default function WorkshopV2() {
     if (!projectId) return;
     if (projectId === activeProjectId && built) return;
     if (activeProjectId && built && activeProjectId !== projectId) {
-      saveProject(activeProjectId, data);
+      saveProject(activeProjectId, clearStaleGenerationState(data));
     }
     let next = loadProject(projectId);
     if (!next) {
@@ -6128,7 +6242,7 @@ export default function WorkshopV2() {
   // Start fresh — save current, clear active, show BriefForm.
   function startNewProject() {
     if (activeProjectId && built) {
-      saveProject(activeProjectId, data);
+      saveProject(activeProjectId, clearStaleGenerationState(data));
     }
     setActiveProjectId(null);
     setActiveProjectIdState(null);
@@ -6139,7 +6253,7 @@ export default function WorkshopV2() {
 
   function handleBackToProjects() {
     if (activeProjectId && built) {
-      saveProject(activeProjectId, data);
+      saveProject(activeProjectId, clearStaleGenerationState(data));
     }
     setBuilt(false);
     setProductionFrameId(null);
@@ -7346,11 +7460,11 @@ export default function WorkshopV2() {
           folders={folders}
           activeProjectId={activeProjectId}
           activeProjectTitle={data.meta?.title || "Untitled"}
-          activeAssetTab={assetTabOpen}
+          activeAssetTab={assetTabOpen === "brand" ? "settings" : assetTabOpen}
           onAssetTabChange={handleToggleAssetTab}
           onBackToProjects={handleBackToProjects}
           assetCounts={{
-            brand: data.brand?.logo ? 1 : 0,
+            settings: data.brand?.logo ? 1 : 0,
             talent: data.talent.length,
             products: data.products.length,
             locations: data.locations.length,
@@ -7406,7 +7520,7 @@ export default function WorkshopV2() {
         position: "relative", zIndex: 100, height: 64, flexShrink: 0,
         display: "grid", gridTemplateColumns: "minmax(0, 1fr) max-content", columnGap: 16, alignItems: "center",
         padding: "0 24px",
-        borderBottom: "1px solid var(--warm-06)", background: "var(--surface)",
+        background: "transparent",
         backdropFilter: "blur(24px) saturate(1.3)", WebkitBackdropFilter: "blur(24px) saturate(1.3)",
         transition: "background 0.4s ease",
       }}>
