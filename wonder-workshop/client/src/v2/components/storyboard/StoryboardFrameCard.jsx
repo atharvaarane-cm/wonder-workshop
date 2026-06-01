@@ -190,7 +190,7 @@ function StoryboardFrameCardComponent({
         />
       </div>
 
-      <div className="relative mx-[-1px] flex flex-1 flex-col overflow-hidden rounded-none border-x border-b border-[#363636] bg-[#191919] shadow-[inset_0px_0px_0px_2px_rgba(255,255,255,0.15)]">
+      <div className="relative flex flex-1 flex-col overflow-hidden rounded-none bg-[#191919]">
         <div
           className="relative shrink-0 overflow-hidden"
           style={{ aspectRatio: aspectCSS }}
