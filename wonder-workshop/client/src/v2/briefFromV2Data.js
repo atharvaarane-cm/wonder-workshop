@@ -26,6 +26,7 @@ export function briefFromV2Data(data) {
   const products = data.products || []
   const locations = data.locations || []
   const frames = data.frames || []
+  const moodBoard = data.moodBoard || []
 
   const brief = {
     title: meta.title || '',
@@ -78,6 +79,10 @@ export function briefFromV2Data(data) {
       name: p.name || '',
       description: p.note || '',
     })),
+    moodBoard: moodBoard.map(m => ({
+      id: m.id,
+      caption: m.caption || '',
+    })),
   }
 
   // Build the images map keyed by OnePager's stable IDs. resolveSlot()
@@ -113,6 +118,10 @@ export function briefFromV2Data(data) {
   frames.forEach((f, i) => {
     const w = wrapImg(f.uploadedImage)
     if (w) images[`shot.${f.id || `idx-${i}`}`] = w
+  })
+  moodBoard.forEach((m, i) => {
+    const w = wrapImg(m.image)
+    if (w) images[`mood.${m.id || `idx-${i}`}`] = w
   })
 
   return { brief, images }
