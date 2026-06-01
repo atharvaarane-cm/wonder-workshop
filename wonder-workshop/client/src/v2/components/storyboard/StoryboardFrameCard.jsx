@@ -151,12 +151,10 @@ function StoryboardFrameCardComponent({
     >
       <div className="pointer-events-none absolute -left-px -top-[3px] h-14 w-[calc(100%+2px)] overflow-hidden">
         <div className="absolute inset-0 bg-[rgba(90,90,90,0.5)]" />
-        <div
-          className="absolute inset-0 opacity-10"
-          style={{
-            background:
-              "radial-gradient(60% 120% at 18% 0%, rgba(255,216,130,0.45), transparent 60%), radial-gradient(70% 120% at 76% 4%, rgba(85,190,255,0.42), transparent 65%)",
-          }}
+        <img
+          alt=""
+          src="/figma-assets/storyboard-card-header-gradient.png"
+          className="absolute inset-0 h-full w-full object-cover opacity-10"
         />
       </div>
 
@@ -178,73 +176,85 @@ function StoryboardFrameCardComponent({
         />
       </div>
 
-      <div
-        className="relative mx-[-1px] shrink-0 overflow-hidden rounded-[12px] border border-[#363636] bg-[#191919] shadow-[inset_0px_0px_0px_2px_rgba(255,255,255,0.15)]"
-        style={{ aspectRatio: aspectCSS }}
-      >
+      <div className="relative mx-[-1px] flex flex-1 flex-col overflow-hidden rounded-[12px] border border-[#363636] bg-[#191919] shadow-[inset_0px_0px_0px_2px_rgba(255,255,255,0.15)]">
         <div
-          className="absolute inset-0"
-          style={{ background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length] }}
-        />
-        {frame.uploadedImage && (
-          <img
-            src={frame.uploadedImage}
-            alt=""
-            onError={handleImageError}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        )}
-        {!frame.uploadedImage && (
+          className="relative shrink-0 overflow-hidden"
+          style={{ aspectRatio: aspectCSS }}
+        >
           <div
             className="absolute inset-0"
-            style={{ background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }}
+            style={{ background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length] }}
           />
-        )}
-        {frame.imageStatus === "generating" && <ShimmerOverlay />}
-        {!frame.uploadedImage && frame.imageStatus !== "generating" && frame.imageStatus !== "error" && onRetry && (
-          <div className="absolute inset-0 z-[3] flex items-center justify-center bg-black/20 p-2.5">
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                onRetry(frame.id);
-              }}
-              className="cursor-pointer rounded-full border border-white/40 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-[0.04em] text-white backdrop-blur-md"
-            >
-              Generate
-            </button>
-          </div>
-        )}
-        {frame.imageStatus === "error" && !frame.uploadedImage && (
-          <div className="absolute inset-0 z-[3] flex flex-col items-center justify-center gap-2 bg-black/40 p-2.5">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-white/90">
-              Generation failed
-            </div>
-            {onRetry && (
+          {frame.uploadedImage && (
+            <img
+              src={frame.uploadedImage}
+              alt=""
+              onError={handleImageError}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
+          {!frame.uploadedImage && (
+            <div
+              className="absolute inset-0"
+              style={{ background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }}
+            />
+          )}
+          {frame.imageStatus === "generating" && <ShimmerOverlay />}
+          {!frame.uploadedImage && frame.imageStatus !== "generating" && frame.imageStatus !== "error" && onRetry && (
+            <div className="absolute inset-0 z-[3] flex items-center justify-center bg-black/20 p-2.5">
               <button
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
                   onRetry(frame.id);
                 }}
-                className="cursor-pointer rounded-full border border-white/40 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-[0.04em] text-white"
+                className="cursor-pointer rounded-full border border-white/40 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-[0.04em] text-white backdrop-blur-md"
               >
-                Retry
+                Generate
               </button>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+          {frame.imageStatus === "error" && !frame.uploadedImage && (
+            <div className="absolute inset-0 z-[3] flex flex-col items-center justify-center gap-2 bg-black/40 p-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-white/90">
+                Generation failed
+              </div>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    onRetry(frame.id);
+                  }}
+                  className="cursor-pointer rounded-full border border-white/40 bg-white/10 px-3 py-1 text-[11px] font-medium tracking-[0.04em] text-white"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
-      <div
-        className="relative z-[1] min-h-[91px] flex-1 px-[23px] pb-3 pt-3 backdrop-blur-[25px]"
-        style={{
-          backgroundImage:
-            "linear-gradient(0deg, rgba(0,0,0,0.74) 0%, rgba(0,0,0,0.733) 6.2698%, rgba(0,0,0,0.714) 12.54%, rgba(0,0,0,0.68) 18.81%, rgba(0,0,0,0.63) 25.079%, rgba(0,0,0,0.57) 31.349%, rgba(0,0,0,0.494) 37.619%, rgba(0,0,0,0.41) 43.889%, rgba(0,0,0,0.33) 50.159%, rgba(0,0,0,0.247) 56.429%, rgba(0,0,0,0.173) 62.698%, rgba(0,0,0,0.11) 68.968%, rgba(0,0,0,0.06) 75.238%, rgba(0,0,0,0) 94.048%)",
-        }}
-      >
-        <div className="line-clamp-3 text-sm font-medium leading-[24.39px] text-white">
-          {renderMentions ? renderMentions(frame.brief, data, { variant: "figmaCard" }) : frame.brief}
+        <div className="relative min-h-[91px] flex-1 overflow-hidden px-[clamp(14px,5.4%,23px)] pb-[clamp(12px,3.2%,18px)] pt-[clamp(12px,3.2%,18px)]">
+          <div className="absolute inset-0 bg-[#191919]" />
+          {frame.uploadedImage && (
+            <img
+              alt=""
+              src={frame.uploadedImage}
+              className="absolute inset-0 h-full w-full scale-110 object-cover opacity-80 blur-[25px]"
+              onError={handleImageError}
+            />
+          )}
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "linear-gradient(0deg, rgba(0,0,0,0.74) 0%, rgba(0,0,0,0.733) 6.2698%, rgba(0,0,0,0.714) 12.54%, rgba(0,0,0,0.68) 18.81%, rgba(0,0,0,0.63) 25.079%, rgba(0,0,0,0.57) 31.349%, rgba(0,0,0,0.494) 37.619%, rgba(0,0,0,0.41) 43.889%, rgba(0,0,0,0.33) 50.159%, rgba(0,0,0,0.247) 56.429%, rgba(0,0,0,0.173) 62.698%, rgba(0,0,0,0.11) 68.968%, rgba(0,0,0,0.06) 75.238%, rgba(0,0,0,0) 94.048%)",
+            }}
+          />
+          <div className="relative line-clamp-3 text-sm font-medium leading-[24.39px] text-white">
+            {renderMentions ? renderMentions(frame.brief, data, { variant: "figmaCard" }) : frame.brief}
+          </div>
         </div>
       </div>
     </Card>

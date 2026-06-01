@@ -58,13 +58,13 @@ import {
   loadProject,
   loadProjectAsync,
   saveProject,
+  saveProjectAsync,
   saveProjectSync,
   deleteProject,
   renameProject,
   setProjectFolder,
   getActiveProjectId,
   setActiveProjectId,
-  migrateLegacyState,
   listFolders,
   createFolder,
   deleteFolder,
@@ -4622,18 +4622,16 @@ function renderMentions(text, data, opts = {}) {
         title={part.asset?.name || part.handle}
         onClick={opts.onMentionClick ? (e => { e.stopPropagation(); opts.onMentionClick(part.asset); }) : undefined}
         style={opts.variant === "figmaCard" ? {
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "6.098px 7.317px",
-          margin: "0 2px",
+          display: "inline",
+          padding: "1px 7.317px 2px",
+          margin: "0 1px",
           borderRadius: 7.317,
           background: "rgba(32,32,32,0.4)",
           color: part.asset?._type === "product" ? "#f1d676" : "#aecff3",
           border: "0",
           fontSize: "1em",
           fontWeight: 500,
-          lineHeight: "1",
+          lineHeight: "inherit",
           cursor: opts.onMentionClick ? "pointer" : "default",
         } : {
           display: "inline-block",
@@ -5973,8 +5971,7 @@ function BriefForm({ onGenerate, generating = false, error = null, folders = [] 
 
 export default function WorkshopV2() {
   // First mount: check for a #share=<base64> URL hash first (read-only
-  // shared brief), then migrate any legacy single-project state, then
-  // resolve the active project id. If a project's already active,
+  // shared brief), then resolve the active project id. If a project's already active,
   // restore its data and jump straight to the OneSheet workspace. If
   // the active ID points at a project whose data blob is missing
   // (corruption, manual localStorage edit, mid-save crash) we clear
@@ -5986,7 +5983,6 @@ export default function WorkshopV2() {
     if (shared) {
       bootstrap.current = { activeId: null, data: shared, shared: true };
     } else {
-      migrateLegacyState();
       let activeId = getActiveProjectId();
       // Sync read of localStorage fallback for instant paint. If
       // empty, the post-mount async effect (further below) hydrates
@@ -6099,14 +6095,18 @@ export default function WorkshopV2() {
     // hold the save off for more than a fraction of a second.
     if (pendingSaveRef.current.debounce) clearTimeout(pendingSaveRef.current.debounce);
     pendingSaveRef.current.debounce = setTimeout(() => {
-      const ok = saveProject(activeProjectId, data);
-      if (ok) {
-        setSaveStatus("saved");
-        setLastSavedAt(Date.now());
-        setProjects(listProjects());
-      } else {
-        setSaveStatus("error");
-      }
+      const saveId = activeProjectId;
+      const saveData = data;
+      saveProjectAsync(saveId, saveData).then(ok => {
+        if (activeRef.current !== saveId || dataRef.current !== saveData) return;
+        if (ok) {
+          setSaveStatus("saved");
+          setLastSavedAt(Date.now());
+          setProjects(listProjects());
+        } else {
+          setSaveStatus("error");
+        }
+      });
       pendingSaveRef.current.debounce = null;
     }, 150);
     // Ceiling — if changes keep coming faster than the debounce can
@@ -6115,12 +6115,18 @@ export default function WorkshopV2() {
     if (!pendingSaveRef.current.ceiling) {
       pendingSaveRef.current.ceiling = setTimeout(() => {
         if (activeRef.current && builtRef.current) {
-          const ok = saveProject(activeRef.current, dataRef.current);
-          if (ok) {
-            setSaveStatus("saved");
-            setLastSavedAt(Date.now());
-            setProjects(listProjects());
-          }
+          const saveId = activeRef.current;
+          const saveData = dataRef.current;
+          saveProjectAsync(saveId, saveData).then(ok => {
+            if (activeRef.current !== saveId || dataRef.current !== saveData) return;
+            if (ok) {
+              setSaveStatus("saved");
+              setLastSavedAt(Date.now());
+              setProjects(listProjects());
+            } else {
+              setSaveStatus("error");
+            }
+          });
         }
         pendingSaveRef.current.ceiling = null;
       }, 2000);
@@ -7283,7 +7289,7 @@ export default function WorkshopV2() {
         // OneSheetExport. briefFromV2Data adapts the data + images shape so
         // OnePager resolves slot images via its existing stable-ID keys.
         const { brief, images } = briefFromV2Data(data);
-        return <OnePager brief={brief} images={images} onClose={() => setExportOpen(false)} />;
+        return <OnePager brief={brief} images={images} projectId={activeProjectId} onClose={() => setExportOpen(false)} />;
       })()}
       {newFolderOpen && (
         <div
