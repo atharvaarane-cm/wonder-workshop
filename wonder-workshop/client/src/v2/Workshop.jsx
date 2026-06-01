@@ -409,7 +409,16 @@ function assetReconcileStatus(asset, type, data) {
   const briefL = brief.toLowerCase();
   const name = String(asset?.name || "").trim();
   const handle = String(asset?.handle || "").toLowerCase().trim();
-  const inBrief = (!!name && mentionsName(brief, name)) || (!!handle && briefL.includes(handle));
+  // Distinctive handle word (e.g. "coke" from @coke). The brief often refers to
+  // an asset by this token even when the exact multi-word NAME isn't present or
+  // is reordered — e.g. element "Coke Bottle" (@coke) vs brief "glass bottle
+  // Coke". Match it whole-word so the asset counts as in-brief. Skip common
+  // stopwords / the @new placeholder so degenerate handles don't always pass.
+  const handleWord = handle.replace(/^@/, "").trim();
+  const HANDLE_STOPWORDS = new Set(["the", "and", "for", "new", "a", "an"]);
+  const inBrief = (!!name && mentionsName(brief, name))
+    || (!!handle && briefL.includes(handle))
+    || (handleWord.length >= 3 && !HANDLE_STOPWORDS.has(handleWord) && mentionsName(brief, handleWord));
   const frames = data?.frames || [];
   const idKey = type === "talent" ? "talentIds" : type === "products" ? "productIds" : null;
   const inStoryboard = frames.some(f => {
