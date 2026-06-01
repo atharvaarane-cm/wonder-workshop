@@ -4210,7 +4210,7 @@ function HoverBarBtn({ children, title, onClick, disabled, danger, active, accen
 function ProjectSettingsPanel({ data, dispatch, onUpdateMeta, onRunRegeneration }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, animation: "fadeIn 0.2s ease" }}>
-      <Card className="rounded-xl p-5 shadow-md" style={{ background: "#202020" }}>
+      <Card className="rounded-xl p-5 shadow-md" style={{ background: "#222222" }}>
         <BrandPanel brand={data.brand} sectionLocked={!!data.locks?.brand} dispatch={dispatch} />
       </Card>
       <BriefSettingsCard
@@ -4347,6 +4347,15 @@ function AssetExpandedPanel({ activeTab, data, dispatch, expanded, setExpanded, 
 function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onUpdateMeta, onRunRegeneration }) {
   const [expanded, setExpanded] = useState(null);
   const typeKey = { talent: "TALENT", products: "PRODUCT", locations: "LOCATION", settings: "BRAND", brand: "BRAND", mood: "MOOD" }[activeTab] || "TALENT";
+  const tintByTab = {
+    talent: "rgba(193, 21, 21, 0.08)",
+    products: "rgba(47, 193, 21, 0.08)",
+    locations: "rgba(193, 133, 21, 0.08)",
+    mood: "rgba(21, 118, 193, 0.08)",
+  };
+  const cardBackground = tintByTab[activeTab]
+    ? `linear-gradient(0deg, ${tintByTab[activeTab]}, ${tintByTab[activeTab]}), #222222`
+    : "#222222";
 
   if (activeTab === "settings" || activeTab === "brand") {
     return (
@@ -4369,7 +4378,7 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onUpdateMeta, onRu
   return (
     <div style={{ marginTop: 20, paddingTop: 16 }}>
       <Card className="rounded-xl p-5 shadow-md" style={{
-        background: "#202020",
+        background: cardBackground,
         minHeight: 220,
         maxHeight: 800,
         overflowY: "auto",
