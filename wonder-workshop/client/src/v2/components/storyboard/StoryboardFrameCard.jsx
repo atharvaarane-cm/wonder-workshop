@@ -29,8 +29,8 @@ const MOVEMENT_TYPES = [
 function ShimmerOverlay({ label = "Generating..." }) {
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center bg-[length:200%_100%] animate-[shimmer_1.5s_infinite_linear]"
-      style={{ backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%)" }}
+      className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center"
+      style={{ backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0) 100%)", backgroundSize: "600px 100%", backgroundRepeat: "no-repeat", animation: "shimmer 1.4s infinite linear" }}
     >
       <span className="rounded-full bg-black/40 px-2 py-[3px] font-semibold text-[9px] uppercase tracking-[0.06em] text-[color:var(--warm-50)] backdrop-blur-md">
         {label}
