@@ -384,6 +384,26 @@ function mentionsName(text, name) {
   catch { return text.toLowerCase().includes(name.toLowerCase()); }
 }
 
+// Does a frame's brief reference this asset via a REAL @-tag? Matches BOTH
+// the short @handle ("@cocacola") AND the @-prefixed full name the brief
+// generator actually emits ("@Coca-Cola Classic can"). These diverge whenever
+// the name has characters the handle strips (a hyphen, spaces) — e.g. the
+// handle "@cocacola" is NOT a substring of "@coca-cola classic can", which made
+// the can false-flag as "not in the storyboard" even though it's tagged in the
+// shots. A bare prose mention (no @) still does NOT count — only @-tags attach a
+// reference image at generation time (keeps the #43 tightening intact).
+function frameTagsAsset(frameBrief, asset) {
+  const fb = String(frameBrief || "");
+  const handle = String(asset?.handle || "").toLowerCase().trim();
+  if (handle && fb.toLowerCase().includes(handle)) return true;
+  const name = String(asset?.name || "").trim();
+  if (name) {
+    try { if (new RegExp("@" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(fb)) return true; }
+    catch { if (fb.toLowerCase().includes("@" + name.toLowerCase())) return true; }
+  }
+  return false;
+}
+
 function assetReconcileStatus(asset, type, data) {
   const brief = String(data?.meta?.treatment || "");
   const briefL = brief.toLowerCase();
@@ -394,13 +414,12 @@ function assetReconcileStatus(asset, type, data) {
   const idKey = type === "talent" ? "talentIds" : type === "products" ? "productIds" : null;
   const inStoryboard = frames.some(f => {
     const fb = String(f?.brief || "");
-    const fbL = fb.toLowerCase();
     // Talent / products count as "in the storyboard" only via a REAL structured
     // reference — the @handle in a frame, or an id link. A loose prose mention
     // of the name does NOT count (it isn't @-tagged, so image-gen won't attach
     // its reference). This is why a just-added element whose name happens to
     // appear in the brief still flags until it's properly woven in.
-    if (handle && fbL.includes(handle)) return true;
+    if (frameTagsAsset(fb, asset)) return true;
     if (idKey && (f[idKey] || []).includes(asset.id)) return true;
     // Locations have no @handle and aren't id-tagged in prose, so they DO match
     // by name (plus the locationId set by AUTO_DETECT once they're woven in).
@@ -966,10 +985,12 @@ function applyAction(state, action) {
     case "AUTO_DETECT_MENTIONS": {
       return { ...state, frames: state.frames.map(f => {
         const briefLower = f.brief.toLowerCase();
-        // Guard empty handles: "".includes-style matching would otherwise tag
-        // EVERY frame (briefLower.includes("") is always true).
-        const mentionedTalent = state.talent.filter(t => t.handle && briefLower.includes(t.handle.toLowerCase())).map(t => t.id);
-        const mentionedProducts = state.products.filter(p => p.handle && briefLower.includes(p.handle.toLowerCase())).map(p => p.id);
+        // Link by @handle OR the @-prefixed full name (frameTagsAsset) — the
+        // brief generator tags by name ("@Coca-Cola Classic can"), not the short
+        // handle, so handle-only matching missed them (and the reference image
+        // never attached). frameTagsAsset guards empty handles internally.
+        const mentionedTalent = state.talent.filter(t => frameTagsAsset(f.brief, t)).map(t => t.id);
+        const mentionedProducts = state.products.filter(p => frameTagsAsset(f.brief, p)).map(p => p.id);
         // Link a location by handle OR name → set the frame's single locationId.
         // Locations aren't @-tagged like talent/products, so without this they
         // never link to a frame (and never count as "in storyboard"). Preserve
@@ -7518,13 +7539,10 @@ export default function WorkshopV2() {
     const frame = (current.frames || []).find(f => f.id === frameId);
     if (!frame) return;
     const aspect = current.meta?.aspect || "16:9";
-    const briefLower = (frame.brief || "").toLowerCase();
-    const handles = {
-      talent: (current.talent || []).map(t => ({ id: t.id, handle: (t.handle || "").toLowerCase(), img: t.headshot })),
-      products: (current.products || []).map(p => ({ id: p.id, handle: (p.handle || "").toLowerCase(), img: p.referenceImage })),
-    };
-    const talentIds = handles.talent.filter(h => h.handle && briefLower.includes(h.handle)).map(h => h.id);
-    const productIds = handles.products.filter(h => h.handle && briefLower.includes(h.handle)).map(h => h.id);
+    // Match by @handle OR @-prefixed name so refs attach for assets the brief
+    // tags by name (e.g. "@Coca-Cola Classic can" → @cocacola).
+    const talentIds = (current.talent || []).filter(t => frameTagsAsset(frame.brief, t)).map(t => t.id);
+    const productIds = (current.products || []).filter(p => frameTagsAsset(frame.brief, p)).map(p => p.id);
     const locationId = frame.locationId || (current.locations?.[0]?.id ?? null);
     const refs = [];
     for (const tid of talentIds) {
@@ -8119,18 +8137,13 @@ export default function WorkshopV2() {
     // requests in parallel. We run with concurrency=3 + a single retry
     // on 429 with a short delay, which empirically keeps every frame
     // successful instead of seeing 7+ silent 429 failures.
-    const handles = {
-      talent: initialData.talent.map(t => ({ id: t.id, handle: (t.handle || "").toLowerCase() })),
-      products: initialData.products.map(p => ({ id: p.id, handle: (p.handle || "").toLowerCase() })),
-    };
     const heroProductIds = (initialData.products || []).filter(p => /high/i.test(p.focus || "")).map(p => p.id);
     let frameSuccess = 0;
     let frameFail = 0;
     const frameTasks = (initialData.frames || []).map(f => async () => {
       dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "generating" });
-      const briefLower = (f.brief || "").toLowerCase();
-      const talentIds = handles.talent.filter(h => h.handle && briefLower.includes(h.handle)).map(h => h.id);
-      const productIds = handles.products.filter(h => h.handle && briefLower.includes(h.handle)).map(h => h.id);
+      const talentIds = initialData.talent.filter(t => frameTagsAsset(f.brief, t)).map(t => t.id);
+      const productIds = initialData.products.filter(p => frameTagsAsset(f.brief, p)).map(p => p.id);
       const locationId = f.locationId || (initialData.locations[0]?.id ?? null);
       const refs = [];
       for (const tid of talentIds) { const u = generated.talent.get(tid); if (u) refs.push(u); }
