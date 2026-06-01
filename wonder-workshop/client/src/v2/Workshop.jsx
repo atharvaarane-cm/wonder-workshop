@@ -502,7 +502,7 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
             padding: "9px 16px", borderRadius: 8, cursor: "pointer",
             background: "transparent", border: "1px solid var(--warm-12)",
             color: "var(--warm-50)", outline: "none", fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
-          }}>Dismiss</button>
+          }}>Keep editing</button>
           <button
             disabled={state.loading || !!state.error || !state.suggestion}
             onClick={() => onApply({ newBrief: brief, frameEdits: edits.filter(fe => chosen[fe.frameNumber]), newFrames: adds })}
@@ -3923,7 +3923,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack 
         value={character.note || ""}
         onChange={v => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "note", value: v })}
         placeholder="Describe this character — age, look, energy, wardrobe…"
-        improveContext={{ kind: "character", name: character.name, brand: data.brand?.name, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== character.name) }}
+        improveContext={{ kind: "character", name: character.name, brand: data.brand?.name, projectBrief: data.meta?.treatment, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== character.name) }}
         currentName={character.name}
         onName={(nm) => {
           dispatch({ type: "UPDATE_TALENT", id: character.id, field: "name", value: nm });
@@ -4696,7 +4696,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
         value={location.note || ""}
         onChange={v => dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "note", value: v })}
         placeholder="Describe this location — time of day, weather, architecture, atmosphere…"
-        improveContext={{ kind: "location", name: location.name, brand: data.brand?.name, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== location.name) }}
+        improveContext={{ kind: "location", name: location.name, brand: data.brand?.name, projectBrief: data.meta?.treatment, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== location.name) }}
         currentName={location.name}
         onName={(nm) => {
           dispatch({ type: "UPDATE_LOCATION", id: location.id, field: "name", value: nm });
@@ -4926,7 +4926,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack }) {
         value={product.note || ""}
         onChange={v => dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "note", value: v })}
         placeholder="Describe this element — color, material, shape, key details for product photography…"
-        improveContext={{ kind: "element", name: product.name, category: product.category, brand: data.brand?.name, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== product.name) }}
+        improveContext={{ kind: "element", name: product.name, category: product.category, brand: data.brand?.name, projectBrief: data.meta?.treatment, existingNames: [...data.talent, ...data.products, ...data.locations].map(a => a.name).filter(n => n && n !== product.name) }}
         currentName={product.name}
         onName={(nm) => {
           dispatch({ type: "UPDATE_PRODUCT", id: product.id, field: "name", value: nm });
@@ -5023,7 +5023,7 @@ function deriveHandle(name) {
 // Write/expand an asset's description AND propose a short name for it. Returns
 // { name, description }. Rules differ by kind so the output suits the image
 // pipeline (character = appearance only; location = place; element = prop).
-async function improveDescription({ kind, name, category, brand, current, existingNames }) {
+async function improveDescription({ kind, name, category, brand, current, existingNames, projectBrief }) {
   const kindLabel = kind === "character" ? "character" : kind === "location" ? "location" : "element / hero prop";
   const rules = kind === "character"
     ? "PRESERVE the user's stated intent and spirit EXACTLY — keep their described role / activity / vibe (e.g. 'a runner', 'a surfer', 'a chef') word-for-word in meaning; never swap it for a different activity and never drop it. THEN add concrete appearance detail: age range, ethnicity (or 'open casting'), build, hair (color/length/style), wardrobe with color + fabric, distinguishing features. The character must remain unmistakably what the user described (a runner stays a runner)."
@@ -5051,15 +5051,17 @@ async function improveDescription({ kind, name, category, brand, current, existi
     { role: "system", content: [
       `You name and describe a ${kindLabel} for an AI image pipeline that generates a reference image from it.`,
       "CRITICAL: you ENRICH the user's text — you NEVER remove, reverse, or contradict what they already wrote. Whatever role, activity, or intent they gave MUST survive in the result (if they wrote a runner, the output is still unmistakably a runner). You add detail; you do not rewrite their intent.",
+      "STAY ON-THEME with the project. Keep the asset consistent with the spot's setting and tone — do NOT introduce clashing elements (e.g. no neon signs in a sunny daytime beach spot). When there's little to go on, infer plausibly FROM THE PROJECT CONTEXT, not at random.",
       rules,
       `Also propose ${nameHint}.`,
       "Return via propose_asset_details.",
     ].join("\n") },
     { role: "user", content: [
+      projectBrief ? `PROJECT CONTEXT (the spot this asset belongs to — match its setting/tone): ${projectBrief}` : null,
       name ? `Current name (may be a placeholder like "New Product"): ${name}` : null,
       category ? `Category: ${category}` : null,
       brand ? `Brand context: ${brand}` : null,
-      current?.trim() ? `Improve/expand this existing description: ${current.trim()}` : "There's no description yet — write one from the name/category above.",
+      current?.trim() ? `Improve/expand this existing description: ${current.trim()}` : "There's no description yet — write one that fits the project context above.",
       existingNames && existingNames.length ? `Names ALREADY used in this project — do NOT reuse any of these, pick a different one: ${existingNames.join(", ")}.` : null,
     ].filter(Boolean).join("\n") },
   ];
@@ -7457,10 +7459,14 @@ export default function WorkshopV2() {
       const u = l?.generatedImage || l?.referenceImage;
       if (u) refs.push(u);
     }
-    for (const pid of productIds) {
+    // Attach @-mentioned products PLUS any High-focus element (a High-focus
+    // element is meant to appear throughout, so ride it along on every frame
+    // for cross-shot consistency) — deduped.
+    const heroProductIds = (current.products || []).filter(p => /high/i.test(p.focus || "")).map(p => p.id);
+    for (const pid of [...new Set([...productIds, ...heroProductIds])]) {
       const p = current.products.find(x => x.id === pid);
       const u = p?.referenceImage;
-      if (u) refs.push(u);
+      if (u && !refs.includes(u)) refs.push(u);
     }
     markPending(`frame.${frameId}`);
     dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId, status: "generating" });
@@ -8026,21 +8032,23 @@ export default function WorkshopV2() {
     // on 429 with a short delay, which empirically keeps every frame
     // successful instead of seeing 7+ silent 429 failures.
     const handles = {
-      talent: initialData.talent.map(t => ({ id: t.id, handle: t.handle.toLowerCase() })),
-      products: initialData.products.map(p => ({ id: p.id, handle: p.handle.toLowerCase() })),
+      talent: initialData.talent.map(t => ({ id: t.id, handle: (t.handle || "").toLowerCase() })),
+      products: initialData.products.map(p => ({ id: p.id, handle: (p.handle || "").toLowerCase() })),
     };
+    const heroProductIds = (initialData.products || []).filter(p => /high/i.test(p.focus || "")).map(p => p.id);
     let frameSuccess = 0;
     let frameFail = 0;
     const frameTasks = (initialData.frames || []).map(f => async () => {
       dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "generating" });
       const briefLower = (f.brief || "").toLowerCase();
-      const talentIds = handles.talent.filter(h => briefLower.includes(h.handle)).map(h => h.id);
-      const productIds = handles.products.filter(h => briefLower.includes(h.handle)).map(h => h.id);
+      const talentIds = handles.talent.filter(h => h.handle && briefLower.includes(h.handle)).map(h => h.id);
+      const productIds = handles.products.filter(h => h.handle && briefLower.includes(h.handle)).map(h => h.id);
       const locationId = f.locationId || (initialData.locations[0]?.id ?? null);
       const refs = [];
       for (const tid of talentIds) { const u = generated.talent.get(tid); if (u) refs.push(u); }
-      if (locationId) { const u = generated.locations.get(locationId); if (u) refs.push(u); }
-      for (const pid of productIds) { const u = generated.products.get(pid); if (u) refs.push(u); }
+      if (locationId) { const u = generated.locations.get(locationId); if (u && !refs.includes(u)) refs.push(u); }
+      // @-mentioned products + any High-focus element (rides along every frame).
+      for (const pid of [...new Set([...productIds, ...heroProductIds])]) { const u = generated.products.get(pid); if (u && !refs.includes(u)) refs.push(u); }
       try {
         const url = await withRetry(() => generateImage(framePrompt(f, initialData.talent, initialData.products), { ratio: aspect, referenceImages: refs }));
         dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });

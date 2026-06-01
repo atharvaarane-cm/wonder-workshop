@@ -242,5 +242,10 @@ export function framePrompt(frame, talent = [], products = []) {
     if (low.length) parts.push(`${low.join(" and ")} ${low.length === 1 ? "is a supporting element — present in the scene but not featured" : "are supporting elements — present but not featured"}`);
     if (parts.length) elemWeight = ` Element emphasis: ${parts.join("; ")}.`;
   }
-  return `${description}${shotType}${camera}.${weighting}${elemWeight} Cinematic film still, photorealistic, narrative production photography.`;
+  // Reference adherence — the call attaches reference images for the
+  // characters, location, and products. The model tends to drift (a beach
+  // becomes a park, the branded can becomes a generic one), so instruct it to
+  // MATCH those references exactly and keep the same setting across shots.
+  const adherence = " IMPORTANT: match the provided reference images exactly — the same character faces and wardrobe, the SAME location/setting (do not change the environment — if the reference is a beach, stay on that beach), and the exact product packaging/branding shown. Do not invent a different place or substitute generic products.";
+  return `${description}${shotType}${camera}.${weighting}${elemWeight}${adherence} Cinematic film still, photorealistic, narrative production photography.`;
 }
