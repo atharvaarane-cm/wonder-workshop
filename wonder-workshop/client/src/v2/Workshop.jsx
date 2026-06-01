@@ -4466,8 +4466,17 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
               // typed a description and didn't know how to generate the image).
               <>
                 <SectionIcon name="sparkle" size={18} color="var(--warm-45)" />
-                <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, marginTop: 5, color: "var(--warm-50)" }}>Generate {label.toLowerCase()}</div>
-                <div style={{ fontFamily: "var(--f)", fontSize: 8.5, fontWeight: 400, marginTop: 2, color: "var(--warm-25)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Click to generate</div>
+                <div style={{ display: "flex", gap: 6, marginTop: 7, justifyContent: "center" }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); if (!generating && !locked) handleRegen(); }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 7, cursor: "pointer", background: "var(--warm-08)", border: "1px solid var(--warm-12)", color: "var(--warm-55)", outline: "none", fontFamily: "var(--f)", fontSize: 10, fontWeight: 600 }}
+                  ><SectionIcon name="sparkle" size={10} color="currentColor" /> Generate</button>
+                  <button
+                    onClick={e => { e.stopPropagation(); fileRef.current?.click(); }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 7, cursor: "pointer", background: "transparent", border: "1px solid var(--warm-12)", color: "var(--warm-45)", outline: "none", fontFamily: "var(--f)", fontSize: 10, fontWeight: 600 }}
+                  >↑ Upload</button>
+                </div>
+                <div style={{ fontFamily: "var(--f)", fontSize: 8.5, fontWeight: 400, marginTop: 6, color: "var(--warm-25)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Generate or upload your own</div>
               </>
             )}
           </div>
