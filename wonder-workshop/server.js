@@ -52,7 +52,14 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: 'At least one user/assistant message required' });
   }
 
-  const history = convo.slice(0, -1).map(m => ({
+  // Gemini requires the history to START with a 'user' role — drop any leading
+  // assistant messages (the chat seeds an opening agent line). Parity with
+  // api/chat.js; without this, local chat 500s where prod works (Court #5).
+  let rawHistory = convo.slice(0, -1);
+  while (rawHistory.length && rawHistory[0].role === 'assistant') {
+    rawHistory = rawHistory.slice(1);
+  }
+  const history = rawHistory.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
