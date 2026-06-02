@@ -355,7 +355,7 @@ function computeOrphans(data) {
     const handle = String(r.handle || "").toLowerCase().trim();
     // Re-created? then it's a live asset again, not an orphan.
     if ((name && liveNames.has(name)) || (handle && liveHandles.has(handle))) continue;
-    const hit = (s) => (handle && s.includes(handle)) || (name && s.includes(name));
+    const hit = (s) => (handle && handleMatches(s, handle)) || (name && mentionsName(s, name));
     const inBrief = hit(brief);
     const frameNumbers = frames.filter(f => hit(String(f.brief || "").toLowerCase())).map(f => f.number);
     if (inBrief || frameNumbers.length) items.push({ type: r.type, name: r.name, handle: r.handle, inBrief, frameNumbers });
@@ -392,6 +392,20 @@ function buildReconcileContext(d, assets) {
 
 // Whole-word match so a name isn't counted via a coincidental substring
 // ("ball" inside "volleyball", "Sam" inside "sample").
+// Match an @handle as a whole token so a short handle ("@sam") doesn't also
+// match a longer one ("@sample"). The leading "@" bounds the start; the
+// trailing (?![a-z0-9_]) bounds the end. Replaces fragile includes() matching
+// that let short handles attach to the wrong asset (Court's review #10).
+function handleMatches(text, handle) {
+  const h = String(handle || "").toLowerCase().trim();
+  if (!h) return false;
+  try {
+    return new RegExp(h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-z0-9_])", "i").test(String(text || ""));
+  } catch {
+    return String(text || "").toLowerCase().includes(h);
+  }
+}
+
 function mentionsName(text, name) {
   if (!name) return false;
   try { return new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(text); }
@@ -409,7 +423,7 @@ function mentionsName(text, name) {
 function frameTagsAsset(frameBrief, asset) {
   const fb = String(frameBrief || "");
   const handle = String(asset?.handle || "").toLowerCase().trim();
-  if (handle && fb.toLowerCase().includes(handle)) return true;
+  if (handle && handleMatches(fb, handle)) return true;
   const name = String(asset?.name || "").trim();
   if (name) {
     try { if (new RegExp("@" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(fb)) return true; }
@@ -431,7 +445,7 @@ function assetReconcileStatus(asset, type, data) {
   const handleWord = handle.replace(/^@/, "").trim();
   const HANDLE_STOPWORDS = new Set(["the", "and", "for", "new", "a", "an"]);
   const inBrief = (!!name && mentionsName(brief, name))
-    || (!!handle && briefL.includes(handle))
+    || (!!handle && handleMatches(brief, handle))
     || (handleWord.length >= 3 && !HANDLE_STOPWORDS.has(handleWord) && mentionsName(brief, handleWord));
   const frames = data?.frames || [];
   const idKey = type === "talent" ? "talentIds" : type === "products" ? "productIds" : null;
@@ -1036,8 +1050,8 @@ function applyAction(state, action) {
         // never link to a frame (and never count as "in storyboard"). Preserve
         // the existing locationId when nothing in the text matches.
         const mloc = state.locations.find(l =>
-          (l.handle && briefLower.includes(l.handle.toLowerCase())) ||
-          (l.name && l.name.trim() && briefLower.includes(l.name.toLowerCase())),
+          (l.handle && handleMatches(briefLower, l.handle.toLowerCase())) ||
+          (l.name && l.name.trim() && mentionsName(briefLower, l.name.toLowerCase())),
         );
         return { ...f, talentIds: mentionedTalent, productIds: mentionedProducts, locationId: mloc ? mloc.id : f.locationId };
       })};
