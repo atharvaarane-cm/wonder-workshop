@@ -152,13 +152,14 @@ app.post('/api/image-gemini', async (req, res) => {
     },
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${IMAGE_GEMINI_KEY}`;
+  // Key via header, not query string (parity with api/image-gemini.js).
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent`;
 
   let geminiRes;
   try {
     geminiRes = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': IMAGE_GEMINI_KEY },
       body: JSON.stringify(body),
     });
   } catch (err) {

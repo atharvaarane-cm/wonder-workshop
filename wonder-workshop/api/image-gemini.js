@@ -22,6 +22,21 @@ const RATIO_MAP = {
   '21:9': '16:9',
 }
 
+// SSRF guard for server-fetched reference images: require https and reject
+// loopback / private / link-local hosts (incl. the cloud metadata IP). Not a
+// bulletproof defense (DNS rebinding exists) but closes the easy holes.
+function isSafeRemoteImageUrl(raw) {
+  let u
+  try { u = new URL(raw) } catch { return false }
+  if (u.protocol !== 'https:') return false
+  const host = u.hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return false
+  if (/^(127\.|10\.|169\.254\.|192\.168\.|0\.)/.test(host)) return false
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false
+  if (host === '::1' || host.startsWith('fe80') || host.startsWith('fc') || host.startsWith('fd')) return false
+  return true
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
@@ -57,10 +72,24 @@ export default async function handler(req, res) {
         mimeType = match[1]
         base64 = match[2]
       } else {
-        const r = await fetch(refUrl)
+        // Remote URL — guard against SSRF (flagged in Court's review): only
+        // https, no internal/link-local hosts, bounded time + size, and it
+        // must actually be an image. Anything off-policy is skipped.
+        if (!isSafeRemoteImageUrl(refUrl)) continue
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 8000)
+        let r
+        try {
+          r = await fetch(refUrl, { signal: controller.signal })
+        } finally {
+          clearTimeout(timer)
+        }
         if (!r.ok) continue
-        mimeType = r.headers.get('content-type') || 'image/png'
+        const ct = r.headers.get('content-type') || ''
+        if (!ct.startsWith('image/')) continue
         const buf = Buffer.from(await r.arrayBuffer())
+        if (buf.length > 10 * 1024 * 1024) continue // cap at ~10MB
+        mimeType = ct
         base64 = buf.toString('base64')
       }
       parts.push({ inlineData: { mimeType, data: base64 } })
@@ -78,13 +107,15 @@ export default async function handler(req, res) {
     },
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+  // Auth via the x-goog-api-key HEADER, not a ?key= query string — keys in
+  // URLs leak through proxy/CDN/access logs (flagged in Court's review).
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
 
   let geminiRes
   try {
     geminiRes = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify(body),
     })
   } catch (err) {
