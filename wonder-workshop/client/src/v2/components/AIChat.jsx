@@ -247,6 +247,37 @@ function currentSrcForSlot(slotKey, data) {
   return null;
 }
 
+// Shared version-history thumbnail strip — used for both a focused asset
+// image slot and a selected storyboard frame. Shows every saved version;
+// the one currently live is ringed; click a thumbnail to make it live.
+// Hidden below 2 versions (a single image isn't a history).
+function VersionGrid({ versions, currentSrc, onPick }) {
+  if (!versions || versions.length < 2) return null;
+  return (
+    <div style={{ marginBottom: 10, borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", padding: "10px 12px" }}>
+      <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+        Versions
+        <span style={{ padding: "1px 6px", borderRadius: 999, background: "var(--warm-08)", color: "var(--warm-50)", fontSize: 9, letterSpacing: 0 }}>{versions.length}</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 6 }}>
+        {versions.map((v, i) => {
+          const active = v.src && v.src === currentSrc;
+          return (
+            <button
+              key={(v.src || "") + i}
+              onClick={() => onPick(v.src)}
+              title={`Version ${i + 1}${active ? " (current)" : ""}`}
+              style={{ position: "relative", aspectRatio: "1/1", padding: 0, borderRadius: 7, overflow: "hidden", cursor: "pointer", background: "var(--warm-06)", border: active ? "2px solid var(--accent, #43a3fd)" : "2px solid transparent", transition: "border-color 0.15s" }}
+            >
+              <img src={v.src} alt={`Version ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // -- AI CHAT PANEL (with @ mentions + asset context + improve button) --
 
 export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending, regenerating, reconcileCount = 0, onReconcileAll, orphanCount = 0, onCleanupOrphans }) {
@@ -518,35 +549,28 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
             <FrameContext frame={selectedFrame} data={data} onDismiss={onDismissFrame} onOpenProduction={onOpenProduction} />
           </div>
         )}
+        {/* Frame version history — flip between every render of this frame so
+            you can compare (e.g. a lens/shot-type change before vs after).
+            Clicking a thumbnail makes it the live frame image. */}
+        {selectedFrame && (
+          <VersionGrid
+            versions={data.versionHistory?.[`frame.${selectedFrame.id}`] || []}
+            currentSrc={selectedFrame.uploadedImage}
+            onPick={src => dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: selectedFrame.id, dataUrl: src })}
+          />
+        )}
         {assetContextResolved?.asset && (
           <div style={{ marginBottom: 10 }}>
             <AssetContext asset={assetContextResolved.asset} type={assetContextResolved.type} thumb={focusedSlot?.currentSrc || assetContextResolved.thumb} slotLabel={focusedSlot?.slotLabel} onDismiss={onDismissAssetContext} />
           </div>
         )}
-        {/* Version tracker — when a specific image is focused, show every saved
-            version of it. Click a thumbnail to make it the live version. */}
-        {focusedSlot && focusedSlot.versions.length > 1 && (
-          <div style={{ marginBottom: 10, borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", padding: "10px 12px" }}>
-            <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-              Versions
-              <span style={{ padding: "1px 6px", borderRadius: 999, background: "var(--warm-08)", color: "var(--warm-50)", fontSize: 9, letterSpacing: 0 }}>{focusedSlot.versions.length}</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 6 }}>
-              {focusedSlot.versions.map((v, i) => {
-                const active = v.src && v.src === focusedSlot.currentSrc;
-                return (
-                  <button
-                    key={(v.src || "") + i}
-                    onClick={() => window.dispatchEvent(new CustomEvent("ww-set-active-version", { detail: { slotKey: focusedSlot.slotKey, src: v.src } }))}
-                    title={`Version ${i + 1}${active ? " (current)" : ""}`}
-                    style={{ position: "relative", aspectRatio: "1/1", padding: 0, borderRadius: 7, overflow: "hidden", cursor: "pointer", background: "var(--warm-06)", border: active ? "2px solid var(--accent, #43a3fd)" : "2px solid transparent", transition: "border-color 0.15s" }}
-                  >
-                    <img src={v.src} alt={`Version ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        {/* Asset image version history — same strip, for a focused image slot. */}
+        {focusedSlot && (
+          <VersionGrid
+            versions={focusedSlot.versions}
+            currentSrc={focusedSlot.currentSrc}
+            onPick={src => window.dispatchEvent(new CustomEvent("ww-set-active-version", { detail: { slotKey: focusedSlot.slotKey, src } }))}
+          />
         )}
         {/* Pending frame changes → Regenerate. Each control you change in the
             frame editor stages a bullet here; Regenerate rebuilds the image. */}

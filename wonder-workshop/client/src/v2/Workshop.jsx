@@ -716,8 +716,12 @@ const MAX_VERSIONS_PER_SLOT = 12;
 function appendVersion(history, slotKey, src) {
   if (!slotKey || !src) return history || {};
   const prev = (history || {})[slotKey] || [];
-  const last = prev[prev.length - 1];
-  if (last && last.src === src) return history || {}; // dedupe
+  // Dedupe against the WHOLE history, not just the last entry: selecting an
+  // older version to make it live writes the image field again, which routes
+  // back through here — without this it would append a duplicate thumbnail
+  // and, over repeated flips, push genuinely-old versions out of the cap.
+  // Real regenerations always produce a new URL, so they still append.
+  if (prev.some(v => v.src === src)) return history || {};
   const next = [...prev, { src, createdAt: Date.now() }];
   const trimmed = next.length > MAX_VERSIONS_PER_SLOT ? next.slice(-MAX_VERSIONS_PER_SLOT) : next;
   return { ...(history || {}), [slotKey]: trimmed };
