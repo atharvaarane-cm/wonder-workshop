@@ -8143,7 +8143,7 @@ export default function WorkshopV2() {
       // Kick off auto image generation in the background. Don't await
       // it here — we want the OneSheet to be interactive immediately
       // and have images stream in as they complete.
-      autoGenerateAssets(v2Data, meta.aspect, { imagePrompts });
+      autoGenerateAssets(v2Data, meta.aspect, { imagePrompts, projectId: newId });
     } catch (e) {
       console.error("[handleGenerate] failed", e);
       setGenerationError(e?.message || "Generation failed. Try again.");
@@ -8161,6 +8161,16 @@ export default function WorkshopV2() {
   // Errors are surfaced via the reducer's "error" generationStatus on
   // the affected asset — generation keeps moving for everything else.
   async function autoGenerateAssets(initialData, aspect, opts = {}) {
+    // Cancellation guard (Court's review #7): this pipeline keeps firing image
+    // gens for ~a minute. If the user switches to / starts a different project
+    // mid-run, drop the in-flight results — otherwise they'd land on whatever
+    // project is now open (asset/frame IDs are reused across projects, so a
+    // result for project A's "f1" would overwrite project B's "f1").
+    const genProjectId = opts.projectId ?? activeRef.current;
+    const applyGen = (action) => {
+      if (activeRef.current !== genProjectId) return;
+      dispatch(action);
+    };
     const generated = {
       talent: new Map(),
       locations: new Map(),
@@ -8227,22 +8237,22 @@ export default function WorkshopV2() {
     const phaseA1 = [];
     for (const t of initialData.talent || []) {
       phaseA1.push((async () => {
-        dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
+        applyGen({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "generating" });
         try {
           // Retry here too — the primary is the prerequisite for ALL of a
           // character's other 7 views, so a single dropped 429 here used to
           // wipe out the whole character (this was why Zoe generated nothing).
           const url = await withRetry(() => generateImage(talentPrompt(t), { ratio: "1:1" }));
           generated.talent.set(t.id, url);
-          dispatch({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
+          applyGen({ type: "UPDATE_TALENT", id: t.id, field: "headshot", value: url });
           // The primary also fills the FRONT headshot slot in the
           // detail-view 4-up grid — both fields point at the same image.
-          dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
-          dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
+          applyGen({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: "front", url });
+          applyGen({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "complete" });
           log("info", `talent primary done: ${t.name}`);
         } catch (err) {
           log("error", `talent primary failed: ${t.name}`, { error: String(err?.message || err) });
-          dispatch({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
+          applyGen({ type: "UPDATE_TALENT_GENERATION", id: t.id, status: "error" });
         } finally {
           markDone(`talent.${t.id}.primary`);
           // The front-slot key shares its pending lifecycle with the primary.
@@ -8268,7 +8278,7 @@ export default function WorkshopV2() {
               ratio: "1:1",
               referenceImages: [primaryRef],
             }));
-            dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: view, url });
+            applyGen({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: t.id, slot: view, url });
             log("info", `headshot done: ${t.name} / ${view}`);
           } catch (err) {
             log("error", `headshot failed: ${t.name} / ${view}`, { error: String(err?.message || err) });
@@ -8284,7 +8294,7 @@ export default function WorkshopV2() {
               ratio: "3:4",
               referenceImages: [primaryRef],
             }));
-            dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: t.id, slot: view, url });
+            applyGen({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: t.id, slot: view, url });
             log("info", `fullbody done: ${t.name} / ${view}`);
           } catch (err) {
             log("error", `fullbody failed: ${t.name} / ${view}`, { error: String(err?.message || err) });
@@ -8305,15 +8315,15 @@ export default function WorkshopV2() {
 
     for (const l of initialData.locations || []) {
       phaseA2Tasks.push(async () => {
-        dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
+        applyGen({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
         try {
           const url = await withRetry(() => generateImage(locationPrompt(l), { ratio: aspect }));
           generated.locations.set(l.id, url);
-          dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
+          applyGen({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
           log("info", `location done: ${l.name}`);
         } catch (err) {
           log("error", `location failed: ${l.name}`, { error: String(err?.message || err) });
-          dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
+          applyGen({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "error" });
         } finally {
           markDone(`location.${l.id}`);
         }
@@ -8321,15 +8331,15 @@ export default function WorkshopV2() {
     }
     for (const p of initialData.products || []) {
       phaseA2Tasks.push(async () => {
-        dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
+        applyGen({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
         try {
           const url = await withRetry(() => generateImage(productPrompt(p), { ratio: "1:1" }));
           generated.products.set(p.id, url);
-          dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
+          applyGen({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "complete", image: url });
           log("info", `product done: ${p.name}`);
         } catch (err) {
           log("error", `product failed: ${p.name}`, { error: String(err?.message || err) });
-          dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
+          applyGen({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "error" });
         } finally {
           markDone(`product.${p.id}`);
         }
@@ -8342,7 +8352,7 @@ export default function WorkshopV2() {
       phaseA2Tasks.push(async () => {
         try {
           const url = await withRetry(() => generateImage(moodPrompt(prompt), { ratio: "1:1" }));
-          dispatch({
+          applyGen({
             type: "ADD_MOOD",
             data: { caption: String(prompt).slice(0, 80), image: url },
           });
@@ -8369,7 +8379,7 @@ export default function WorkshopV2() {
     let frameSuccess = 0;
     let frameFail = 0;
     const frameTasks = (initialData.frames || []).map(f => async () => {
-      dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "generating" });
+      applyGen({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "generating" });
       const talentIds = initialData.talent.filter(t => frameTagsAsset(f.brief, t)).map(t => t.id);
       const productIds = initialData.products.filter(p => frameTagsAsset(f.brief, p)).map(p => p.id);
       const locationId = f.locationId || (initialData.locations[0]?.id ?? null);
@@ -8380,12 +8390,12 @@ export default function WorkshopV2() {
       for (const pid of [...new Set([...productIds, ...heroProductIds])]) { const u = generated.products.get(pid); if (u && !refs.includes(u)) refs.push(u); }
       try {
         const url = await withRetry(() => generateImage(framePrompt(f, initialData.talent, initialData.products), { ratio: aspect, referenceImages: refs }));
-        dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
+        applyGen({ type: "UPLOAD_FRAME_IMAGE", frameId: f.id, dataUrl: url });
         frameSuccess++;
         log("info", `frame done: ${f.number}`);
       } catch (err) {
         log("error", `frame failed: ${f.number}`, { error: String(err?.message || err) });
-        dispatch({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "error" });
+        applyGen({ type: "SET_FRAME_IMAGE_STATUS", frameId: f.id, status: "error" });
         frameFail++;
       } finally {
         markDone(`frame.${f.id}`);
