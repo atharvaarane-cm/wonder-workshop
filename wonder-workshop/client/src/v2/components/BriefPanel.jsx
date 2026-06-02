@@ -3,6 +3,7 @@ import { SectionIcon } from "../Workshop.jsx";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import iconBriefSvg from "../../assets/icon-brief.svg?raw";
 import {
   AlertDialog,
   AlertDialogDescription,
@@ -12,6 +13,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+function BriefIcon({ size = 18, color = "currentColor" }) {
+  const svg = iconBriefSvg.replace(
+    /<svg[^>]*>/,
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">`
+  );
+  return (
+    <span
+      aria-hidden="true"
+      style={{ color, width: size, height: size, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 0 }}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
 
 // Brief panel — squished mask-faded preview in display mode; click to
 // expand the textarea up to 600px. Tracks a local draft so the parent
@@ -278,7 +293,7 @@ export function EditBriefDialog({
           }
           onClick={() => setDraft(value || "")}
         >
-          <SectionIcon name="edit" size={12} color="currentColor" />
+          <BriefIcon size={12} color="currentColor" />
           Edit Brief
         </AlertDialogTrigger>
         <AlertDialogPopup className="max-w-2xl dark:border-white/18 dark:bg-[#181818] dark:shadow-[0_20px_60px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.045)]">
@@ -384,7 +399,7 @@ export function BriefSettingsCard({
               minWidth: 0,
             }}
           >
-            <SectionIcon name="edit" size={18} color="var(--warm)" />
+            <BriefIcon size={26} color="var(--warm)" />
             <div
               style={{
                 fontFamily: "var(--f)",
