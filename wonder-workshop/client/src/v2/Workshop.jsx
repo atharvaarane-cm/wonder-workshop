@@ -44,6 +44,7 @@ import {
   normalizeHomeBackground,
 } from "./components/home/HomeBackground.jsx";
 import { StoryboardFrameCard } from "./components/storyboard/StoryboardFrameCard.jsx";
+import { DEMO_PROJECT_META, cloneDemoProjectData, isDemoProjectId } from "./demoProject.js";
 import { V2Lightbox } from "./components/V2Lightbox.jsx";
 import { generateImage, upscaleImage, talentPrompt, locationPrompt, productPrompt, framePrompt, talentHeadshotPrompt, talentFullBodyPrompt, moodPrompt } from "./imageGen.js";
 import iconAspectUrl from "../assets/icon-aspect.svg";
@@ -6955,7 +6956,9 @@ export default function WorkshopV2() {
       // empty, the post-mount async effect (further below) hydrates
       // from IndexedDB. DON'T clear the active pointer here — the
       // data might be IDB-only after the persistence refactor.
-      let initialData = activeId ? clearStaleGenerationState(loadProject(activeId)) : null;
+      let initialData = activeId
+        ? (isDemoProjectId(activeId) ? cloneDemoProjectData() : clearStaleGenerationState(loadProject(activeId)))
+        : null;
       bootstrap.current = { activeId, data: initialData, shared: false };
     }
   }
@@ -7027,6 +7030,7 @@ export default function WorkshopV2() {
   // actual image data after first paint.
   useEffect(() => {
     if (!activeProjectId) return;
+    if (isDemoProjectId(activeProjectId)) return; // demo is code-defined — nothing to hydrate from IDB
     let cancelled = false;
     loadProjectAsync(activeProjectId).then(full => {
       if (cancelled || !full) return;
@@ -7076,6 +7080,7 @@ export default function WorkshopV2() {
 
   useEffect(() => {
     if (!built || !activeProjectId) return;
+    if (isDemoProjectId(activeProjectId)) return; // static demo is read-only / code-defined — never auto-save it
     setSaveStatus("saving");
     // Short debounce — let a couple rapid dispatches batch, but never
     // hold the save off for more than a fraction of a second.
@@ -7131,7 +7136,7 @@ export default function WorkshopV2() {
   // way to guarantee data is persisted before the JS context dies.
   useEffect(() => {
     function flushOnUnload() {
-      if (activeRef.current && builtRef.current) {
+      if (activeRef.current && builtRef.current && !isDemoProjectId(activeRef.current)) {
         saveProjectSync(activeRef.current, clearStaleGenerationState({ ...dataRef.current, chatHistory: chatRef.current }));
       }
     }
@@ -7300,11 +7305,13 @@ export default function WorkshopV2() {
   async function switchToProject(projectId) {
     if (!projectId) return;
     if (projectId === activeProjectId && built) return;
-    if (activeProjectId && built && activeProjectId !== projectId) {
+    // Don't persist the static demo when leaving it (it's read-only/code-defined).
+    if (activeProjectId && built && activeProjectId !== projectId && !isDemoProjectId(activeProjectId)) {
       saveProject(activeProjectId, clearStaleGenerationState({ ...data, chatHistory: chatMessages }));
     }
-    let next = loadProject(projectId);
-    if (!next) {
+    // The static demo's data lives in code (with images in /public), not storage.
+    let next = isDemoProjectId(projectId) ? cloneDemoProjectData() : loadProject(projectId);
+    if (!next && !isDemoProjectId(projectId)) {
       // localStorage didn't have it — pull the full blob from IDB.
       try { next = await loadProjectAsync(projectId); } catch {}
     }
@@ -7324,7 +7331,7 @@ export default function WorkshopV2() {
 
   // Start fresh — save current, clear active, show BriefForm.
   function startNewProject() {
-    if (activeProjectId && built) {
+    if (activeProjectId && built && !isDemoProjectId(activeProjectId)) {
       saveProject(activeProjectId, clearStaleGenerationState({ ...data, chatHistory: chatMessages }));
     }
     setActiveProjectId(null);
@@ -7336,7 +7343,7 @@ export default function WorkshopV2() {
   }
 
   function handleBackToProjects() {
-    if (activeProjectId && built) {
+    if (activeProjectId && built && !isDemoProjectId(activeProjectId)) {
       saveProject(activeProjectId, clearStaleGenerationState({ ...data, chatHistory: chatMessages }));
     }
     setBuilt(false);
@@ -7346,6 +7353,7 @@ export default function WorkshopV2() {
   }
 
   function handleDeleteProject(projectId) {
+    if (isDemoProjectId(projectId)) return; // the static demo isn't a real, deletable project
     // If we're deleting the active project, clear pending auto-saves
     // FIRST so a ceiling timeout doesn't fire seconds later and recreate
     // the project from in-memory state. Then clear active state. Then
@@ -7373,6 +7381,7 @@ export default function WorkshopV2() {
     setProjects(listProjects());
   }
   function handleRenameProject(projectId, newName) {
+    if (isDemoProjectId(projectId)) return; // the static demo's name is fixed
     renameProject(projectId, newName);
     setProjects(listProjects());
   }
@@ -8923,7 +8932,7 @@ export default function WorkshopV2() {
         <ProjectSidebar
           homeBackdrop={!built}
           mode={built && activeProjectId ? "project" : "root"}
-          projects={projects}
+          projects={[DEMO_PROJECT_META, ...projects.filter(p => p.id !== DEMO_PROJECT_META.id)]}
           folders={folders}
           activeProjectId={activeProjectId}
           activeProjectTitle={data.meta?.title || "Untitled"}
