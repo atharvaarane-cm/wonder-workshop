@@ -1,11 +1,26 @@
 import { useEffect, useState } from 'react'
 import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  ChevronDownIcon,
+  ClapperboardIcon,
+  MapPinIcon,
+  PaletteIcon,
+  ShirtIcon,
+  SlidersHorizontalIcon,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Menu,
+  MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from '@/components/ui/menu'
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../utils/characterPrompts.js'
 import { expandMentions } from '../utils/mentions.js'
 import { exportPptx } from '../utils/pptxExport.js'
@@ -24,10 +39,138 @@ const SECTION_OPTIONS = {
 const SECTION_VALUES = Object.keys(SECTION_OPTIONS)
 const DEFAULT_SECTIONS = ['headerFooter', 'storyboard', 'treatment', 'locations', 'talent']
 
-function renderSectionSelectValue(value) {
-  if (!value?.length) return 'No sections'
-  const first = SECTION_OPTIONS[value[0]] || ''
-  return value.length > 1 ? `${first} (+${value.length - 1} more)` : first
+const VIEW_PRESET_GROUPS = [
+  {
+    id: 'viewAll',
+    label: 'View All',
+    icon: SlidersHorizontalIcon,
+    presets: [
+      {
+        id: 'productionAll',
+        label: 'Production Sheet',
+        triggerLabel: 'View: All +4 more',
+        description: 'Header, storyboard, treatment, locations, talent',
+        sections: DEFAULT_SECTIONS,
+      },
+      {
+        id: 'fullAll',
+        label: 'Full Sheet',
+        triggerLabel: 'View: All Sections',
+        description: 'Every printable section',
+        sections: SECTION_VALUES,
+      },
+      {
+        id: 'coreThree',
+        label: '3 Sections',
+        triggerLabel: 'View: 3 Sections',
+        description: 'Header, storyboard, treatment',
+        sections: ['headerFooter', 'storyboard', 'treatment'],
+      },
+    ],
+  },
+  {
+    id: 'art',
+    label: 'Art Dept',
+    icon: PaletteIcon,
+    presets: [
+      {
+        id: 'artBoard',
+        label: 'Art Dept (3)',
+        triggerLabel: 'View: Art Dept (3)',
+        description: 'Talent, elements, mood',
+        sections: ['talent', 'elements', 'mood'],
+      },
+      {
+        id: 'artBuild',
+        label: 'Build Reference',
+        triggerLabel: 'View: Art Build',
+        description: 'Locations, elements, mood',
+        sections: ['locations', 'elements', 'mood'],
+      },
+    ],
+  },
+  {
+    id: 'camera',
+    label: 'Camera Dept',
+    icon: ClapperboardIcon,
+    presets: [
+      {
+        id: 'cameraStoryboard',
+        label: 'Storyboard Images',
+        triggerLabel: 'View: Camera Dept',
+        description: 'Storyboard only',
+        sections: ['storyboard'],
+      },
+      {
+        id: 'cameraContext',
+        label: 'Shot Context',
+        triggerLabel: 'View: Camera Dept (3)',
+        description: 'Header, storyboard, treatment',
+        sections: ['headerFooter', 'storyboard', 'treatment'],
+      },
+    ],
+  },
+  {
+    id: 'location',
+    label: 'Location Dept',
+    icon: MapPinIcon,
+    presets: [
+      {
+        id: 'locationScout',
+        label: 'Scout Sheet',
+        triggerLabel: 'View: Location Dept',
+        description: 'Locations plus storyboard context',
+        sections: ['headerFooter', 'storyboard', 'locations'],
+      },
+      {
+        id: 'locationOnly',
+        label: 'Locations Only',
+        triggerLabel: 'View: Locations',
+        description: 'Location thumbnails only',
+        sections: ['locations'],
+      },
+    ],
+  },
+  {
+    id: 'wardrobe',
+    label: 'Wardrobe Dept',
+    icon: ShirtIcon,
+    presets: [
+      {
+        id: 'wardrobeTalent',
+        label: 'Wardrobe Dept (3)',
+        triggerLabel: 'View: Wardrobe Dept (3)',
+        description: 'Talent, elements, mood',
+        sections: ['talent', 'elements', 'mood'],
+      },
+      {
+        id: 'wardrobeTalentOnly',
+        label: 'Talent Only',
+        triggerLabel: 'View: Talent',
+        description: 'Talent references only',
+        sections: ['talent'],
+      },
+    ],
+  },
+]
+
+const VIEW_PRESETS = VIEW_PRESET_GROUPS.flatMap(group => group.presets.map(preset => ({
+  ...preset,
+  groupLabel: group.label,
+})))
+
+function sameSections(a = [], b = []) {
+  if (a.length !== b.length) return false
+  const set = new Set(a)
+  return b.every(value => set.has(value))
+}
+
+function getViewTriggerLabel(value) {
+  const preset = VIEW_PRESETS.find(option => sameSections(value, option.sections))
+  if (preset) return preset.triggerLabel
+  if (!value?.length) return 'View: No Sections'
+  if (value.length === 1) return `View: ${SECTION_OPTIONS[value[0]] || '1 Section'}`
+  return `View: ${value.length} Sections`
 }
 
 // Resolve a generated image src by trying the stable slot ID first, then
@@ -181,6 +324,18 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
   const [treatmentLoading, setTreatmentLoading] = useState(false)
   const [visibleSections, setVisibleSections] = useState(DEFAULT_SECTIONS)
   const isVisible = (section) => visibleSections.includes(section)
+  const viewTriggerLabel = getViewTriggerLabel(visibleSections)
+
+  function applyViewPreset(sections) {
+    setVisibleSections(sections)
+  }
+
+  function toggleSection(section, checked) {
+    setVisibleSections(current => {
+      if (checked) return current.includes(section) ? current : [...current, section]
+      return current.filter(value => value !== section)
+    })
+  }
 
   // Storyboard frames — stable ID per shot.id, legacy prompt as fallback.
   const shotFrames = shots.map((shot, idx) => {
@@ -323,23 +478,60 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
                 Full detail
               </button>
             </div>
-            <Select
-              aria-label="Select export sheet sections"
-              value={visibleSections}
-              onValueChange={setVisibleSections}
-              multiple
-            >
-              <SelectTrigger className="op-section-select-trigger" size="sm">
-                <SelectValue>{renderSectionSelectValue}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup alignItemWithTrigger={false}>
-                {SECTION_VALUES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {SECTION_OPTIONS[value]}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button
+                    aria-label="Select export sheet view"
+                    className="op-view-menu-trigger"
+                    size="sm"
+                    variant="outline"
+                  />
+                }
+              >
+                <span className="op-view-menu-trigger-label">{viewTriggerLabel}</span>
+                <ChevronDownIcon aria-hidden="true" className="size-4" />
+              </MenuTrigger>
+              <MenuPopup align="start" sideOffset={6} className="op-view-menu-popup">
+                <MenuGroup>
+                  <MenuGroupLabel>Departments</MenuGroupLabel>
+                  {VIEW_PRESET_GROUPS.map((group) => {
+                    const Icon = group.icon
+                    return (
+                      <MenuSub key={group.id}>
+                        <MenuSubTrigger>
+                          <Icon aria-hidden="true" />
+                          {group.label}
+                        </MenuSubTrigger>
+                        <MenuSubPopup className="op-view-menu-popup">
+                          {group.presets.map((preset) => (
+                            <MenuItem key={preset.id} onClick={() => applyViewPreset(preset.sections)}>
+                              <span className="op-view-preset-copy">
+                                <span>{preset.label}</span>
+                                <span>{preset.description}</span>
+                              </span>
+                            </MenuItem>
+                          ))}
+                        </MenuSubPopup>
+                      </MenuSub>
+                    )
+                  })}
+                </MenuGroup>
+                <MenuSeparator />
+                <MenuGroup>
+                  <MenuGroupLabel>Custom sections</MenuGroupLabel>
+                  {SECTION_VALUES.map((value) => (
+                    <MenuCheckboxItem
+                      key={value}
+                      checked={visibleSections.includes(value)}
+                      onCheckedChange={(checked) => toggleSection(value, checked)}
+                    >
+                      {SECTION_OPTIONS[value]}
+                    </MenuCheckboxItem>
+                  ))}
+                </MenuGroup>
+              </MenuPopup>
+            </Menu>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="onepager-print-btn" onClick={handleExportPptx} disabled={exportingPptx}>

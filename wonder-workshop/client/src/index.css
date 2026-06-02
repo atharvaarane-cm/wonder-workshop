@@ -4398,3 +4398,63 @@ select:-webkit-autofill {
     @apply bg-background text-foreground; }
   html {
     @apply font-sans; } }
+
+/* Export-by-department view menu (ported from Court ckizer 46d82d5 — OnePager VIEW_PRESET_GROUPS) */
+.op-view-menu-trigger {
+  width: 230px;
+  min-width: 230px;
+  justify-content: space-between;
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.1) !important;
+  color: #fff !important;
+}
+.op-view-menu-trigger:hover,
+.op-view-menu-trigger[data-pressed] {
+  background: rgba(255,255,255,0.16) !important;
+}
+.op-view-menu-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.op-view-menu-popup {
+  min-width: 230px;
+  background: #1b1b1b !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #f5f5f5 !important;
+}
+.op-view-menu-popup [data-slot="menu-label"] {
+  color: rgba(255,255,255,0.44);
+}
+.op-view-menu-popup [data-slot="menu-item"],
+.op-view-menu-popup [data-slot="menu-sub-trigger"],
+.op-view-menu-popup [data-slot="menu-checkbox-item"] {
+  color: rgba(255,255,255,0.9);
+}
+.op-view-menu-popup [data-slot="menu-item"][data-highlighted],
+.op-view-menu-popup [data-slot="menu-sub-trigger"][data-highlighted],
+.op-view-menu-popup [data-slot="menu-sub-trigger"][data-popup-open],
+.op-view-menu-popup [data-slot="menu-checkbox-item"][data-highlighted] {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.op-view-menu-popup [data-slot="menu-separator"] {
+  background: rgba(255,255,255,0.1);
+}
+.op-view-preset-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.op-view-preset-copy span:first-child {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.94);
+}
+.op-view-preset-copy span:last-child {
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(255,255,255,0.44);
+}

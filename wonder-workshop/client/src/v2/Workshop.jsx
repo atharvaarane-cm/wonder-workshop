@@ -649,6 +649,16 @@ function ReconcileModal({ state, frames, onClose, onApply }) {
   );
 }
 
+// Persist the AI chat drawer's open/closed state across reloads (ported from
+// Court ckizer b6de969). NOTE: that commit also restyled AssetContext — we do
+// NOT take that half; main's AssetContext is newer (thumbnails + slot labels).
+const AI_CHAT_DRAWER_STORAGE_KEY = "ww-v2-ai-chat-drawer";
+function readAIChatDrawerOpenPreference() {
+  if (typeof window === "undefined") return true;
+  try { return window.localStorage.getItem(AI_CHAT_DRAWER_STORAGE_KEY) !== "closed"; }
+  catch { return true; }
+}
+
 const INITIAL_STATE = {
   meta: {
     title: "THE LONG RUN",
@@ -6986,7 +6996,7 @@ export default function WorkshopV2() {
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(readAIChatDrawerOpenPreference);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   // Chat history persists per-project: seeded from the project's saved
@@ -7018,6 +7028,12 @@ export default function WorkshopV2() {
   const [reconcile, setReconcile] = useState(null); // modal state
 
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
+
+  // Remember the AI chat drawer's open/closed state across reloads.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem(AI_CHAT_DRAWER_STORAGE_KEY, sidebarOpen ? "open" : "closed"); } catch {}
+  }, [sidebarOpen]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
