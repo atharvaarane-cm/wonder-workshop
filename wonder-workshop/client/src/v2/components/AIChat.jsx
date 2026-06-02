@@ -261,26 +261,52 @@ function currentSrcForSlot(slotKey, data) {
 // image slot and a selected storyboard frame. Shows every saved version;
 // the one currently live is ringed; click a thumbnail to make it live.
 // Hidden below 2 versions (a single image isn't a history).
-function VersionGrid({ versions, currentSrc, onPick }) {
+function VersionGrid({ versions, currentSrc, onPick, onDelete, maxHeight = 168 }) {
+  // Which thumbnail is mid-delete-confirm. Deleting a version is destructive,
+  // so the × flips the thumb into an inline "Delete? ✓ ✕" confirm right here
+  // in the chat box rather than removing it instantly.
+  const [confirmSrc, setConfirmSrc] = useState(null);
   if (!versions || versions.length < 2) return null;
   return (
-    <div style={{ marginBottom: 10, borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", padding: "10px 12px" }}>
+    <div style={{ borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", padding: "10px 12px" }}>
       <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
         Versions
         <span style={{ padding: "1px 6px", borderRadius: 999, background: "var(--warm-08)", color: "var(--warm-50)", fontSize: 9, letterSpacing: 0 }}>{versions.length}</span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 6, maxHeight, overflowY: "auto" }}>
         {versions.map((v, i) => {
           const active = v.src && v.src === currentSrc;
+          const confirming = confirmSrc === v.src;
           return (
-            <button
+            <div
               key={(v.src || "") + i}
-              onClick={() => onPick(v.src)}
-              title={`Version ${i + 1}${active ? " (current)" : ""}`}
-              style={{ position: "relative", aspectRatio: "1/1", padding: 0, borderRadius: 7, overflow: "hidden", cursor: "pointer", background: "var(--warm-06)", border: active ? "2px solid var(--accent, #43a3fd)" : "2px solid transparent", transition: "border-color 0.15s" }}
+              onMouseLeave={() => { if (confirming) setConfirmSrc(null); }}
+              style={{ position: "relative", aspectRatio: "1/1", borderRadius: 7, overflow: "hidden", background: "var(--warm-06)", border: active ? "2px solid var(--accent, #43a3fd)" : "2px solid transparent", transition: "border-color 0.15s" }}
             >
-              <img src={v.src} alt={`Version ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-            </button>
+              <img
+                src={v.src}
+                alt={`Version ${i + 1}`}
+                onClick={() => { if (!confirming) onPick(v.src); }}
+                title={`Version ${i + 1}${active ? " (current)" : ""}`}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: confirming ? "default" : "pointer" }}
+              />
+              {onDelete && !confirming && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setConfirmSrc(v.src); }}
+                  title="Delete this version"
+                  style={{ position: "absolute", top: 3, right: 3, width: 16, height: 16, borderRadius: 4, border: "none", background: "rgba(0,0,0,0.55)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, lineHeight: 1, padding: 0 }}
+                >×</button>
+              )}
+              {confirming && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.74)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  <span style={{ fontFamily: "var(--f)", fontSize: 8, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>DELETE?</span>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(v.src); setConfirmSrc(null); }} title="Yes, delete" style={{ width: 20, height: 17, borderRadius: 4, border: "none", background: "#c0392b", color: "#fff", cursor: "pointer", fontSize: 10, lineHeight: 1, padding: 0 }}>✓</button>
+                    <button onClick={(e) => { e.stopPropagation(); setConfirmSrc(null); }} title="Cancel" style={{ width: 20, height: 17, borderRadius: 4, border: "1px solid rgba(255,255,255,0.4)", background: "transparent", color: "#fff", cursor: "pointer", fontSize: 10, lineHeight: 1, padding: 0 }}>✕</button>
+                  </div>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -452,8 +478,34 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
   // user always knows how much of a bulk generation is left.
   const genStats = usePendingStats();
 
+  // Version history of whatever's focused (a frame, or a specific image slot).
+  // Pinned to the TOP of the panel — it can hold up to a dozen renders, so it
+  // gets its own scrollable region rather than crowding the composer.
+  const frameVersionKey = selectedFrame ? `frame.${selectedFrame.id}` : null;
+  const frameVersions = frameVersionKey ? (data.versionHistory?.[frameVersionKey] || []) : [];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {selectedFrame && frameVersions.length > 1 && (
+        <div style={{ flexShrink: 0, borderBottom: "1px solid var(--warm-06)", padding: "12px 16px" }}>
+          <VersionGrid
+            versions={frameVersions}
+            currentSrc={selectedFrame.uploadedImage}
+            onPick={src => dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: selectedFrame.id, dataUrl: src })}
+            onDelete={src => dispatch({ type: "REMOVE_VERSION", slotKey: frameVersionKey, src })}
+          />
+        </div>
+      )}
+      {focusedSlot && focusedSlot.versions.length > 1 && (
+        <div style={{ flexShrink: 0, borderBottom: "1px solid var(--warm-06)", padding: "12px 16px" }}>
+          <VersionGrid
+            versions={focusedSlot.versions}
+            currentSrc={focusedSlot.currentSrc}
+            onPick={src => window.dispatchEvent(new CustomEvent("ww-set-active-version", { detail: { slotKey: focusedSlot.slotKey, src } }))}
+            onDelete={src => dispatch({ type: "REMOVE_VERSION", slotKey: focusedSlot.slotKey, src })}
+          />
+        </div>
+      )}
       {/* Messages — bottom-aligned like text messages, centered when empty */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px", display: "flex", flexDirection: "column", gap: 12, justifyContent: hasUserMessages ? "flex-end" : "center" }}>
         {hasUserMessages ? (
@@ -559,28 +611,10 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
             <FrameContext frame={selectedFrame} data={data} onDismiss={onDismissFrame} onOpenProduction={onOpenProduction} />
           </div>
         )}
-        {/* Frame version history — flip between every render of this frame so
-            you can compare (e.g. a lens/shot-type change before vs after).
-            Clicking a thumbnail makes it the live frame image. */}
-        {selectedFrame && (
-          <VersionGrid
-            versions={data.versionHistory?.[`frame.${selectedFrame.id}`] || []}
-            currentSrc={selectedFrame.uploadedImage}
-            onPick={src => dispatch({ type: "UPLOAD_FRAME_IMAGE", frameId: selectedFrame.id, dataUrl: src })}
-          />
-        )}
         {assetContextResolved?.asset && (
           <div style={{ marginBottom: 10 }}>
             <AssetContext asset={assetContextResolved.asset} type={assetContextResolved.type} thumb={focusedSlot?.currentSrc || assetContextResolved.thumb} slotLabel={focusedSlot?.slotLabel} onDismiss={onDismissAssetContext} />
           </div>
-        )}
-        {/* Asset image version history — same strip, for a focused image slot. */}
-        {focusedSlot && (
-          <VersionGrid
-            versions={focusedSlot.versions}
-            currentSrc={focusedSlot.currentSrc}
-            onPick={src => window.dispatchEvent(new CustomEvent("ww-set-active-version", { detail: { slotKey: focusedSlot.slotKey, src } }))}
-          />
         )}
         {/* Pending frame changes → Regenerate. Each control you change in the
             frame editor stages a bullet here; Regenerate rebuilds the image. */}

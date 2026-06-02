@@ -793,6 +793,15 @@ function applyAction(state, action) {
         frames: state.frames.map(f => f.id === action.frameId ? { ...f, uploadedImage: action.dataUrl, imageStatus: "uploaded" } : f),
         versionHistory: appendVersion(state.versionHistory, `frame.${action.frameId}`, action.dataUrl),
       };
+    // Remove one saved version from a slot's history (the version-tracker's
+    // per-thumbnail delete). Only touches the history log — the live image
+    // (the slot's own field) is untouched, even if it was that version.
+    case "REMOVE_VERSION": {
+      const { slotKey, src } = action;
+      if (!slotKey || !src || !state.versionHistory?.[slotKey]) return state;
+      const next = state.versionHistory[slotKey].filter(v => v.src !== src);
+      return { ...state, versionHistory: { ...state.versionHistory, [slotKey]: next } };
+    }
     case "ADD_FRAME": {
       const maxId = Math.max(0, ...state.frames.map(f => parseInt(f.id.slice(1))));
       const nf = {
@@ -3396,15 +3405,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
           </div>
 
           <div className="mt-5 flex border-t border-white/10 pt-5">
-            <Button
-              variant="destructive-outline"
-              size="xs"
-              className="w-fit gap-1.5"
-              onClick={() => onDeleteFrame(frame.id)}
-            >
-              <SectionIcon name="trash" size={12} color="#ff6b6b" />
-              Delete Frame
-            </Button>
+            <ConfirmAction label="Delete Frame" variant="danger" onConfirm={() => onDeleteFrame(frame.id)} />
           </div>
         </Card>
         </div>
