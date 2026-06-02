@@ -793,8 +793,14 @@ function applyAction(state, action) {
       };
     case "SET_META":
       return { ...state, meta: { ...state.meta, ...action.meta } };
-    case "UPDATE_META":
+    case "UPDATE_META": {
+      // Whitelist meta fields so a chat tool call (or any dispatch) can't write
+      // an arbitrary key into meta — reducer-side defense, even if the tool
+      // schema's enum is bypassed/hallucinated (Court's review #9).
+      const META_FIELDS = new Set(["title", "treatment", "client", "format", "aspect"]);
+      if (!META_FIELDS.has(action.field)) return state;
       return { ...state, meta: { ...state.meta, [action.field]: action.value } };
+    }
     case "UPDATE_FRAME":
       return { ...state, frames: state.frames.map(f => f.id === action.frameId ? { ...f, [action.field]: action.value } : f) };
     case "UPDATE_FRAME_CAMERA": {
@@ -995,8 +1001,12 @@ function applyAction(state, action) {
     }
     case "PRUNE_DELETED_REFS":
       return { ...state, deletedRefs: action.refs || [] };
-    case "UPDATE_BRAND":
+    case "UPDATE_BRAND": {
+      // Whitelist brand fields (same rationale as UPDATE_META, Court #9).
+      const BRAND_FIELDS = new Set(["name", "url", "guidelines", "logo"]);
+      if (!BRAND_FIELDS.has(action.field)) return state;
       return { ...state, brand: { ...(state.brand || {}), [action.field]: action.value } };
+    }
     case "UPLOAD_BRAND_LOGO":
       return { ...state, brand: { ...(state.brand || {}), logo: action.dataUrl } };
     case "ADD_MOOD": {
