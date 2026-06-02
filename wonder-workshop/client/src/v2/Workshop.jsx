@@ -2614,14 +2614,14 @@ function ChevronDropdown({ label, value, options, onChange, style: extraStyle = 
   );
 }
 
-function DropdownAssetIcon({ src, size = 18, alt = "" }) {
+function DropdownAssetIcon({ src, size = 18, alt = "", style = {} }) {
   return (
     <img
       src={src}
       alt={alt}
       width={size}
       height={size}
-      style={{ display: "block", width: size, height: size, flexShrink: 0, objectFit: "contain" }}
+      style={{ display: "block", width: size, height: size, flexShrink: 0, objectFit: "contain", ...style }}
     />
   );
 }
@@ -6760,6 +6760,7 @@ function BriefForm({
   }
   const fmtSize = (b) => b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(0) + " KB" : (b / 1048576).toFixed(1) + " MB";
   const fmtType = (t) => t.startsWith("image/") ? "IMG" : t === "application/pdf" ? "PDF" : t.includes("word") ? "DOC" : t.startsWith("text/") ? "TXT" : "FILE";
+  const formRowGap = 20;
 
   return (
     <div style={{ position: "relative", minHeight: "100%" }}>
@@ -6791,7 +6792,7 @@ function BriefForm({
           boxShadow: "0 24px 64px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
           borderRadius: 14, padding: "3%", marginBottom: "2%",
         }}>
-          <div style={{ marginBottom: 20, position: "relative" }}>
+          <div style={{ marginBottom: formRowGap, position: "relative" }}>
             <span aria-hidden="true" style={{
               position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)",
               zIndex: 2, pointerEvents: "none", display: "inline-flex", alignItems: "center",
@@ -6807,7 +6808,55 @@ function BriefForm({
               className="[&_[data-slot=input]]:pl-11"
             />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 5 }}>
+          <div style={{ marginBottom: formRowGap, position: "relative" }}>
+            <Textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
+              size="lg"
+              disabled={improving}
+              placeholder="Storyboard Brief..."
+              className="[&_[data-slot=textarea]]:pt-2 [&_[data-slot=textarea]]:pb-16"
+              style={{ minHeight: 160, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
+              <button
+                onClick={improveBrief}
+                disabled={!meta.treatment?.trim() || improving || generating}
+                type="button"
+                title="Use Gemini to expand a rough idea into a 100-180 word grounded brief"
+                style={{
+                  position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
+                  display: "flex", alignItems: "center", gap: 6,
+                  height: 25, padding: "0 8px", borderRadius: 7,
+                  background: "linear-gradient(0deg, rgba(0, 0, 0, 0.17) 0%, rgba(102, 102, 102, 0.153) 100%), linear-gradient(0deg, rgba(219, 219, 219, 0.6), rgba(219, 219, 219, 0.6)), linear-gradient(92deg, #429FD6 3.61%, #7762E7 24.14%, #A45EE1 39.21%, #CB4FCB 56.02%, #FF3598 70.65%, #ED7180 85.72%, #E9886D 100%)",
+                  border: "0.5px solid color(display-p3 1 1 1 / 0.5)",
+                  color: "#1a1c1f",
+                  cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
+                  outline: "none",
+                  fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
+                  letterSpacing: "-0.01em",
+                  opacity: meta.treatment?.trim() && !improving ? 1 : 0.05,
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)",
+                  transition: "filter 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease",
+                }}
+                onMouseEnter={e => {
+                  if (e.currentTarget.disabled) return;
+                  e.currentTarget.style.filter = "brightness(1.05)";
+                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.65), 0 2px 8px rgba(0,0,0,0.22)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.filter = "none";
+                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)";
+                }}
+              >
+                {improving && <ShimmerSweep color="rgba(255,255,255,0.38)" />}
+                <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <DropdownAssetIcon
+                    src={iconSparkleUrl}
+                    size={11}
+                    style={{ filter: "brightness(0) saturate(100%) invert(9%) sepia(9%) saturate(703%) hue-rotate(177deg) brightness(95%) contrast(91%)" }}
+                  />
+                  {improving ? "Improving…" : "Improve with AI"}
+                </span>
+              </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: formRowGap }}>
             <RootMenuDropdown
               value={meta.client}
               options={[
@@ -6843,50 +6892,6 @@ function BriefForm({
               triggerLabel={`Aspect: ${meta.aspect || "16:9"}`}
               renderIcon={(value, color, size = 18) => <RatioIcon ratio={value} color={color} size={size} />}
             />
-          </div>
-          <div style={{ marginBottom: 20, position: "relative" }}>
-            <Textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
-              size="lg"
-              disabled={improving}
-              placeholder="Storyboard Brief..."
-              className="[&_[data-slot=textarea]]:pt-2 [&_[data-slot=textarea]]:pb-16"
-              style={{ minHeight: 160, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
-              <button
-                onClick={improveBrief}
-                disabled={!meta.treatment?.trim() || improving || generating}
-                type="button"
-                title="Use Gemini to expand a rough idea into a 100-180 word grounded brief"
-                style={{
-                  position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: 25, padding: "0 8px", borderRadius: 7,
-                  background: "linear-gradient(0deg, rgba(0, 0, 0, 0.17) 0%, rgba(102, 102, 102, 0.153) 100%), linear-gradient(0deg, rgba(219, 219, 219, 0.6), rgba(219, 219, 219, 0.6)), linear-gradient(92deg, #429FD6 3.61%, #7762E7 24.14%, #A45EE1 39.21%, #CB4FCB 56.02%, #FF3598 70.65%, #ED7180 85.72%, #E9886D 100%)",
-                  border: "0.5px solid color(display-p3 1 1 1 / 0.5)",
-                  color: "#fff",
-                  cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
-                  outline: "none",
-                  fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
-                  letterSpacing: "-0.01em",
-                  opacity: meta.treatment?.trim() && !improving ? 1 : 0.5,
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)",
-                  transition: "filter 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease",
-                }}
-                onMouseEnter={e => {
-                  if (e.currentTarget.disabled) return;
-                  e.currentTarget.style.filter = "brightness(1.05)";
-                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.65), 0 2px 8px rgba(188,87,197,0.22)";
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.filter = "none";
-                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)";
-                }}
-              >
-                {improving && <ShimmerSweep color="rgba(255,255,255,0.38)" />}
-                <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <DropdownAssetIcon src={iconSparkleUrl} size={11} />
-                  {improving ? "Improving…" : "Improve with AI"}
-                </span>
-              </button>
           </div>
 
           {/* File upload zone */}
