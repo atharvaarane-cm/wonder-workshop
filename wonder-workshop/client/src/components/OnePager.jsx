@@ -38,6 +38,13 @@ const SECTION_OPTIONS = {
 
 const SECTION_VALUES = Object.keys(SECTION_OPTIONS)
 const DEFAULT_SECTIONS = ['headerFooter', 'storyboard', 'treatment', 'locations', 'talent']
+const LAYOUT_PROFILES = {
+  productionBalanced: 'production-balanced',
+  storyboardFocus: 'storyboard-focus',
+  artReference: 'art-reference',
+  locationReference: 'location-reference',
+  fullDetail: 'full-detail',
+}
 
 const VIEW_PRESET_GROUPS = [
   {
@@ -51,6 +58,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: All +4 more',
         description: 'Header, storyboard, treatment, locations, talent',
         sections: DEFAULT_SECTIONS,
+        layoutProfile: LAYOUT_PROFILES.productionBalanced,
       },
       {
         id: 'fullAll',
@@ -58,6 +66,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: All Sections',
         description: 'Every printable section',
         sections: SECTION_VALUES,
+        layoutProfile: LAYOUT_PROFILES.fullDetail,
       },
       {
         id: 'coreThree',
@@ -65,6 +74,70 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: 3 Sections',
         description: 'Header, storyboard, treatment',
         sections: ['headerFooter', 'storyboard', 'treatment'],
+        layoutProfile: LAYOUT_PROFILES.productionBalanced,
+      },
+    ],
+  },
+  {
+    id: 'recommended',
+    label: 'Recommended Views',
+    icon: SlidersHorizontalIcon,
+    presets: [
+      {
+        id: 'recommendedProduction',
+        label: 'Production Sheet',
+        triggerLabel: 'View: All +4 more',
+        description: 'Storyboard plus crew essentials',
+        sections: DEFAULT_SECTIONS,
+        layoutProfile: LAYOUT_PROFILES.productionBalanced,
+      },
+      {
+        id: 'recommendedFull',
+        label: 'Full Detail Sheet',
+        triggerLabel: 'View: All Sections',
+        description: 'Every printable section',
+        sections: SECTION_VALUES,
+        layoutProfile: LAYOUT_PROFILES.fullDetail,
+      },
+      {
+        id: 'storyboardReview',
+        label: 'Storyboard Review',
+        triggerLabel: 'View: Storyboard Review',
+        description: 'Large storyboard frames',
+        sections: ['storyboard'],
+        layoutProfile: LAYOUT_PROFILES.storyboardFocus,
+      },
+      {
+        id: 'artDeptRecommended',
+        label: 'Art Dept',
+        triggerLabel: 'View: Art Dept (3)',
+        description: 'Talent, elements, mood',
+        sections: ['talent', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
+      },
+      {
+        id: 'cameraDeptRecommended',
+        label: 'Camera Dept',
+        triggerLabel: 'View: Camera Dept',
+        description: 'Storyboard only',
+        sections: ['storyboard'],
+        layoutProfile: LAYOUT_PROFILES.storyboardFocus,
+      },
+      {
+        id: 'locationDeptRecommended',
+        label: 'Location Dept',
+        triggerLabel: 'View: Location Dept',
+        description: 'Scout sheet',
+        sections: ['locations'],
+        layoutProfile: LAYOUT_PROFILES.locationReference,
+      },
+      {
+        id: 'wardrobeDeptRecommended',
+        label: 'Wardrobe Dept',
+        triggerLabel: 'View: Wardrobe Dept (3)',
+        description: 'Talent, elements, mood',
+        sections: ['talent', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
       },
     ],
   },
@@ -79,6 +152,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: Art Dept (3)',
         description: 'Talent, elements, mood',
         sections: ['talent', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
       },
       {
         id: 'artBuild',
@@ -86,6 +160,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: Art Build',
         description: 'Locations, elements, mood',
         sections: ['locations', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
       },
     ],
   },
@@ -100,6 +175,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: Camera Dept',
         description: 'Storyboard only',
         sections: ['storyboard'],
+        layoutProfile: LAYOUT_PROFILES.storyboardFocus,
       },
       {
         id: 'cameraContext',
@@ -107,6 +183,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: Camera Dept (3)',
         description: 'Header, storyboard, treatment',
         sections: ['headerFooter', 'storyboard', 'treatment'],
+        layoutProfile: LAYOUT_PROFILES.productionBalanced,
       },
     ],
   },
@@ -121,6 +198,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: Location Dept',
         description: 'Locations plus storyboard context',
         sections: ['headerFooter', 'storyboard', 'locations'],
+        layoutProfile: LAYOUT_PROFILES.locationReference,
       },
       {
         id: 'locationOnly',
@@ -128,6 +206,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: Locations',
         description: 'Location thumbnails only',
         sections: ['locations'],
+        layoutProfile: LAYOUT_PROFILES.locationReference,
       },
     ],
   },
@@ -142,6 +221,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: Wardrobe Dept (3)',
         description: 'Talent, elements, mood',
         sections: ['talent', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
       },
       {
         id: 'wardrobeTalentOnly',
@@ -149,6 +229,7 @@ const VIEW_PRESET_GROUPS = [
         triggerLabel: 'View: Talent',
         description: 'Talent references only',
         sections: ['talent'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
       },
     ],
   },
@@ -165,12 +246,40 @@ function sameSections(a = [], b = []) {
   return b.every(value => set.has(value))
 }
 
-function getViewTriggerLabel(value) {
+function getPresetById(id) {
+  return VIEW_PRESETS.find(option => option.id === id)
+}
+
+function getViewTriggerLabel(value, activePresetId = null) {
+  const activePreset = getPresetById(activePresetId)
+  if (activePreset && sameSections(value, activePreset.sections)) return activePreset.triggerLabel
   const preset = VIEW_PRESETS.find(option => sameSections(value, option.sections))
   if (preset) return preset.triggerLabel
   if (!value?.length) return 'View: No Sections'
   if (value.length === 1) return `View: ${SECTION_OPTIONS[value[0]] || '1 Section'}`
   return `View: ${value.length} Sections`
+}
+
+function getStoryboardGrid(count) {
+  if (count <= 1) return { cols: 1, rows: 1 }
+  if (count === 2) return { cols: 2, rows: 1 }
+  if (count <= 4) return { cols: 2, rows: 2 }
+  if (count <= 6) return { cols: 3, rows: 2 }
+  if (count <= 9) return { cols: 3, rows: 3 }
+  return { cols: 4, rows: 3 }
+}
+
+function inferLayoutProfile(sections, mode, activePresetId = null) {
+  if (mode === 'full') return LAYOUT_PROFILES.fullDetail
+  const activePreset = getPresetById(activePresetId)
+  if (activePreset && sameSections(sections, activePreset.sections)) return activePreset.layoutProfile
+  const preset = VIEW_PRESETS.find(option => sameSections(sections, option.sections))
+  if (preset?.layoutProfile) return preset.layoutProfile
+  const set = new Set(sections)
+  if (sections.length === 1 && set.has('storyboard')) return LAYOUT_PROFILES.storyboardFocus
+  if (sections.length === 1 && set.has('locations')) return LAYOUT_PROFILES.locationReference
+  if (!set.has('storyboard')) return LAYOUT_PROFILES.artReference
+  return LAYOUT_PROFILES.productionBalanced
 }
 
 // Resolve a generated image src by trying the stable slot ID first, then
@@ -323,14 +432,17 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
   const [treatment, setTreatment] = useState('')
   const [treatmentLoading, setTreatmentLoading] = useState(false)
   const [visibleSections, setVisibleSections] = useState(DEFAULT_SECTIONS)
+  const [activePresetId, setActivePresetId] = useState('recommendedProduction')
   const isVisible = (section) => visibleSections.includes(section)
-  const viewTriggerLabel = getViewTriggerLabel(visibleSections)
+  const viewTriggerLabel = getViewTriggerLabel(visibleSections, activePresetId)
 
-  function applyViewPreset(sections) {
-    setVisibleSections(sections)
+  function applyViewPreset(preset) {
+    setVisibleSections(preset.sections)
+    setActivePresetId(preset.id)
   }
 
   function toggleSection(section, checked) {
+    setActivePresetId(null)
     setVisibleSections(current => {
       if (checked) return current.includes(section) ? current : [...current, section]
       return current.filter(value => value !== section)
@@ -344,6 +456,9 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
     const src = resolveSlot(images, shotSlotId(shot, idx), legacyPrompt)
     return { shot, src }
   })
+  const layoutProfile = inferLayoutProfile(visibleSections, mode, activePresetId)
+  const storyboardGrid = getStoryboardGrid(shotFrames.length)
+  const visibleSectionAttr = visibleSections.join(' ')
 
   // Primary character + additional characters with their stable index.
   const characters = []
@@ -454,9 +569,10 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
     <div className="onepager-backdrop" onClick={onClose}>
       <div className="onepager-shell" onClick={e => e.stopPropagation()}>
 
-        {/* Toolbar (hidden in print) */}
         <div className="onepager-toolbar no-print">
-          <span className="onepager-toolbar-title">One Pager Preview</span>
+          <div className="onepager-toolbar-left">
+            <span className="onepager-toolbar-title">One Pager Preview</span>
+          </div>
           <div className="onepager-toolbar-controls">
             <div className="op-mode-switch" role="tablist" aria-label="Sheet mode">
               <button
@@ -494,8 +610,20 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
               </MenuTrigger>
               <MenuPopup align="start" sideOffset={6} className="op-view-menu-popup">
                 <MenuGroup>
+                  <MenuGroupLabel>Recommended Views</MenuGroupLabel>
+                  {VIEW_PRESET_GROUPS.find(group => group.id === 'recommended')?.presets.map((preset) => (
+                    <MenuItem key={preset.id} onClick={() => applyViewPreset(preset)}>
+                      <span className="op-view-preset-copy">
+                        <span>{preset.label}</span>
+                        <span>{preset.description}</span>
+                      </span>
+                    </MenuItem>
+                  ))}
+                </MenuGroup>
+                <MenuSeparator />
+                <MenuGroup>
                   <MenuGroupLabel>Departments</MenuGroupLabel>
-                  {VIEW_PRESET_GROUPS.map((group) => {
+                  {VIEW_PRESET_GROUPS.filter(group => !['recommended', 'viewAll'].includes(group.id)).map((group) => {
                     const Icon = group.icon
                     return (
                       <MenuSub key={group.id}>
@@ -505,7 +633,7 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
                         </MenuSubTrigger>
                         <MenuSubPopup className="op-view-menu-popup">
                           {group.presets.map((preset) => (
-                            <MenuItem key={preset.id} onClick={() => applyViewPreset(preset.sections)}>
+                            <MenuItem key={preset.id} onClick={() => applyViewPreset(preset)}>
                               <span className="op-view-preset-copy">
                                 <span>{preset.label}</span>
                                 <span>{preset.description}</span>
@@ -533,7 +661,7 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
               </MenuPopup>
             </Menu>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="onepager-toolbar-actions">
             <button className="onepager-print-btn" onClick={handleExportPptx} disabled={exportingPptx}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
@@ -558,7 +686,16 @@ export default function OnePager({ brief, images = {}, onClose, projectId = null
           </div>
         </div>
 
-        <div className={`onepager-page onepager-page--${mode}`}>
+        <div
+          className={`onepager-page onepager-page--${mode}`}
+          data-layout-profile={layoutProfile}
+          data-visible-sections={visibleSectionAttr}
+          data-storyboard-count={shotFrames.length}
+          style={{
+            '--op-story-cols': storyboardGrid.cols,
+            '--op-story-rows': storyboardGrid.rows,
+          }}
+        >
 
           {/* ── Header ── */}
           {isVisible('headerFooter') && (
