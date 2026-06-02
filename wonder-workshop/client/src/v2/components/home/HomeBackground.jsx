@@ -1,5 +1,20 @@
+import { Component } from "react";
 import { ImageIcon, WavesIcon } from "lucide-react";
 import { ShaderGradient, ShaderGradientCanvas } from "@shadergradient/react";
+
+// The shader background is a WebGL canvas — on machines/projectors without
+// usable WebGL (common at venues) it can fail to init and leave the landing
+// blank. Detect support up front, and catch any init error at runtime, so we
+// always fall back to the static "classic" background instead of a blank page.
+function supportsWebGL() {
+  if (typeof document === "undefined") return false;
+  try {
+    const c = document.createElement("canvas");
+    return !!(window.WebGLRenderingContext && (c.getContext("webgl") || c.getContext("experimental-webgl")));
+  } catch {
+    return false;
+  }
+}
 
 export const HOME_BACKGROUND_STORAGE_KEY = "ww-home-background";
 export const HOME_BACKGROUND_OPTIONS = {
@@ -51,13 +66,26 @@ export function normalizeHomeBackground(value) {
     : HOME_BACKGROUND_OPTIONS.shader;
 }
 
+// Falls back to the classic background if the shader subtree throws while
+// mounting (e.g. WebGL context creation fails on the host).
+class ShaderErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(err) { console.warn("[HomeBackground] shader failed — falling back to classic", err); }
+  render() { return this.state.failed ? <ClassicHomeBackground /> : this.props.children; }
+}
+
 export function HomeBackground({ mode = HOME_BACKGROUND_OPTIONS.shader }) {
   const normalizedMode = normalizeHomeBackground(mode);
+  // Honor the shader choice only where WebGL actually works; otherwise classic.
+  const useShader = normalizedMode === HOME_BACKGROUND_OPTIONS.shader && supportsWebGL();
 
   return (
     <>
-      {normalizedMode === HOME_BACKGROUND_OPTIONS.shader ? (
-        <ShaderHomeBackground />
+      {useShader ? (
+        <ShaderErrorBoundary>
+          <ShaderHomeBackground />
+        </ShaderErrorBoundary>
       ) : (
         <ClassicHomeBackground />
       )}
