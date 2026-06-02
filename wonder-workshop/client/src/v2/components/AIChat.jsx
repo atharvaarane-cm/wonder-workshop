@@ -163,9 +163,19 @@ function MentionPopup({ query, data, onSelect, onClose, selectedIndex }) {
 
 // -- FRAME CONTEXT (simplified) -------------------------------
 
+// "Wide" is both a Shot Type (framing) AND a lens. The pill shows the shot
+// type on the top line, so spell the LENS out explicitly on the detail line
+// (with its focal length) — otherwise a lens change looks like nothing
+// happened because the top line still reads the (unchanged) shot type.
+const FRAME_LENS_LABEL = { wide: "Wide-angle · 24mm", normal: "Normal · 50mm", telephoto: "Telephoto · 85mm" };
+
 function FrameContext({ frame, data, onDismiss, onOpenProduction }) {
   if (!frame) return null;
   const fIdx = data.frames.findIndex(f => f.id === frame.id);
+  // Detail line = movement/height (only when non-default) + the lens.
+  const moveHeight = ((frame.movement && frame.movement !== "static") || (frame.cameraHeight && frame.cameraHeight !== "eye")) ? frame.camera : "";
+  const lensLabel = FRAME_LENS_LABEL[frame.lens] || "";
+  const cameraLine = [moveHeight, lensLabel].filter(Boolean).join("  ·  ");
 
   return (
     <div style={{ borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", overflow: "hidden" }}>
@@ -188,7 +198,7 @@ function FrameContext({ frame, data, onDismiss, onOpenProduction }) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 500, color: "var(--warm)" }}>Frame {frame.number} {"\xB7"} {frame.shotType}</div>
-          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-25)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{!isCameraDefault(frame) ? frame.camera : ""}</div>
+          <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-25)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cameraLine}</div>
         </div>
         <PremiumButton variant="ghost" onClick={onOpenProduction} style={{ padding: "4px 8px", fontSize: 10, gap: 4 }}>
           <SectionIcon name="edit" size={10} color="var(--warm-40)" /> Edit
