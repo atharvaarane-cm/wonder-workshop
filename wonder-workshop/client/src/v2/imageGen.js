@@ -220,10 +220,30 @@ export function moodPrompt(text) {
   return `${text}. Cinematic mood reference, evocative atmosphere, photorealistic, no text or watermarks, tone-setting visual.`;
 }
 
+// Lens + camera-angle phrasing for the image prompt. These structured fields
+// (frame.lens / frame.cameraAngle) drive the LENS and ANGLE controls but were
+// previously NOT written into the prompt — only movement + height made it in
+// (via frame.camera / deriveCameraText). So changing the lens or angle and
+// regenerating produced no real change. Spell them out here so the controls
+// actually steer the model.
+const LENS_PROMPT = {
+  wide: "shot on a wide-angle lens (~24mm equivalent): broad field of view, expansive framing that takes in more of the environment, mild wide-angle perspective",
+  normal: "shot on a normal lens (~50mm equivalent): natural, true-to-the-eye field of view and perspective",
+  telephoto: "shot on a telephoto lens (~85mm equivalent): narrow field of view, compressed perspective, subject isolated against a softly blurred background (shallow depth of field)",
+};
+const ANGLE_PROMPT = {
+  front: "", // neutral / straight-on — no extra phrasing needed
+  "3qR": "the subject viewed from a three-quarter angle (turned slightly so the camera sees them from the front-right)",
+  "3qL": "the subject viewed from a three-quarter angle (turned slightly so the camera sees them from the front-left)",
+  back: "the subject viewed from behind (back of the subject toward the camera)",
+};
+
 export function framePrompt(frame, talent = [], products = []) {
   const description = frame.brief || "";
   const shotType = frame.shotType ? `, ${frame.shotType} framing` : "";
   const camera = frame.camera ? `, ${frame.camera}` : "";
+  const lensTxt = frame.lens && LENS_PROMPT[frame.lens] ? `, ${LENS_PROMPT[frame.lens]}` : "";
+  const angleTxt = frame.cameraAngle && ANGLE_PROMPT[frame.cameraAngle] ? `, ${ANGLE_PROMPT[frame.cameraAngle]}` : "";
   // Weight referenced characters by role so the composition reflects who
   // matters: Leads get focal prominence, Extras stay background. Supporting
   // characters get no special clause (neutral). Only added when the frame
@@ -255,5 +275,5 @@ export function framePrompt(frame, talent = [], products = []) {
   // becomes a park, the branded can becomes a generic one), so instruct it to
   // MATCH those references exactly and keep the same setting across shots.
   const adherence = " IMPORTANT — use the reference images for IDENTITY ONLY: copy the exact character faces and wardrobe and the exact product packaging/branding. The character and product references are studio cut-outs on plain gray backdrops — IGNORE those backgrounds; they are NOT the setting. The setting of THIS shot is the location described / the location reference image: place every character and product naturally INTO that environment with correct ground contact, realistic human scale, and perspective/lighting that matches the scene. Never output a plain gray or studio backdrop. Keep people physically grounded (feet on the ground unless the action is clearly a jump) and keep props held or resting naturally in someone's hands or on a surface — no floating, levitating, or pasted-on objects, no one hovering unnaturally high. Keep the SAME location across shots; do not substitute a generic place or product.";
-  return `${description}${shotType}${camera}.${weighting}${elemWeight}${adherence} Cinematic film still, photorealistic, narrative production photography.`;
+  return `${description}${shotType}${camera}${angleTxt}${lensTxt}.${weighting}${elemWeight}${adherence} Cinematic film still, photorealistic, narrative production photography.`;
 }
