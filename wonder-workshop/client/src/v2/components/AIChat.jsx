@@ -225,6 +225,28 @@ function ChatIconButton({ onClick, disabled, title, active, muted, pulsing, chil
   );
 }
 
+// Resolve the image currently live in a given slotKey, so the version
+// tracker can mark which thumbnail is active. Mirrors the slotKey scheme
+// used by versionHistory in Workshop.jsx (talent headshot/headshots/
+// fullBody, product, location).
+function currentSrcForSlot(slotKey, data) {
+  if (!slotKey || !data) return null;
+  let m;
+  if ((m = slotKey.match(/^talent\.(.+)\.headshots\.(front|side|threeQuarter|back)$/)))
+    return data.talent?.find(t => t.id === m[1])?.headshots?.[m[2]] || null;
+  if ((m = slotKey.match(/^talent\.(.+)\.fullBody\.(front|side|threeQuarter|back)$/)))
+    return data.talent?.find(t => t.id === m[1])?.fullBody?.[m[2]] || null;
+  if ((m = slotKey.match(/^talent\.(.+)\.headshot$/)))
+    return data.talent?.find(t => t.id === m[1])?.headshot || null;
+  if ((m = slotKey.match(/^product\.(.+)$/)))
+    return data.products?.find(p => p.id === m[1])?.referenceImage || null;
+  if ((m = slotKey.match(/^location\.(.+)$/))) {
+    const l = data.locations?.find(x => x.id === m[1]);
+    return l ? (l.generatedImage || l.referenceImage || null) : null;
+  }
+  return null;
+}
+
 // -- AI CHAT PANEL (with @ mentions + asset context + improve button) --
 
 export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFrameId, onSendMessage, onDismissFrame, onOpenProduction, onMentionClick, chatAssetContext, onDismissAssetContext, chatFocusTrigger, pendingFrameEdits = {}, onRegeneratePending, regenerating, reconcileCount = 0, onReconcileAll, orphanCount = 0, onCleanupOrphans }) {
@@ -264,6 +286,18 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
     }
     return null;
   })() : null;
+
+  // When a SPECIFIC image slot is focused (not just the asset), surface that
+  // slot's version history in the panel — click a thumbnail to swap which
+  // version is live (fires ww-set-active-version; the slot listens + applies
+  // it via its own onSelectVersion). The chip's thumb/label also reflect the
+  // specific image.
+  const focusedSlot = chatAssetContext?.slotKey ? {
+    slotKey: chatAssetContext.slotKey,
+    slotLabel: chatAssetContext.slotLabel || "",
+    versions: data.versionHistory?.[chatAssetContext.slotKey] || [],
+    currentSrc: currentSrcForSlot(chatAssetContext.slotKey, data),
+  } : null;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatBusy]);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 100); }, []);
@@ -486,7 +520,32 @@ export function AIChatPanel({ data, dispatch, chatMessages, chatBusy, selectedFr
         )}
         {assetContextResolved?.asset && (
           <div style={{ marginBottom: 10 }}>
-            <AssetContext asset={assetContextResolved.asset} type={assetContextResolved.type} thumb={assetContextResolved.thumb} onDismiss={onDismissAssetContext} />
+            <AssetContext asset={assetContextResolved.asset} type={assetContextResolved.type} thumb={focusedSlot?.currentSrc || assetContextResolved.thumb} slotLabel={focusedSlot?.slotLabel} onDismiss={onDismissAssetContext} />
+          </div>
+        )}
+        {/* Version tracker — when a specific image is focused, show every saved
+            version of it. Click a thumbnail to make it the live version. */}
+        {focusedSlot && focusedSlot.versions.length > 1 && (
+          <div style={{ marginBottom: 10, borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", padding: "10px 12px" }}>
+            <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+              Versions
+              <span style={{ padding: "1px 6px", borderRadius: 999, background: "var(--warm-08)", color: "var(--warm-50)", fontSize: 9, letterSpacing: 0 }}>{focusedSlot.versions.length}</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 6 }}>
+              {focusedSlot.versions.map((v, i) => {
+                const active = v.src && v.src === focusedSlot.currentSrc;
+                return (
+                  <button
+                    key={(v.src || "") + i}
+                    onClick={() => window.dispatchEvent(new CustomEvent("ww-set-active-version", { detail: { slotKey: focusedSlot.slotKey, src: v.src } }))}
+                    title={`Version ${i + 1}${active ? " (current)" : ""}`}
+                    style={{ position: "relative", aspectRatio: "1/1", padding: 0, borderRadius: 7, overflow: "hidden", cursor: "pointer", background: "var(--warm-06)", border: active ? "2px solid var(--accent, #43a3fd)" : "2px solid transparent", transition: "border-color 0.15s" }}
+                  >
+                    <img src={v.src} alt={`Version ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
         {/* Pending frame changes → Regenerate. Each control you change in the

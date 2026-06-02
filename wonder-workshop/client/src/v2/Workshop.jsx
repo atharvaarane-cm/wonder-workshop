@@ -2841,9 +2841,13 @@ function ConfirmAction({ label, onConfirm, variant = "danger", style = {} }) {
 
 // -- ASSET CONTEXT (for AI chat) ------------------------------
 
-export function AssetContext({ asset, type, thumb, onDismiss }) {
+export function AssetContext({ asset, type, thumb, onDismiss, slotLabel }) {
   const badges = { talent: "T", product: "P", location: "L", mood: "M", brand: "B" };
   const labels = { talent: "Character", product: "Element", location: "Location", mood: "Mood", brand: "Brand" };
+  // When a specific image slot is focused, lead with "Selected image" + the
+  // slot label so the user sees the chat is targeting that exact image.
+  const topLabel = slotLabel ? "Selected image" : (labels[type] || "Selected");
+  const nameLine = slotLabel || asset.name;
   return (
     <div style={{ borderRadius: 10, background: "var(--warm-04)", border: "1px solid var(--warm-08)", overflow: "hidden" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px" }}>
@@ -2853,8 +2857,8 @@ export function AssetContext({ asset, type, thumb, onDismiss }) {
           <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 700, color: "var(--warm-30)", background: "var(--warm-06)", width: 34, height: 34, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{badges[type]}</span>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{labels[type] || "Selected"}</div>
-          <div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, color: "var(--warm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{asset.name}</div>
+          <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: "var(--warm-25)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{topLabel}</div>
+          <div style={{ fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, color: "var(--warm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nameLine}</div>
           {asset.handle ? <div style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-25)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{asset.handle}</div> : null}
         </div>
         <button onClick={onDismiss} title="Dismiss" style={{ width: 20, height: 20, borderRadius: 4, border: "1px solid var(--warm-08)", background: "transparent", color: "var(--warm-30)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 11, flexShrink: 0 }}>&times;</button>
@@ -4125,6 +4129,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
             pendingKey={`talent.${character.id}.primary`}
             basePrompt={talentPrompt(character)}
             versions={data.versionHistory?.[`talent.${character.id}.headshot`] || []}
+            focus={{ type: "talent", id: character.id, slotKey: `talent.${character.id}.headshot`, slotLabel: `${character.name} · Reference`, basePrompt: talentPrompt(character) }}
             onSelectVersion={src => dispatch({ type: "UPDATE_TALENT", id: character.id, field: "headshot", value: src })}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: "headshot" })}
@@ -4150,6 +4155,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
             basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentHeadshotPrompt(character, v)]))}
             pendingKeyByView={Object.fromEntries(VIEWS.map(v => [v, `talent.${character.id}.headshots.${v}`]))}
             versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.headshots.${v}`] || []]))}
+            focusByView={Object.fromEntries(VIEWS.map(v => [v, { type: "talent", id: character.id, slotKey: `talent.${character.id}.headshots.${v}`, slotLabel: `${character.name} · ${VIEW_LABEL[v]} headshot`, basePrompt: talentHeadshotPrompt(character, v) }]))}
             onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_HEADSHOT_SLOT", id: character.id, slot: view, url: src })}
             onRegenerate={regenerateHeadshot}
             onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `headshots:${view}` })}
@@ -4168,6 +4174,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
             basePromptByView={Object.fromEntries(VIEWS.map(v => [v, talentFullBodyPrompt(character, v)]))}
             pendingKeyByView={Object.fromEntries(VIEWS.map(v => [v, `talent.${character.id}.fullBody.${v}`]))}
             versionsBySlot={Object.fromEntries(VIEWS.map(v => [v, data.versionHistory?.[`talent.${character.id}.fullBody.${v}`] || []]))}
+            focusByView={Object.fromEntries(VIEWS.map(v => [v, { type: "talent", id: character.id, slotKey: `talent.${character.id}.fullBody.${v}`, slotLabel: `${character.name} · ${VIEW_LABEL[v]} full body`, basePrompt: talentFullBodyPrompt(character, v) }]))}
             onSelectVersion={(view, src) => dispatch({ type: "UPDATE_TALENT_FULLBODY_SLOT", id: character.id, slot: view, url: src })}
             onRegenerate={regenerateFullBody}
             onClear={view => dispatch({ type: "CLEAR_TALENT_IMAGE_SLOT", id: character.id, slot: `fullBody:${view}` })}
@@ -4203,7 +4210,7 @@ function CharacterDetailView({ character, data, dispatch, sectionLocked, onBack,
 // view. Each cell is a V2ImageSlot; clicking the slot triggers
 // per-view regeneration. "Populate All" fires all four in sequence
 // (matches v1's button label).
-function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByView = {}, pendingKeyByView = {}, versionsBySlot = {}, onSelectVersion, onRegenerate, onClear, onUpload, onPopulateAll }) {
+function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByView = {}, pendingKeyByView = {}, versionsBySlot = {}, focusByView = {}, onSelectVersion, onRegenerate, onClear, onUpload, onPopulateAll }) {
   const [populating, setPopulating] = useState(false);
   const hasAny = views.some(v => slots[v]);
 
@@ -4248,6 +4255,7 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
               basePrompt={basePromptByView[view]}
               pendingKey={pendingKeyByView[view]}
               versions={versionsBySlot[view] || []}
+              focus={focusByView[view]}
               onSelectVersion={src => onSelectVersion?.(view, src)}
               onRegenerate={instruction => onRegenerate(view, instruction)}
               onClear={() => onClear(view)}
@@ -4269,8 +4277,29 @@ function SlotGrid({ label, views, viewLabel, slots, ratio, locked, basePromptByV
 // the placeholder to fire onRegenerate. Real shimmer + lightbox + the
 // full v1 hover toolbar (8 actions) land in a follow-up — this is the
 // minimum surface for the redesign to feel right.
-function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versions = [], onSelectVersion, onRegenerate, onClear, onUpload }) {
+function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versions = [], onSelectVersion, onRegenerate, onClear, onUpload, focus = null }) {
   const [hovered, setHovered] = useState(false);
+  // Which slot the chat is currently focused on (broadcast by the main
+  // component whenever chatAssetContext changes — single source of truth).
+  // This slot glows when it's the focused one. Clicking an image fires
+  // ww-focus-slot to REQUEST focus; the chat panel can fire
+  // ww-set-active-version to swap which saved version is live in this slot.
+  const [focusedSlotKey, setFocusedSlotKey] = useState(null);
+  const isFocused = !!(focus?.slotKey && focusedSlotKey === focus.slotKey);
+  useEffect(() => {
+    function onFocusChanged(e) { setFocusedSlotKey(e.detail?.slotKey || null); }
+    function onSetVersion(e) {
+      const { slotKey, src: vsrc } = e.detail || {};
+      if (!focus?.slotKey || slotKey !== focus.slotKey || !vsrc) return;
+      onSelectVersion?.(vsrc);
+    }
+    window.addEventListener("ww-focus-slot-changed", onFocusChanged);
+    window.addEventListener("ww-set-active-version", onSetVersion);
+    return () => {
+      window.removeEventListener("ww-focus-slot-changed", onFocusChanged);
+      window.removeEventListener("ww-set-active-version", onSetVersion);
+    };
+  }, [focus?.slotKey, onSelectVersion]);
   const [toolbarHovered, setToolbarHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
   // External pending state (from the autoGen pool's pending bus).
@@ -4448,16 +4477,22 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
         style={{
           position: "relative", aspectRatio: aspectCSS, borderRadius: 8,
           background: "var(--warm-04)",
-          border: "1px solid var(--warm-08)",
+          border: isFocused ? "1px solid var(--accent, #43a3fd)" : "1px solid var(--warm-08)",
+          boxShadow: isFocused ? "0 0 0 2px var(--accent, #43a3fd), 0 0 14px 1px rgba(67,163,253,0.45)" : "none",
+          transition: "box-shadow 0.18s ease, border-color 0.18s ease",
           display: "flex", alignItems: "center", justifyContent: "center",
           cursor: "pointer", overflow: "visible",
         }}
         onClick={() => {
-          // Clicking an image opens the AI chat to edit it (the lightbox was
-          // removed). The chat is already focused on the asset you drilled
-          // into; this just surfaces the panel.
-          if (src) window.dispatchEvent(new CustomEvent("ww-open-chat"));
-          else if (!generating && !locked) handleRegen();
+          // Clicking a generated image FOCUSES the chat on this specific
+          // image: it becomes the chat's active target, the panel shows this
+          // slot's version history, and the slot glows. ww-focus-slot carries
+          // the asset + slot identity; the main component turns it into
+          // chatAssetContext and opens the panel. Empty slot → generate.
+          if (src) {
+            if (focus?.slotKey) window.dispatchEvent(new CustomEvent("ww-focus-slot", { detail: focus }));
+            else window.dispatchEvent(new CustomEvent("ww-open-chat"));
+          } else if (!generating && !locked) handleRegen();
         }}
       >
         {/* Render the image as a real <img> rather than a CSS
@@ -4957,6 +4992,7 @@ function LocationDetailView({ location, data, dispatch, sectionLocked, aspect = 
             basePrompt={locationPrompt(location)}
             pendingKey={`location.${location.id}`}
             versions={versions}
+            focus={{ type: "location", id: location.id, slotKey: `location.${location.id}`, slotLabel: `${location.name} · Reference`, basePrompt: locationPrompt(location) }}
             onSelectVersion={src => dispatch({ type: "UPDATE_LOCATION_GENERATION", id: location.id, status: "complete", image: src })}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_LOCATION_IMAGE", id: location.id })}
@@ -5198,6 +5234,7 @@ function ElementDetailView({ product, data, dispatch, sectionLocked, onBack, onP
             basePrompt={productPrompt(product)}
             pendingKey={`product.${product.id}`}
             versions={versions}
+            focus={{ type: "product", id: product.id, slotKey: `product.${product.id}`, slotLabel: `${product.name} · Reference`, basePrompt: productPrompt(product) }}
             onSelectVersion={src => dispatch({ type: "UPDATE_PRODUCT_GENERATION", id: product.id, status: "complete", image: src })}
             onRegenerate={regenerateReference}
             onClear={() => dispatch({ type: "CLEAR_PRODUCT_IMAGE", id: product.id })}
@@ -7110,6 +7147,33 @@ export default function WorkshopV2() {
     return () => window.removeEventListener("ww-open-chat", openChat);
   }, []);
 
+  // Click a specific image slot in a detail view → focus the chat on THAT
+  // image: it becomes the active chat target, the panel shows its version
+  // history, and the slot glows. The slot fires ww-focus-slot with its
+  // asset + slot identity; we fold the slotKey into chatAssetContext (which
+  // otherwise just carries the asset). Additive: a slotKey-less context still
+  // behaves exactly as the tile-level selection always has.
+  useEffect(() => {
+    function onFocusSlot(e) {
+      const d = e.detail;
+      if (!d?.type || !d.id || !d.slotKey) return;
+      setSelectedFrameId(null);
+      setChatAssetContext({ type: d.type, id: d.id, slotKey: d.slotKey, slotLabel: d.slotLabel, basePrompt: d.basePrompt });
+      setSidebarOpen(true);
+      setChatFocusTrigger(p => p + 1);
+    }
+    window.addEventListener("ww-focus-slot", onFocusSlot);
+    return () => window.removeEventListener("ww-focus-slot", onFocusSlot);
+  }, []);
+
+  // Single source of truth for the focused-slot glow: whenever the chat
+  // context changes, broadcast which slotKey (if any) is now focused.
+  // Focusing an ASSET via a tile (no slotKey) broadcasts null → any prior
+  // slot glow clears. Every V2ImageSlot listens and glows iff it matches.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("ww-focus-slot-changed", { detail: { slotKey: chatAssetContext?.slotKey || null } }));
+  }, [chatAssetContext]);
+
   // Reconcile — pull a missing asset (or a whole section / everything)
   // back into the brief + storyboard. Opens the preview modal with an AI
   // suggestion the user can edit or apply. Triggered by tile chips,
@@ -8360,6 +8424,11 @@ export default function WorkshopV2() {
       } else if (c.type === "brand") {
         const b = currentData.brand || {};
         focusLine = `The user has the Brand section selected — "this"/"it"/"the brand" refer to it. Use update_brand for name/url/guidelines. Current: ${JSON.stringify({ name: b.name, url: b.url, hasLogo: !!b.logo })}.`;
+      }
+      // Image-level focus: the user clicked a SPECIFIC image slot, not just
+      // the asset. "this image", "the prompt", "this one" refer to THAT image.
+      if (c.slotKey) {
+        focusLine += `\nThe user has a SPECIFIC IMAGE of this asset selected: "${c.slotLabel || c.slotKey}". "this image", "this one", "the prompt", and "this prompt" all refer to THAT image. If asked to show/print/explain the prompt, return this image's prompt verbatim: ${JSON.stringify(c.basePrompt || "")}. If asked to change THIS image, regenerate the asset (the selected view is the one to update).`;
       }
     }
 
