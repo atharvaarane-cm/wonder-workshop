@@ -7886,10 +7886,15 @@ export default function WorkshopV2() {
     // ratios (1:1 / 3:4) that don't change with the project aspect, so we
     // leave them untouched — regenerating them needlessly re-rolls identity
     // (this is what scrambled characters on a simple aspect change).
-    const tasks = [];
+    // Build THUNKS (not already-started promises) and run them 3-at-a-time,
+    // matching the throttled main pipeline. Previously each location + frame
+    // promise was created — and thus fired — up front, so an aspect change on
+    // a real project launched a dozen+ image gens at once, tripping Gemini's
+    // rate limit and silently dropping images (Court's review #8).
+    const taskThunks = [];
     for (const l of (data.locations || [])) {
       if (l.locked || data.locks?.locations) continue;
-      tasks.push((async () => {
+      taskThunks.push(async () => {
         try {
           // Condition on the existing location image so the reshaped version
           // keeps the same look, just at the new aspect.
@@ -7897,16 +7902,24 @@ export default function WorkshopV2() {
           const url = await generateImage(locationPrompt(l), { ratio: newRatio, referenceImages: ref ? [ref] : [] });
           dispatch({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "complete", image: url });
         } catch (e) { console.error("[aspect-regen location]", e); }
-      })());
+      });
     }
     // Frames go through regenerateOneFrame so they're conditioned on the
     // character + location reference images (identity preserved) at the new
     // aspect — the old bare framePrompt path passed NO refs and produced
     // different-looking people.
     for (const f of (data.frames || [])) {
-      tasks.push(regenerateOneFrame(f.id).catch(e => console.error("[aspect-regen frame]", e)));
+      taskThunks.push(() => regenerateOneFrame(f.id).catch(e => console.error("[aspect-regen frame]", e)));
     }
-    await Promise.allSettled(tasks);
+    const ASPECT_REGEN_CONCURRENCY = 3;
+    const queue = [...taskThunks];
+    const workers = Array.from({ length: ASPECT_REGEN_CONCURRENCY }, async () => {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (next) await next();
+      }
+    });
+    await Promise.allSettled(workers);
     toast("Aspect-ratio regeneration complete", { kind: "success" });
   }
 
