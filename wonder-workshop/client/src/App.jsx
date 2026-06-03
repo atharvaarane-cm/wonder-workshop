@@ -13,6 +13,15 @@ export default function App() {
       <AnchoredToastProvider>
         <ToastEventBridge />
         <WorkshopV2 />
+        {/* Tiny build-ID tag — lets anyone glance and confirm their build
+            (vs a stale cached tab). Unobtrusive, bottom-right, non-interactive. */}
+        <div
+          aria-hidden="true"
+          title="build"
+          style={{ position: "fixed", right: 6, bottom: 4, zIndex: 9999, fontSize: 9, fontFamily: "monospace", letterSpacing: "0.04em", color: "rgba(255,255,255,0.22)", pointerEvents: "none", userSelect: "none" }}
+        >
+          {__BUILD_ID__}
+        </div>
       </AnchoredToastProvider>
     </ToastProvider>
   );
