@@ -27,11 +27,16 @@ const MOVEMENT_TYPES = [
 ];
 
 function ShimmerOverlay({ label = "Generating..." }) {
+  // Width-independent, seamless sweep: a full-cover gradient bar that
+  // translateX -100% -> 100% (its own width = the card), looping. Both ends
+  // sit fully off-screen so the loop reset is invisible — fixes the jerk from
+  // the old px-based background-position (which only cleared on ~600px cards).
   return (
-    <div
-      className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center"
-      style={{ backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0) 100%)", backgroundSize: "600px 100%", backgroundRepeat: "no-repeat", animation: "shimmer 1.4s infinite linear" }}
-    >
+    <div className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center overflow-hidden">
+      <div
+        className="absolute inset-0"
+        style={{ backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0) 100%)", animation: "shimmerSweep 1.5s infinite linear", willChange: "transform" }}
+      />
       <span className="rounded-full bg-black/40 px-2 py-[3px] font-semibold text-[9px] uppercase tracking-[0.06em] text-[color:var(--warm-50)] backdrop-blur-md">
         {label}
       </span>

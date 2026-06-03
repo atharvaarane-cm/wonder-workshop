@@ -1644,6 +1644,12 @@ select:-webkit-autofill {
   0%   { background-position: -600px 0; }
   100% { background-position:  600px 0; }
 }
+/* Seamless, width-independent sweep for ShimmerOverlay — a full-cover bar
+   translated by its own width, so the loop reset is fully off-screen. */
+@keyframes shimmerSweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
 .skeleton-line {
   height: 11px; border-radius: 6px; margin-bottom: 9px;
   background: linear-gradient(90deg, #ebebeb 25%, #e0e0e0 50%, #ebebeb 75%);
