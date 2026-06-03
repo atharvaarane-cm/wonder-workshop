@@ -3774,7 +3774,11 @@ select:-webkit-autofill {
 
 /* ── One Pager ── */
 .onepager-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  /* Near-opaque dark canvas so the export reads as a true fullscreen preview
+     (the app no longer shows through behind the centered letter page —
+     Ravi's "not full screen" flag). */
+  position: fixed; inset: 0; background: rgba(9,9,11,0.985);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   display: flex; flex-direction: column; align-items: center;
   overflow-y: auto; z-index: 500; padding: 16px 24px 32px;
 }
