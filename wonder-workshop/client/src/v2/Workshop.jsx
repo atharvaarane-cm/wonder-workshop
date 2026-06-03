@@ -301,9 +301,9 @@ function getThemeVars(isDark) {
 }
 
 export const CHAT_SUGGESTIONS = [
-  { label: "Create a new character based on this project's brief", icon: "users" },
-  { label: "Suggest a new location and add it", icon: "map" },
-  { label: "Add a hero product / element with reference image", icon: "camera" },
+  { label: "Create a character", icon: "users" },
+  { label: "Add new location", icon: "map" },
+  { label: "Add a hero product or element", icon: "camera" },
 ];
 
 export function isCameraDefault(frame) {
