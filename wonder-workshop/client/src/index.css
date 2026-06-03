@@ -3783,7 +3783,11 @@ select:-webkit-autofill {
   overflow-y: auto; z-index: 500; padding: 16px 24px 32px;
 }
 .onepager-shell {
-  width: min(1500px, calc(100vw - 48px)); display: flex; flex-direction: column; gap: 0;
+  /* Export sheet width. Ravi (5/31 sync): the sheet reads "tiny" on a 4K
+     monitor — a 1500px column stranded in dead space — and asked to "make this
+     much bigger," ~50% bigger. Bumped 1500 -> 2200 so it fills the screen on
+     large displays while still bounded by viewport width on smaller ones. */
+  width: min(2200px, calc(100vw - 48px)); display: flex; flex-direction: column; gap: 0;
 }
 .onepager-toolbar {
   display: flex; align-items: center; justify-content: space-between;
