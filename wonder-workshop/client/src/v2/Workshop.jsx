@@ -6771,10 +6771,10 @@ function BriefForm({
             <WLogo color="rgba(224,224,224,0.25)" size={28} />
             <HomeBackgroundSwitch value={homeBackground} onChange={onHomeBackgroundChange} />
           </div>
-          <h1 style={{ fontFamily: "var(--f)", fontSize: 48, fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)", whiteSpace: "nowrap" }}>
+          <h1 style={{ fontFamily: "var(--f)", fontSize: "clamp(30px, 6vw, 48px)", fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)" }}>
             Welcome to the Workshop.
           </h1>
-          <p style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, marginBottom: "5%", whiteSpace: "nowrap" }}>
+          <p style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, marginBottom: "5%" }}>
             Write a brief, a script, or a sentence. Add reference files for more context. AI builds the boards.
           </p>
         </div>
@@ -6856,7 +6856,7 @@ function BriefForm({
                 </span>
               </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: formRowGap }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: formRowGap }}>
             <RootMenuDropdown
               value={meta.client}
               options={[
@@ -6976,6 +6976,23 @@ function BriefForm({
 
 // -- MAIN APP -------------------------------------------------
 
+// Track whether we're at a phone-ish viewport. Inline styles can't be
+// media-queried, so the layout reads this to collapse the 256px sidebar into
+// an off-canvas drawer on mobile (offsite attendees view the homepage on
+// phones — Ravi's flag).
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth <= breakpoint);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 export default function WorkshopV2() {
   // First mount: check for a #share=<base64> URL hash first (read-only
   // shared brief), then resolve the active project id. If a project's already active,
@@ -7026,6 +7043,8 @@ export default function WorkshopV2() {
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(readAIChatDrawerOpenPreference);
+  const isMobile = useIsMobile();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   // Chat history persists per-project: seeded from the project's saved
@@ -8996,36 +9015,59 @@ export default function WorkshopV2() {
       )}
 
       <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden", position: "relative", zIndex: 1 }}>
-        {/* Left: project sidebar (full-height multi-project nav) */}
-        <ProjectSidebar
-          homeBackdrop={!built}
-          mode={built && activeProjectId ? "project" : "root"}
-          projects={[DEMO_PROJECT_META, ...projects.filter(p => p.id !== DEMO_PROJECT_META.id)]}
-          folders={folders}
-          activeProjectId={activeProjectId}
-          activeProjectTitle={data.meta?.title || "Untitled"}
-          activeAssetTab={assetTabOpen === "brand" ? "settings" : assetTabOpen}
-          onAssetTabChange={handleToggleAssetTab}
-          onBackToProjects={handleBackToProjects}
-          assetCounts={{
-            settings: data.brand?.logo ? 1 : 0,
-            talent: data.talent.length,
-            products: data.products.length,
-            locations: data.locations.length,
-            mood: (data.moodBoard || []).length,
-          }}
-          reconcileFlags={reconciliation.bySection}
-          onSwitch={switchToProject}
-          onNew={startNewProject}
-          onHome={handleBackToProjects}
-          onDelete={handleDeleteProject}
-          onRename={handleRenameProject}
-          onMoveToFolder={handleMoveToFolder}
-          onNewFolder={handleNewFolder}
-          onDeleteFolder={handleDeleteFolder}
-          onCleanupDuplicates={handleCleanupDuplicates}
-          onRenameFolder={handleRenameFolder}
-        />
+        {/* Left: project sidebar. On mobile it collapses to an off-canvas
+            drawer (hamburger + backdrop) so the homepage gets full width
+            on a phone — Ravi's offsite flag. One instance, conditionally
+            wrapped, so props aren't duplicated. */}
+        {(() => {
+          const sb = (
+            <ProjectSidebar
+              homeBackdrop={!built}
+              mode={built && activeProjectId ? "project" : "root"}
+              projects={[DEMO_PROJECT_META, ...projects.filter(p => p.id !== DEMO_PROJECT_META.id)]}
+              folders={folders}
+              activeProjectId={activeProjectId}
+              activeProjectTitle={data.meta?.title || "Untitled"}
+              activeAssetTab={assetTabOpen === "brand" ? "settings" : assetTabOpen}
+              onAssetTabChange={handleToggleAssetTab}
+              onBackToProjects={() => { handleBackToProjects(); setMobileNavOpen(false); }}
+              assetCounts={{
+                settings: data.brand?.logo ? 1 : 0,
+                talent: data.talent.length,
+                products: data.products.length,
+                locations: data.locations.length,
+                mood: (data.moodBoard || []).length,
+              }}
+              reconcileFlags={reconciliation.bySection}
+              onSwitch={(id) => { switchToProject(id); setMobileNavOpen(false); }}
+              onNew={() => { startNewProject(); setMobileNavOpen(false); }}
+              onHome={() => { handleBackToProjects(); setMobileNavOpen(false); }}
+              onDelete={handleDeleteProject}
+              onRename={handleRenameProject}
+              onMoveToFolder={handleMoveToFolder}
+              onNewFolder={handleNewFolder}
+              onDeleteFolder={handleDeleteFolder}
+              onCleanupDuplicates={handleCleanupDuplicates}
+              onRenameFolder={handleRenameFolder}
+            />
+          );
+          if (!isMobile) return sb;
+          return (
+            <>
+              <button
+                aria-label="Open project menu"
+                onClick={() => setMobileNavOpen(o => !o)}
+                style={{ position: "fixed", top: 10, left: 10, zIndex: 220, width: 38, height: 38, borderRadius: 9, border: "1px solid var(--warm-12)", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", color: "var(--warm)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 17, lineHeight: 1 }}
+              >☰</button>
+              {mobileNavOpen && (
+                <div onClick={() => setMobileNavOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
+              )}
+              <div style={{ position: "fixed", left: 0, top: 0, height: "100dvh", zIndex: 201, transform: mobileNavOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.25s ease", boxShadow: mobileNavOpen ? "2px 0 24px rgba(0,0,0,0.5)" : "none" }}>
+                {sb}
+              </div>
+            </>
+          );
+        })()}
 
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {/* Read-only banner — surfaces when the project was loaded from
