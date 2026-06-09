@@ -8618,7 +8618,7 @@ export default function WorkshopV2() {
     ].join("\n");
 
     const history = [
-      { role: "system", content: chatContext.systemPrompt },
+      { role: "system", content: systemPrompt },
       ...chatMessages.filter(m => m.role === "user" || m.role === "ai").map(m => ({
         role: m.role === "ai" ? "assistant" : "user",
         content: m.text,
