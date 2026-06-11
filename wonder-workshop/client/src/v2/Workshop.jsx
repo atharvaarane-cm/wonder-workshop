@@ -6711,6 +6711,8 @@ function BriefForm({
   const [files, setFiles] = useState([]);
   const [fileDragOver, setFileDragOver] = useState(false);
   const [improving, setImproving] = useState(false);
+  const [improveMode, setImproveMode] = useState("treatment"); // drives the Generating… tag label
+  const [improveError, setImproveError] = useState(null);
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveCustomMode, setImproveCustomMode] = useState(false);
   const [customText, setCustomText] = useState("");
@@ -6729,6 +6731,8 @@ function BriefForm({
   async function improveBrief(mode = "treatment", customInstruction = "") {
     const text = (meta.treatment || "").trim();
     if (!text || improving || generating) return;
+    setImproveMode(mode);
+    setImproveError(null);
     setImproving(true);
     setImproveOpen(false);
     setImproveCustomMode(false);
@@ -6768,8 +6772,15 @@ function BriefForm({
       const payload = await res.json();
       const expanded = (payload?.message?.content || "").trim().replace(/^["'`]+|["'`]+$/g, "");
       if (expanded) setMeta(m => ({ ...m, treatment: expanded }));
+      else throw new Error("The AI returned an empty response — try again.");
     } catch (e) {
       console.error("[improve brief]", e);
+      // Surface it — a silent console.error reads as "nothing happened".
+      setImproveError(
+        /Failed to fetch|NetworkError|50\d/.test(String(e?.message))
+          ? "Couldn't reach the AI service. Check your connection and try again."
+          : (e?.message || "Improve failed — try again.")
+      );
     } finally {
       setImproving(false);
     }
@@ -6841,9 +6852,15 @@ function BriefForm({
 
             {/* Row 2 — what are we making + inline add-files / improve */}
             <div style={{ position: "relative" }}>
+              {/* While the AI rewrites the brief, sweep the whole box with the
+                  same shimmer + Generating… tag used on generating image cards,
+                  so it's unmistakable that something is happening. */}
+              {improving && (
+                <ShimmerOverlay label={improveMode === "script" ? "Writing script…" : improveMode === "custom" ? "Improving…" : "Writing treatment…"} />
+              )}
               <Textarea
                 value={meta.treatment}
-                onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
+                onChange={e => { setMeta(m => ({ ...m, treatment: e.target.value })); if (improveError) setImproveError(null); }}
                 size="lg"
                 disabled={improving}
                 placeholder="What are we making?"
@@ -6959,6 +6976,23 @@ function BriefForm({
                 )}
               </div>
             </div>
+
+            {improveError && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "9px 12px", borderRadius: 10,
+                background: "rgba(229, 84, 74, 0.12)", border: "1px solid rgba(229, 84, 74, 0.3)",
+                color: "#F2A39C", fontFamily: "var(--f)", fontSize: 12.5, lineHeight: 1.4,
+              }}>
+                <span aria-hidden="true">⚠</span>
+                <span style={{ flex: 1 }}>{improveError}</span>
+                <button
+                  type="button"
+                  onClick={() => setImproveError(null)}
+                  style={{ border: "none", background: "transparent", color: "#F2A39C", cursor: "pointer", fontSize: 14, lineHeight: 1, outline: "none", padding: 2 }}
+                >&times;</button>
+              </div>
+            )}
 
             {files.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
