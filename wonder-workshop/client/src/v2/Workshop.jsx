@@ -9230,6 +9230,45 @@ export default function WorkshopV2() {
         )}
       </nav>
 
+      {/* Breadcrumbs — a persistent "go up a level" trail so it's always easy to
+          get back after drilling in. "All Projects" → the project list; the
+          project name → out of a frame's production view. */}
+      {built && (() => {
+        const prodFrame = productionFrameId ? data.frames.find(f => f.id === productionFrameId) : null;
+        const link = (label, onClick) => (
+          <button
+            type="button"
+            onClick={onClick}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--warm-35)", fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, outline: "none", whiteSpace: "nowrap" }}
+            onMouseEnter={e => { e.currentTarget.style.color = "var(--warm)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--warm-35)"; }}
+          >{label}</button>
+        );
+        const current = label => (
+          <span style={{ color: "var(--warm-60)", fontFamily: "var(--f)", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+        );
+        const sep = <span aria-hidden="true" style={{ color: "var(--warm-15)", fontSize: 12 }}>{"›"}</span>;
+        return (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0,
+            padding: isMobile ? "8px 14px" : "6px 24px",
+            borderBottom: "1px solid var(--warm-04)",
+          }}>
+            {link("All Projects", () => handleBackToProjects())}
+            {sep}
+            {prodFrame ? (
+              <>
+                {link(data.meta?.title || "Untitled", () => setProductionFrameId(null))}
+                {sep}
+                {current(`Frame ${prodFrame.number}`)}
+              </>
+            ) : (
+              current(data.meta?.title || "Untitled")
+            )}
+          </div>
+        );
+      })()}
+
       {/* Mobile section switcher — Characters / Elements / Locations / Mood /
           Project Settings as a scrollable row of tappable pills. On desktop these
           live in the left sidebar; on a phone they belong across the top. */}
