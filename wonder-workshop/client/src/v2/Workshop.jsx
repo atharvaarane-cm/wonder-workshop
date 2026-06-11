@@ -7042,19 +7042,23 @@ function BriefForm({
                 onClick={() => !generating && onGenerate(meta)}
                 disabled={generating}
                 style={{
+                  position: "relative", overflow: "hidden",
                   display: "inline-flex", alignItems: "center", gap: 8,
                   padding: "12px 26px", borderRadius: 999, border: "none",
                   background: "#f4f1ec", color: "#15120f",
                   fontFamily: "var(--f)", fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em",
                   cursor: generating ? "default" : "pointer", outline: "none",
-                  boxShadow: "0 2px 14px rgba(0, 0, 0, 0.25)", opacity: generating ? 0.7 : 1,
+                  boxShadow: "0 2px 14px rgba(0, 0, 0, 0.25)", opacity: generating ? 0.85 : 1,
                   transition: "filter 0.12s ease",
                 }}
                 onMouseEnter={e => { if (!generating) e.currentTarget.style.filter = "brightness(0.96)"; }}
                 onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
               >
-                <DropdownAssetIcon src={iconSparkleUrl} size={14} style={{ filter: "brightness(0)", opacity: 0.85 }} />
-                {generating ? "Creating…" : "Create"}
+                {generating && <ShimmerSweep color="rgba(0,0,0,0.16)" />}
+                <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <DropdownAssetIcon src={iconSparkleUrl} size={14} style={{ filter: "brightness(0)", opacity: 0.85 }} />
+                  {generating ? "Creating…" : "Create"}
+                </span>
               </button>
             </div>
 
