@@ -1273,6 +1273,8 @@ const _pendingListeners = new Set();
 function _notifyPending() { for (const fn of _pendingListeners) fn(); }
 export function markPending(key) {
   if (!key) return;
+  // Re-queuing a slot (e.g. a manual retry) clears any prior failure badge.
+  if (_failed.has(key)) { _failed.delete(key); _notifyFailed(); }
   if (_pending.has(key)) return;
   if (_pending.size === 0) _pendingTotal = 0; // empty → start a fresh batch
   _pending.add(key);
@@ -1323,6 +1325,35 @@ export function usePendingStats() {
     return () => { _pendingListeners.delete(force); };
   }, []);
   return { pending: _pending.size, total: _pendingTotal, done: Math.max(0, _pendingTotal - _pending.size) };
+}
+
+// -- FAILED BUS -----------------------------------------------
+// Slots whose generation gave up after every retry (usually Gemini
+// rate-limiting under a big batch). Without this, a failed slot looks
+// identical to one that was never attempted — an empty "Generate" box.
+// Marking it lets the slot show "Generation failed — Retry". Same key
+// format as the pending bus; markPending(key) clears the failure.
+const _failed = new Set();
+const _failedListeners = new Set();
+function _notifyFailed() { for (const fn of _failedListeners) fn(); }
+export function markFailed(key) {
+  if (!key || _failed.has(key)) return;
+  _failed.add(key);
+  _notifyFailed();
+}
+export function clearFailed(key) {
+  if (!key || !_failed.has(key)) return;
+  _failed.delete(key);
+  _notifyFailed();
+}
+export function useFailed(key) {
+  const [, force] = useReducer(x => x + 1, 0);
+  useEffect(() => {
+    _failedListeners.add(force);
+    return () => { _failedListeners.delete(force); };
+  }, []);
+  if (!key) return false;
+  return _failed.has(key);
 }
 
 // True whenever ANY generation/regeneration is in flight (any pending key).
@@ -4389,6 +4420,9 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
   // The slot shimmers whether or not its task has actually started,
   // so queued items announce themselves alongside in-flight ones.
   const externalPending = usePending(pendingKey);
+  // True if this slot's auto-generation gave up after all retries — show a
+  // retryable error instead of a blank "Generate" box (clears on retry).
+  const failed = useFailed(pendingKey);
   // Shimmer whenever this slot is generating — including a repopulate over an
   // existing image (every pending key is reliably cleared in a finally, so
   // there's no stuck-shimmer risk). "any time there's something generating".
@@ -4505,6 +4539,7 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
 
   async function handleRegen(instruction) {
     if (locked) return;
+    clearFailed(pendingKey); // a retry clears the prior failure badge
     setGenerating(true);
     setImproveOpen(false);
     try {
@@ -4512,6 +4547,7 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
       toast(instruction ? "Improved" : "Regenerated", { kind: "success", ttl: 2200 });
     } catch (e) {
       console.error("[V2ImageSlot regen]", e);
+      markFailed(pendingKey); // retry failed too — keep the error state
       toast(`Generation failed: ${e?.message?.slice(0, 140) || "unknown error"}`, { kind: "error" });
     } finally {
       setGenerating(false);
@@ -4603,6 +4639,24 @@ function V2ImageSlot({ src, label, ratio, locked, basePrompt, pendingKey, versio
               <>
                 <SectionIcon name="plus" size={16} color="var(--warm-25)" />
                 <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 500, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
+              </>
+            ) : failed ? (
+              // Auto-gen gave up (usually rate-limited under the big batch).
+              // Show it as a recoverable error with a one-click retry, so it
+              // doesn't read as "never attempted".
+              <>
+                <div aria-hidden="true" style={{ fontSize: 18, lineHeight: 1, color: "#F2A39C" }}>⚠</div>
+                <div style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, marginTop: 5, color: "#F2A39C", letterSpacing: "0.04em", textTransform: "uppercase" }}>Generation failed</div>
+                <div style={{ display: "flex", gap: 6, marginTop: 7, justifyContent: "center" }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); if (!generating) handleRegen(); }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 7, cursor: "pointer", background: "rgba(242,163,156,0.14)", border: "1px solid rgba(242,163,156,0.4)", color: "#F2A39C", outline: "none", fontFamily: "var(--f)", fontSize: 10, fontWeight: 600 }}
+                  ><SectionIcon name="sparkle" size={10} color="currentColor" /> Retry</button>
+                  <button
+                    onClick={e => { e.stopPropagation(); fileRef.current?.click(); }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 7, cursor: "pointer", background: "transparent", border: "1px solid var(--warm-12)", color: "var(--warm-45)", outline: "none", fontFamily: "var(--f)", fontSize: 10, fontWeight: 600 }}
+                  >↑ Upload</button>
+                </div>
               </>
             ) : (
               // Empty + unlocked → clicking the slot generates. Make that
@@ -8426,13 +8480,16 @@ export default function WorkshopV2() {
     // out 14+ requests at once (4 fullbody × N talent + 3 extra
     // headshots × N talent + locations + products + mood) and half
     // were dropping silently.
-    const IMG_CONCURRENCY = 3;
-    // Up to 3 retries with exponential backoff (1.5s → 3s → 6s) on
-    // rate-limits / transient 5xx. Gemini rate-limits hard under a ~50-call
-    // batch, and a single retry left too many calls dropping both attempts
-    // (empty full-body SIDE slots, failed frames). More attempts + longer
-    // backoff lets the per-minute window recover before giving up.
-    async function withRetry(task, attempts = 3) {
+    // Concurrency 2 (was 3): a ~50-image burst at 3 wide overran Gemini's
+    // per-minute window so hard that many slots exhausted their retries and
+    // came back blank. Two in flight eases the pressure without making the
+    // whole batch crawl.
+    const IMG_CONCURRENCY = 2;
+    // Up to 5 retries (was 3) with jittered exponential backoff
+    // (~1.5s → 3s → 6s → 12s → 18s cap). The extra attempts + jitter let the
+    // per-minute rate-limit window recover instead of giving up early, which
+    // is what left empty headshot/full-body slots and failed frames.
+    async function withRetry(task, attempts = 5) {
       let delay = 1500;
       for (let i = 0; ; i++) {
         try {
@@ -8440,8 +8497,10 @@ export default function WorkshopV2() {
         } catch (err) {
           const retryable = err?.status === 429 || (err?.status >= 500 && err?.status < 600) || !err?.status;
           if (!retryable || i >= attempts) throw err;
-          await new Promise(r => setTimeout(r, delay));
-          delay *= 2;
+          // Jitter so the 2 workers don't retry in lockstep and re-collide.
+          const jitter = delay * (0.5 + Math.random() * 0.5);
+          await new Promise(r => setTimeout(r, jitter));
+          delay = Math.min(delay * 2, 18000);
         }
       }
     }
@@ -8523,6 +8582,7 @@ export default function WorkshopV2() {
             log("info", `headshot done: ${t.name} / ${view}`);
           } catch (err) {
             log("error", `headshot failed: ${t.name} / ${view}`, { error: String(err?.message || err) });
+            markFailed(`talent.${t.id}.headshots.${view}`); // surface a retryable error, not a blank slot
           } finally {
             markDone(`talent.${t.id}.headshots.${view}`);
           }
@@ -8539,6 +8599,7 @@ export default function WorkshopV2() {
             log("info", `fullbody done: ${t.name} / ${view}`);
           } catch (err) {
             log("error", `fullbody failed: ${t.name} / ${view}`, { error: String(err?.message || err) });
+            markFailed(`talent.${t.id}.fullBody.${view}`); // surface a retryable error, not a blank slot
           } finally {
             markDone(`talent.${t.id}.fullBody.${view}`);
           }
