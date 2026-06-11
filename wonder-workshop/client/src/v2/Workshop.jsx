@@ -7093,6 +7093,38 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
+// Every project must have at least one location, and the brief/treatment must
+// actually NAME it — otherwise it reads wrong AND trips the reconcile check
+// ("missing from brief" → amber dot) even though it's used in every board. The
+// generated location is named by the LLM, but the user's typed treatment
+// predates it, so the two drift. Guarantee a location and weave it into the
+// treatment prose when it's absent. Mutates v2Data in place.
+function ensureLocationInTreatment(v2Data) {
+  if (!v2Data?.meta) return;
+  let locs = Array.isArray(v2Data.locations) ? v2Data.locations : [];
+  if (!locs.length) {
+    // Model ignored the always-one-location rule — synthesize a minimal one.
+    locs = [{
+      id: "l1", name: "Main Location", handle: "@location", type: "ai",
+      colors: ["#444", "#555", "#666", "#777"], note: "", referenceImage: null,
+      generationStatus: "idle", generatedImage: null, locked: false,
+    }];
+    v2Data.locations = locs;
+  }
+  const primary = locs[0];
+  const t = (v2Data.meta.treatment || "").trim();
+  const named = (needle) => {
+    const n = (needle || "").replace(/^@/, "").trim();
+    if (n.length < 3) return false;
+    return new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(t);
+  };
+  if (named(primary.name) || named(primary.handle)) return; // already named
+  const setting = (primary.name || primary.handle || "the location").replace(/^@/, "");
+  v2Data.meta.treatment = t
+    ? `${t}${/[.!?]["')\]]?$/.test(t) ? "" : "."} Set at ${setting}.`
+    : `Set at ${setting}.`;
+}
+
 export default function WorkshopV2() {
   // First mount: check for a #share=<base64> URL hash first (read-only
   // shared brief), then resolve the active project id. If a project's already active,
@@ -8224,6 +8256,9 @@ export default function WorkshopV2() {
       if (meta.treatment?.trim()) {
         v2Data.meta.treatment = meta.treatment.trim();
       }
+      // Guarantee ≥1 location and that the treatment names it (clears the
+      // bogus reconcile dot + keeps the brief reading with its setting).
+      ensureLocationInTreatment(v2Data);
       // imagePrompts comes back as 4 cinematic visual descriptions —
       // perfect mood-board fodder. Capture before the v2Data discards them.
       const imagePrompts = Array.isArray(v1Brief?.imagePrompts) ? v1Brief.imagePrompts.slice(0, 4) : [];
@@ -8306,7 +8341,10 @@ export default function WorkshopV2() {
           client: meta.client || v2Data.meta.client,
           format: meta.format || v2Data.meta.format,
           aspect: meta.aspect || v2Data.meta.aspect,
-          treatment: meta.treatment || v2Data.meta.treatment,
+          // v2Data.meta.treatment already = the user's text (if any) with the
+          // location woven in by ensureLocationInTreatment — use it as-is so the
+          // weave isn't clobbered by the raw input.
+          treatment: v2Data.meta.treatment,
         },
       });
       // Auto-detect @mentions in the new shot briefs so frame

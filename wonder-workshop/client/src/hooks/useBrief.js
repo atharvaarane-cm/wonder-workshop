@@ -18,7 +18,7 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
     "duration": "<e.g. 30s>",
     "shots": <number>,
     "location": "<location1, location2>",
-    "description": "<2-3 sentence cinematic creative direction>",
+    "description": "<2-3 sentence cinematic creative direction that NAMES the primary location (environment.heroName) in the prose>",
     "keyMessage": "<single punchy sentence — the one feeling or idea the viewer should walk away with>",
     "toneKeywords": ["<adjective1>", "<adjective2>", "<adjective3>", "<adjective4>"],
     "productionType": "<Video | Stills | Video + Stills>"
@@ -59,7 +59,9 @@ Given a user's prompt, return a JSON object with EXACTLY this structure — no e
 }
 
 Rules:
+- THERE IS ALWAYS AT LEAST ONE LOCATION. environment.heroName and environment.heroEnvironment are BOTH REQUIRED and must NEVER be empty — if the prompt doesn't specify a setting, infer a fitting one. heroName is a short, specific place name (e.g. 'Cozy House Party', 'Sunset Beach').
 - environment.heroEnvironment is REQUIRED — populate it with a vivid 1-2 sentence description of the main location pulled from the user's prompt (architecture, time of day, weather, surrounding context). Never leave empty.
+- creativeDirection.description (the treatment) MUST explicitly NAME the primary location (environment.heroName) in its prose — the brief should read with its setting, e.g. "Inside the Cozy House Party, friends gather…". The same location MUST also appear in the shotList (see @-handles). A location that exists but is never named in the treatment is a bug.
 - DO NOT populate moodBoard or environments arrays — those are user-driven sections; the user adds entries manually via "Add mood reference" / "Add location" buttons. Leave them out of the JSON entirely.
 - shotList (the storyboard) must have exactly 9 items
 - DIRECT THE STORYBOARD LIKE A REAL COMMERCIAL — it must read as a deliberately
