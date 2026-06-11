@@ -31,7 +31,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import OnePager from "../components/OnePager.jsx";
-import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
+import { ProjectSidebar, PROJECT_SECTION_TABS } from "./components/sidebar/ProjectSidebar.jsx";
 import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { AIChatPanel, AIChatTab } from "./components/AIChat.jsx";
 import { BriefSettingsCard } from "./components/BriefPanel.jsx";
@@ -6519,12 +6519,15 @@ function SidebarPanel({ onClose, children }) {
           <SectionIcon name="sparkle" size={15} color="var(--warm)" />
           <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 600, color: "var(--warm)" }}>AI Chat</span>
         </div>
-        <button onClick={onClose} style={{
-          width: 24, height: 24, borderRadius: 5, border: "1px solid var(--warm-08)",
-          background: "transparent", color: "var(--warm-30)", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 14, lineHeight: 1, outline: "none",
-          paddingBottom: 1,
-        }}>&times;</button>
+        <button onClick={onClose} aria-label="Close chat" title="Close chat" style={{
+          width: 36, height: 36, borderRadius: 9, border: "1px solid var(--warm-20)",
+          background: "var(--warm-10)", color: "var(--warm)", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 24, fontWeight: 300, lineHeight: 1, outline: "none",
+          paddingBottom: 2, transition: "background 0.14s ease",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--warm-20)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "var(--warm-10)"; }}
+        >&times;</button>
       </div>
 
       {/* Content */}
@@ -8095,11 +8098,13 @@ export default function WorkshopV2() {
   }, [highlightedFrames]);
 
   const selectFrame = useCallback((id) => {
+    // Open the frame in production view, but DON'T auto-open the chat — clicking
+    // around / into focus modes shouldn't pop the chat panel. The user opens chat
+    // explicitly via the AI Chat tab.
     setSelectedFrameId(id);
     setProductionFrameId(id);
     setChatAssetContext(null);
-    if (!sidebarOpen) setSidebarOpen(true);
-  }, [sidebarOpen]);
+  }, []);
 
   // Real brief generation, powered by v1's generateBrief() → Gemini.
   // Builds a single prompt string from the BriefForm inputs (title,
@@ -8759,9 +8764,10 @@ export default function WorkshopV2() {
   // context type: "talent" | "product" | "location".
   const handleFocusAsset = useCallback((type, id) => {
     if (!type || !id) return;
+    // Focus the asset for chat context, but don't auto-open the chat panel —
+    // navigating into a card shouldn't surface the chat.
     setChatAssetContext({ type, id });
     setSelectedFrameId(null); // focusing an asset clears any frame focus
-    setSidebarOpen(true);
   }, []);
 
   const handleFocusChat = useCallback(() => {
@@ -9219,6 +9225,39 @@ export default function WorkshopV2() {
           </div>
         )}
       </nav>
+
+      {/* Mobile section switcher — Characters / Elements / Locations / Mood /
+          Project Settings as a scrollable row of tappable pills. On desktop these
+          live in the left sidebar; on a phone they belong across the top. */}
+      {built && isMobile && (
+        <div style={{
+          display: "flex", gap: 6, overflowX: "auto", flexShrink: 0,
+          padding: "8px 12px", borderBottom: "1px solid var(--warm-06)",
+          background: "rgba(10,9,9,0.55)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          scrollbarWidth: "none",
+        }}>
+          {PROJECT_SECTION_TABS.map(tab => {
+            const active = (assetTabOpen === "brand" ? "settings" : assetTabOpen) === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => handleToggleAssetTab(tab.key)}
+                style={{
+                  flexShrink: 0, padding: "7px 14px", borderRadius: 999,
+                  border: `1px solid ${active ? "rgba(255,255,255,0.28)" : "var(--warm-10)"}`,
+                  background: active ? "rgba(255,255,255,0.13)" : "transparent",
+                  color: active ? "var(--warm)" : "var(--warm-50)",
+                  fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
+                  whiteSpace: "nowrap", cursor: "pointer", outline: "none",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Content area */}
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
