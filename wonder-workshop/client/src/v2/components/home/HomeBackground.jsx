@@ -20,9 +20,11 @@ export const HOME_BACKGROUND_STORAGE_KEY = "ww-home-background";
 export const HOME_BACKGROUND_OPTIONS = {
   shader: "shader",
   classic: "classic",
+  orange: "orange",
 };
 
 const CLASSIC_HOME_BG = "/landing-bg/wonder-w.png";
+const ORANGE_HOME_BG = "/landing-bg/home-orange.jpg";
 
 const SHADER_PRESET = {
   animate: "on",
@@ -77,6 +79,14 @@ class ShaderErrorBoundary extends Component {
 
 export function HomeBackground({ mode = HOME_BACKGROUND_OPTIONS.shader }) {
   const normalizedMode = normalizeHomeBackground(mode);
+
+  // The orange "homescreen" backdrop (Figma) is its own look — a full-bleed image
+  // kept vivid, with only a soft vignette (the dark glass card supplies its own
+  // contrast), so it skips the heavy darkening overlays shader/classic use.
+  if (normalizedMode === HOME_BACKGROUND_OPTIONS.orange) {
+    return <OrangeHomeBackground />;
+  }
+
   // Honor the shader choice only where WebGL actually works; otherwise classic.
   const useShader = normalizedMode === HOME_BACKGROUND_OPTIONS.shader && supportsWebGL();
 
@@ -130,6 +140,36 @@ function ClassicHomeBackground() {
         opacity: 0.55,
       }}
     />
+  );
+}
+
+function OrangeHomeBackground() {
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          backgroundImage: `url(${ORANGE_HOME_BG})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          background:
+            "radial-gradient(ellipse 60% 52% at 50% 58%, rgba(8,5,3,0.32) 0%, rgba(8,5,3,0) 72%)",
+        }}
+      />
+    </>
   );
 }
 
