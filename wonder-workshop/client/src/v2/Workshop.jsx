@@ -9,6 +9,18 @@ import { MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
 const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
 const HOVER_SCALE = 1.012;
 const TAP_SCALE = 0.985;
+
+// Shared layout-transition config so containers grow/shrink smoothly when
+// tiles or frames are added/removed (framer-motion `layout` + AnimatePresence).
+const LAYOUT_TRANSITION = { type: "spring", stiffness: 360, damping: 34, mass: 0.8 };
+// Enter/exit for individual tiles inside an AnimatePresence grid.
+const TILE_ENTER = {
+  layout: true,
+  initial: { opacity: 0, scale: 0.85 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.85 },
+  transition: LAYOUT_TRANSITION,
+};
 import { generateBrief, chatWithTools, regenerateShotList, suggestReconciliation, suggestOrphanCleanup } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
@@ -31,7 +43,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import OnePager from "../components/OnePager.jsx";
-import { ProjectSidebar } from "./components/sidebar/ProjectSidebar.jsx";
+import { ProjectSidebar, PROJECT_SECTION_TABS } from "./components/sidebar/ProjectSidebar.jsx";
 import { EditBriefDialog } from "./components/BriefPanel.jsx";
 import { AIChatPanel, AIChatTab } from "./components/AIChat.jsx";
 import { BriefSettingsCard } from "./components/BriefPanel.jsx";
@@ -3199,6 +3211,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const fIdx = data.frames.findIndex(f => f.id === frame.id);
   const update = (field, value) => dispatch({ type: "UPDATE_FRAME", frameId: frame.id, field, value });
   const updateCamera = (fields) => dispatch({ type: "UPDATE_FRAME_CAMERA", frameId: frame.id, fields });
+  const isMobile = useIsMobile();
   const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
   const loc = data.locations.find(l => l.id === frame.locationId);
   const hasImage = !!frame.uploadedImage;
@@ -3236,7 +3249,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const isPortrait = aspNum < 1;
 
   return (
-    <div style={{ padding: "0 24px 32px", maxWidth: isPortrait ? 1100 : 960, margin: "0 auto", background: "transparent" }}>
+    <div style={{ padding: isMobile ? "0 16px 120px" : "0 24px 32px", maxWidth: isPortrait ? 1100 : 960, margin: "0 auto", background: "transparent" }}>
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0 20px" }}>
         <PremiumButton variant="ghost" onClick={onBack} style={{ gap: 6, padding: "6px 12px" }}>
@@ -3671,17 +3684,20 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch, data }) {
           autoGenerateLabel="Regenerate all"
         />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-        {moodBoard.map(m => (
-          <MoodTile
-            key={m.id}
-            item={m}
-            dispatch={dispatch}
-            locked={sectionLocked}
-            versions={data?.versionHistory?.[`mood.${m.id}`] || []}
-          />
-        ))}
-        <div style={{ position: "relative" }}>
+      <motion.div layout transition={LAYOUT_TRANSITION} style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+        <AnimatePresence>
+          {moodBoard.map(m => (
+            <motion.div key={m.id} {...TILE_ENTER}>
+              <MoodTile
+                item={m}
+                dispatch={dispatch}
+                locked={sectionLocked}
+                versions={data?.versionHistory?.[`mood.${m.id}`] || []}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <motion.div layout transition={LAYOUT_TRANSITION} style={{ position: "relative" }}>
           <button
             ref={addBtnRef}
             onClick={() => dispatch({ type: "ADD_MOOD", data: {} })}
@@ -3698,8 +3714,8 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch, data }) {
           <div aria-hidden="true" style={{ width: "100%", marginTop: 4, fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, padding: "3px 5px", visibility: "hidden" }}>
             Caption…
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
       {moodBoard.length === 0 && (
         <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 400, color: "var(--warm-25)", textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>
           Drop in mood references — color palettes, film stills, photos. They guide tone without driving generation directly.
@@ -3839,21 +3855,25 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
         reconcileCount={data.talent.filter(t => assetReconcileStatus(t, "talent", data).needs).length}
         onReconcileAll={() => requestReconcile({ scope: "section", type: "talent" })}
       />
-      <div style={{
+      <motion.div layout transition={LAYOUT_TRANSITION} style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
         gap: 12,
       }}>
-        {data.talent.map(t => (
-          <div key={t.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
-            <CharacterTile character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
-            {assetReconcileStatus(t, "talent", data).needs && (
-              <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "talent", id: t.id }); }} />
-            )}
-          </div>
-        ))}
-        <AddCharacterTile onClick={() => dispatch({ type: "ADD_TALENT", data: {} })} />
-      </div>
+        <AnimatePresence>
+          {data.talent.map(t => (
+            <motion.div key={t.id} {...TILE_ENTER} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+              <CharacterTile character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
+              {assetReconcileStatus(t, "talent", data).needs && (
+                <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "talent", id: t.id }); }} />
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <motion.div layout transition={LAYOUT_TRANSITION}>
+          <AddCharacterTile onClick={() => dispatch({ type: "ADD_TALENT", data: {} })} />
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
@@ -4886,7 +4906,7 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
         reconcileCount={data.locations.filter(l => assetReconcileStatus(l, "locations", data).needs).length}
         onReconcileAll={() => requestReconcile({ scope: "section", type: "locations" })}
       />
-      <div style={{
+      <motion.div layout transition={LAYOUT_TRANSITION} style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
         gap: 12,
@@ -4896,19 +4916,23 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
           const aspectCSS = asp.includes(":") ? asp.replace(":", "/") : `${asp}/1`;
           return (
             <>
-              {data.locations.map(l => (
-                <div key={l.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
-                  <LocationTile location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
-                  {assetReconcileStatus(l, "locations", data).needs && (
-                    <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "locations", id: l.id }); }} />
-                  )}
-                </div>
-              ))}
-              <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} aspectCSS={aspectCSS} />
+              <AnimatePresence>
+                {data.locations.map(l => (
+                  <motion.div key={l.id} {...TILE_ENTER} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+                    <LocationTile location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
+                    {assetReconcileStatus(l, "locations", data).needs && (
+                      <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "locations", id: l.id }); }} />
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              <motion.div layout transition={LAYOUT_TRANSITION}>
+                <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} aspectCSS={aspectCSS} />
+              </motion.div>
             </>
           );
         })()}
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -5112,21 +5136,25 @@ function ElementTab({ data, dispatch, onFocusAsset }) {
         reconcileCount={data.products.filter(p => assetReconcileStatus(p, "products", data).needs).length}
         onReconcileAll={() => requestReconcile({ scope: "section", type: "products" })}
       />
-      <div style={{
+      <motion.div layout transition={LAYOUT_TRANSITION} style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
         gap: 12,
       }}>
-        {data.products.map(p => (
-          <div key={p.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
-            <ElementTile product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
-            {assetReconcileStatus(p, "products", data).needs && (
-              <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "products", id: p.id }); }} />
-            )}
-          </div>
-        ))}
-        <AddTile label="Add Element" iconName="box" onClick={() => dispatch({ type: "ADD_PRODUCT", data: {} })} />
-      </div>
+        <AnimatePresence>
+          {data.products.map(p => (
+            <motion.div key={p.id} {...TILE_ENTER} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+              <ElementTile product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
+              {assetReconcileStatus(p, "products", data).needs && (
+                <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "products", id: p.id }); }} />
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <motion.div layout transition={LAYOUT_TRANSITION}>
+          <AddTile label="Add Element" iconName="box" onClick={() => dispatch({ type: "ADD_PRODUCT", data: {} })} />
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
@@ -5514,9 +5542,12 @@ function SectionTitle({ title, count }) {
 
 function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, generating, autoGenerateLabel = "Auto-generate", reconcileCount = 0, onReconcileAll }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    // flexWrap so the controls (esp. the amber "Reconcile all" button) drop to a
+    // new line and make room when they appear, instead of overlapping the title
+    // on narrow / mobile widths.
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
       <SectionTitle title={title} count={count} />
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {reconcileCount > 0 && onReconcileAll && (
           <button
             onClick={onReconcileAll}
@@ -5839,6 +5870,7 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onFocusAsset, onUp
 
 
 function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist, onFocusAsset, onRetryFrame, onRunRegeneration }) {
+  const isMobile = useIsMobile();
   const [dragId, setDragId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
   const didDrag = useRef(false);
@@ -5925,7 +5957,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
   const isProjectSettings = assetTabOpen === "settings" || assetTabOpen === "brand";
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 24px 32px", background: "transparent" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px 14px 120px" : "24px 24px 32px", background: "transparent" }}>
       <Reveal>
         <div>
           {/* Header */}
@@ -5963,10 +5995,12 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
             const asp = data.meta.aspect;
             const aspNum = asp.includes(":") ? (() => { const [w,h] = asp.split(":").map(Number); return w/h; })() : parseFloat(asp);
             const aspCSS = asp.includes(":") ? asp.replace(":", "/") : `${asp}/1`;
-            const cols = aspNum < 1 ? 4 : 3;
+            const cols = isMobile ? 2 : (aspNum < 1 ? 4 : 3);
             return (
           <div style={{ paddingTop: 20, marginTop: 16 }}>
-            <div
+            <motion.div
+              layout
+              transition={LAYOUT_TRANSITION}
               onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
               onDrop={onDr}
               style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16 }}
@@ -6029,7 +6063,9 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                 if (insertAt >= remaining.length) items.push(dropPreview);
                 return items;
               })()}
-              <div
+              <motion.div
+                layout
+                transition={LAYOUT_TRANSITION}
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragRef.current.id) { const endPos = data.frames.length - 1; if (endPos !== dragRef.current.targetPos) { dragRef.current.targetPos = endPos; setDropIndex(endPos); } } }}
                 onDrop={onDr}
                 onClick={() => dispatch({ type: "ADD_FRAME" })}
@@ -6041,8 +6077,8 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                 }}
               >
                 <span style={{ fontSize: 24, fontWeight: 200, color: "var(--warm-15)" }}>+</span>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           </div>
             );
           })()}
@@ -6520,12 +6556,15 @@ function SidebarPanel({ onClose, children }) {
           <SectionIcon name="sparkle" size={15} color="var(--warm)" />
           <span style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 600, color: "var(--warm)" }}>AI Chat</span>
         </div>
-        <button onClick={onClose} style={{
-          width: 24, height: 24, borderRadius: 5, border: "1px solid var(--warm-08)",
-          background: "transparent", color: "var(--warm-30)", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 14, lineHeight: 1, outline: "none",
-          paddingBottom: 1,
-        }}>&times;</button>
+        <button onClick={onClose} aria-label="Close chat" title="Close chat" style={{
+          width: 36, height: 36, borderRadius: 9, border: "1px solid var(--warm-20)",
+          background: "var(--warm-10)", color: "var(--warm)", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f)", fontSize: 24, fontWeight: 300, lineHeight: 1, outline: "none",
+          paddingBottom: 2, transition: "background 0.14s ease",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--warm-20)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "var(--warm-10)"; }}
+        >&times;</button>
       </div>
 
       {/* Content */}
@@ -6673,6 +6712,8 @@ function BriefForm({
   const [files, setFiles] = useState([]);
   const [fileDragOver, setFileDragOver] = useState(false);
   const [improving, setImproving] = useState(false);
+  const [improveMode, setImproveMode] = useState("treatment"); // drives the Generating… tag label
+  const [improveError, setImproveError] = useState(null);
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveCustomMode, setImproveCustomMode] = useState(false);
   const [customText, setCustomText] = useState("");
@@ -6691,6 +6732,8 @@ function BriefForm({
   async function improveBrief(mode = "treatment", customInstruction = "") {
     const text = (meta.treatment || "").trim();
     if (!text || improving || generating) return;
+    setImproveMode(mode);
+    setImproveError(null);
     setImproving(true);
     setImproveOpen(false);
     setImproveCustomMode(false);
@@ -6730,8 +6773,15 @@ function BriefForm({
       const payload = await res.json();
       const expanded = (payload?.message?.content || "").trim().replace(/^["'`]+|["'`]+$/g, "");
       if (expanded) setMeta(m => ({ ...m, treatment: expanded }));
+      else throw new Error("The AI returned an empty response — try again.");
     } catch (e) {
       console.error("[improve brief]", e);
+      // Surface it — a silent console.error reads as "nothing happened".
+      setImproveError(
+        /Failed to fetch|NetworkError|50\d/.test(String(e?.message))
+          ? "Couldn't reach the AI service. Check your connection and try again."
+          : (e?.message || "Improve failed — try again.")
+      );
     } finally {
       setImproving(false);
     }
@@ -6803,9 +6853,15 @@ function BriefForm({
 
             {/* Row 2 — what are we making + inline add-files / improve */}
             <div style={{ position: "relative" }}>
+              {/* While the AI rewrites the brief, sweep the whole box with the
+                  same shimmer + Generating… tag used on generating image cards,
+                  so it's unmistakable that something is happening. */}
+              {improving && (
+                <ShimmerOverlay label={improveMode === "script" ? "Writing script…" : improveMode === "custom" ? "Improving…" : "Writing treatment…"} />
+              )}
               <Textarea
                 value={meta.treatment}
-                onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
+                onChange={e => { setMeta(m => ({ ...m, treatment: e.target.value })); if (improveError) setImproveError(null); }}
                 size="lg"
                 disabled={improving}
                 placeholder="What are we making?"
@@ -6921,6 +6977,23 @@ function BriefForm({
                 )}
               </div>
             </div>
+
+            {improveError && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "9px 12px", borderRadius: 10,
+                background: "rgba(229, 84, 74, 0.12)", border: "1px solid rgba(229, 84, 74, 0.3)",
+                color: "#F2A39C", fontFamily: "var(--f)", fontSize: 12.5, lineHeight: 1.4,
+              }}>
+                <span aria-hidden="true">⚠</span>
+                <span style={{ flex: 1 }}>{improveError}</span>
+                <button
+                  type="button"
+                  onClick={() => setImproveError(null)}
+                  style={{ border: "none", background: "transparent", color: "#F2A39C", cursor: "pointer", fontSize: 14, lineHeight: 1, outline: "none", padding: 2 }}
+                >&times;</button>
+              </div>
+            )}
 
             {files.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -7079,7 +7152,11 @@ export default function WorkshopV2() {
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(readAIChatDrawerOpenPreference);
+  // Chat defaults CLOSED on phones (it's a full-screen overlay there, so opening
+  // it by default would hide the storyboard); honors the saved preference on desktop.
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth <= 768 ? false : readAIChatDrawerOpenPreference(),
+  );
   const isMobile = useIsMobile();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -8106,11 +8183,13 @@ export default function WorkshopV2() {
   }, [highlightedFrames]);
 
   const selectFrame = useCallback((id) => {
+    // Open the frame in production view, but DON'T auto-open the chat — clicking
+    // around / into focus modes shouldn't pop the chat panel. The user opens chat
+    // explicitly via the AI Chat tab.
     setSelectedFrameId(id);
     setProductionFrameId(id);
     setChatAssetContext(null);
-    if (!sidebarOpen) setSidebarOpen(true);
-  }, [sidebarOpen]);
+  }, []);
 
   // Real brief generation, powered by v1's generateBrief() → Gemini.
   // Builds a single prompt string from the BriefForm inputs (title,
@@ -8770,9 +8849,10 @@ export default function WorkshopV2() {
   // context type: "talent" | "product" | "location".
   const handleFocusAsset = useCallback((type, id) => {
     if (!type || !id) return;
+    // Focus the asset for chat context, but don't auto-open the chat panel —
+    // navigating into a card shouldn't surface the chat.
     setChatAssetContext({ type, id });
     setSelectedFrameId(null); // focusing an asset clears any frame focus
-    setSidebarOpen(true);
   }, []);
 
   const handleFocusChat = useCallback(() => {
@@ -8842,7 +8922,7 @@ export default function WorkshopV2() {
       ...getThemeVars(isDark),
       background: "transparent",
       position: "relative",
-      minHeight: "100vh", fontFamily: "var(--f)", color: "var(--warm)",
+      minHeight: "100dvh", fontFamily: "var(--f)", color: "var(--warm)",
       opacity: ready ? 1 : 0, transition: "opacity 0.8s ease, background 0.4s ease, color 0.4s ease",
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -9051,7 +9131,7 @@ export default function WorkshopV2() {
         </div>
       )}
 
-      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden", position: "relative", zIndex: 1 }}>
+      <div style={{ display: "flex", height: "100dvh", minHeight: 0, overflow: "hidden", position: "relative", zIndex: 1 }}>
         {/* Left: project sidebar. On mobile it collapses to an off-canvas
             drawer (hamburger + backdrop) so the homepage gets full width
             on a phone — Ravi's offsite flag. One instance, conditionally
@@ -9112,7 +9192,7 @@ export default function WorkshopV2() {
               {mobileNavOpen && (
                 <div onClick={() => setMobileNavOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 200 }} />
               )}
-              <div style={{ position: "fixed", top: 64, left: 16, zIndex: 201, width: 272, height: "min(620px, calc(100vh - 84px))", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", boxShadow: mobileNavOpen ? "0 24px 60px rgba(0,0,0,0.55)" : "none", transform: mobileNavOpen ? "translateY(0)" : "translateY(-10px)", opacity: mobileNavOpen ? 1 : 0, pointerEvents: mobileNavOpen ? "auto" : "none", transition: "opacity 0.18s ease, transform 0.18s ease" }}>
+              <div style={{ position: "fixed", top: 64, left: 16, zIndex: 201, width: 272, height: "min(620px, calc(100dvh - 84px))", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", boxShadow: mobileNavOpen ? "0 24px 60px rgba(0,0,0,0.55)" : "none", transform: mobileNavOpen ? "translateY(0)" : "translateY(-10px)", opacity: mobileNavOpen ? 1 : 0, pointerEvents: mobileNavOpen ? "auto" : "none", transition: "opacity 0.18s ease, transform 0.18s ease" }}>
                 {sb}
               </div>
             </>
@@ -9164,7 +9244,9 @@ export default function WorkshopV2() {
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          {built && <>
+          {/* Secondary controls are hidden on mobile — the floating Projects pill
+              owns the top-left there, and aspect/length/save would overlap it. */}
+          {built && !isMobile && <>
             <AspectRatioControl
               value={data.meta.aspect}
               onChange={(newRatio) => handleAspectChange(newRatio)}
@@ -9187,10 +9269,13 @@ export default function WorkshopV2() {
 
         {built && (
           <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end", justifySelf: "end" }}>
-            <PremiumButton variant="ghost" onClick={() => dispatch({ type: "UNDO" })} disabled={past.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Undo (Ctrl+Z)">{"↩"}</PremiumButton>
-            <PremiumButton variant="ghost" onClick={() => dispatch({ type: "REDO" })} disabled={future.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Redo (Ctrl+Shift+Z)">{"↪"}</PremiumButton>
-
-            <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
+            {!isMobile && (
+              <>
+                <PremiumButton variant="ghost" onClick={() => dispatch({ type: "UNDO" })} disabled={past.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Undo (Ctrl+Z)">{"↩"}</PremiumButton>
+                <PremiumButton variant="ghost" onClick={() => dispatch({ type: "REDO" })} disabled={future.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Redo (Ctrl+Shift+Z)">{"↪"}</PremiumButton>
+                <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
+              </>
+            )}
 
             <Button variant="outline" onClick={() => setExportOpen(true)}>
               <SectionIcon name="download" color="currentColor" /> Export
@@ -9225,6 +9310,78 @@ export default function WorkshopV2() {
           </div>
         )}
       </nav>
+
+      {/* Breadcrumbs — a persistent "go up a level" trail so it's always easy to
+          get back after drilling in. "All Projects" → the project list; the
+          project name → out of a frame's production view. */}
+      {built && (() => {
+        const prodFrame = productionFrameId ? data.frames.find(f => f.id === productionFrameId) : null;
+        const link = (label, onClick) => (
+          <button
+            type="button"
+            onClick={onClick}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--warm-35)", fontFamily: "var(--f)", fontSize: 12, fontWeight: 500, outline: "none", whiteSpace: "nowrap" }}
+            onMouseEnter={e => { e.currentTarget.style.color = "var(--warm)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--warm-35)"; }}
+          >{label}</button>
+        );
+        const current = label => (
+          <span style={{ color: "var(--warm-60)", fontFamily: "var(--f)", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+        );
+        const sep = <span aria-hidden="true" style={{ color: "var(--warm-15)", fontSize: 12 }}>{"›"}</span>;
+        return (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0,
+            padding: isMobile ? "8px 14px" : "6px 24px",
+            borderBottom: "1px solid var(--warm-04)",
+          }}>
+            {link("All Projects", () => handleBackToProjects())}
+            {sep}
+            {prodFrame ? (
+              <>
+                {link(data.meta?.title || "Untitled", () => setProductionFrameId(null))}
+                {sep}
+                {current(`Frame ${prodFrame.number}`)}
+              </>
+            ) : (
+              current(data.meta?.title || "Untitled")
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Mobile section switcher — Characters / Elements / Locations / Mood /
+          Project Settings as a scrollable row of tappable pills. On desktop these
+          live in the left sidebar; on a phone they belong across the top. */}
+      {built && isMobile && (
+        <div style={{
+          display: "flex", gap: 6, overflowX: "auto", flexShrink: 0,
+          padding: "8px 12px", borderBottom: "1px solid var(--warm-06)",
+          background: "rgba(10,9,9,0.55)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          scrollbarWidth: "none",
+        }}>
+          {PROJECT_SECTION_TABS.map(tab => {
+            const active = (assetTabOpen === "brand" ? "settings" : assetTabOpen) === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => handleToggleAssetTab(tab.key)}
+                style={{
+                  flexShrink: 0, padding: "7px 14px", borderRadius: 999,
+                  border: `1px solid ${active ? "rgba(255,255,255,0.28)" : "var(--warm-10)"}`,
+                  background: active ? "rgba(255,255,255,0.13)" : "transparent",
+                  color: active ? "var(--warm)" : "var(--warm-50)",
+                  fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
+                  whiteSpace: "nowrap", cursor: "pointer", outline: "none",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Content area */}
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
@@ -9267,14 +9424,22 @@ export default function WorkshopV2() {
 
         {/* Sidebar -- always AI Chat */}
         {built && (
-          <div style={{
+          <div style={isMobile ? {
+            // Mobile: a full-screen overlay when open, and removed from the flow
+            // when closed — so the one-sheet gets the full width instead of being
+            // crushed by a 380px panel on a ~390px screen.
+            position: "fixed", inset: 0, zIndex: 300,
+            display: sidebarOpen ? "block" : "none",
+            background: "rgba(10,9,9,0.97)",
+            backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+          } : {
             width: sidebarOpen ? 380 : 0, flexShrink: 0, overflow: "hidden",
             borderLeft: sidebarOpen ? "1px solid var(--warm-06)" : "none",
             background: "transparent",
             backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
             transition: "width 0.35s cubic-bezier(0.22,1,0.36,1)",
           }}>
-            <div style={{ width: 380, height: "100%" }}>
+            <div style={{ width: isMobile ? "100%" : 380, height: "100%" }}>
               <SidebarPanel onClose={() => setSidebarOpen(false)}>
                 <AIChatPanel data={data} dispatch={dispatch}
                   chatMessages={chatMessages} chatBusy={chatBusy}

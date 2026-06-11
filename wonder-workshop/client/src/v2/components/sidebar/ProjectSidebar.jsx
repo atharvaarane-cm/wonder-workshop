@@ -21,7 +21,7 @@ import iconNavMoodSvg from "../../../assets/icon-nav-mood.svg?raw";
 // to switch; the current project saves automatically before the
 // switch so no work is lost.
 
-const PROJECT_SECTION_TABS = [
+export const PROJECT_SECTION_TABS = [
   { key: "talent", label: "Characters", icon: "characters" },
   { key: "products", label: "Elements", icon: "elements" },
   { key: "locations", label: "Locations", icon: "locations" },
