@@ -5513,9 +5513,12 @@ function SectionTitle({ title, count }) {
 
 function SectionHeader({ title, count, locked, onToggleLock, onAutoGenerate, generating, autoGenerateLabel = "Auto-generate", reconcileCount = 0, onReconcileAll }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    // flexWrap so the controls (esp. the amber "Reconcile all" button) drop to a
+    // new line and make room when they appear, instead of overlapping the title
+    // on narrow / mobile widths.
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
       <SectionTitle title={title} count={count} />
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {reconcileCount > 0 && onReconcileAll && (
           <button
             onClick={onReconcileAll}
@@ -5838,6 +5841,7 @@ function AssetTabBar({ data, dispatch, activeTab, onAIAssist, onFocusAsset, onUp
 
 
 function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectFrame, onUpdateMeta, dispatch, assetTabOpen, onToggleAssetTab, onAIAssist, onFocusAsset, onRetryFrame, onRunRegeneration }) {
+  const isMobile = useIsMobile();
   const [dragId, setDragId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion index (0..frames.length)
   const didDrag = useRef(false);
@@ -5924,7 +5928,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
   const isProjectSettings = assetTabOpen === "settings" || assetTabOpen === "brand";
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 24px 32px", background: "transparent" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px 14px 120px" : "24px 24px 32px", background: "transparent" }}>
       <Reveal>
         <div>
           {/* Header */}
@@ -5962,7 +5966,7 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
             const asp = data.meta.aspect;
             const aspNum = asp.includes(":") ? (() => { const [w,h] = asp.split(":").map(Number); return w/h; })() : parseFloat(asp);
             const aspCSS = asp.includes(":") ? asp.replace(":", "/") : `${asp}/1`;
-            const cols = aspNum < 1 ? 4 : 3;
+            const cols = isMobile ? 2 : (aspNum < 1 ? 4 : 3);
             return (
           <div style={{ paddingTop: 20, marginTop: 16 }}>
             <div
