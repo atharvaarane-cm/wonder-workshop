@@ -9,6 +9,18 @@ import { MoonIcon, SparklesIcon, SunIcon } from "lucide-react";
 const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
 const HOVER_SCALE = 1.012;
 const TAP_SCALE = 0.985;
+
+// Shared layout-transition config so containers grow/shrink smoothly when
+// tiles or frames are added/removed (framer-motion `layout` + AnimatePresence).
+const LAYOUT_TRANSITION = { type: "spring", stiffness: 360, damping: 34, mass: 0.8 };
+// Enter/exit for individual tiles inside an AnimatePresence grid.
+const TILE_ENTER = {
+  layout: true,
+  initial: { opacity: 0, scale: 0.85 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.85 },
+  transition: LAYOUT_TRANSITION,
+};
 import { generateBrief, chatWithTools, regenerateShotList, suggestReconciliation, suggestOrphanCleanup } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
@@ -3671,17 +3683,20 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch, data }) {
           autoGenerateLabel="Regenerate all"
         />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-        {moodBoard.map(m => (
-          <MoodTile
-            key={m.id}
-            item={m}
-            dispatch={dispatch}
-            locked={sectionLocked}
-            versions={data?.versionHistory?.[`mood.${m.id}`] || []}
-          />
-        ))}
-        <div style={{ position: "relative" }}>
+      <motion.div layout transition={LAYOUT_TRANSITION} style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+        <AnimatePresence>
+          {moodBoard.map(m => (
+            <motion.div key={m.id} {...TILE_ENTER}>
+              <MoodTile
+                item={m}
+                dispatch={dispatch}
+                locked={sectionLocked}
+                versions={data?.versionHistory?.[`mood.${m.id}`] || []}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <motion.div layout transition={LAYOUT_TRANSITION} style={{ position: "relative" }}>
           <button
             ref={addBtnRef}
             onClick={() => dispatch({ type: "ADD_MOOD", data: {} })}
@@ -3698,8 +3713,8 @@ function MoodPanel({ moodBoard, sectionLocked, dispatch, data }) {
           <div aria-hidden="true" style={{ width: "100%", marginTop: 4, fontFamily: "var(--f)", fontSize: 10, fontWeight: 400, padding: "3px 5px", visibility: "hidden" }}>
             Caption…
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
       {moodBoard.length === 0 && (
         <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 400, color: "var(--warm-25)", textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>
           Drop in mood references — color palettes, film stills, photos. They guide tone without driving generation directly.
@@ -3839,21 +3854,25 @@ function CharacterTab({ data, dispatch, onFocusAsset }) {
         reconcileCount={data.talent.filter(t => assetReconcileStatus(t, "talent", data).needs).length}
         onReconcileAll={() => requestReconcile({ scope: "section", type: "talent" })}
       />
-      <div style={{
+      <motion.div layout transition={LAYOUT_TRANSITION} style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
         gap: 12,
       }}>
-        {data.talent.map(t => (
-          <div key={t.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
-            <CharacterTile character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
-            {assetReconcileStatus(t, "talent", data).needs && (
-              <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "talent", id: t.id }); }} />
-            )}
-          </div>
-        ))}
-        <AddCharacterTile onClick={() => dispatch({ type: "ADD_TALENT", data: {} })} />
-      </div>
+        <AnimatePresence>
+          {data.talent.map(t => (
+            <motion.div key={t.id} {...TILE_ENTER} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+              <CharacterTile character={t} onClick={() => { setViewingId(t.id); onFocusAsset?.("talent", t.id); }} />
+              {assetReconcileStatus(t, "talent", data).needs && (
+                <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "talent", id: t.id }); }} />
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <motion.div layout transition={LAYOUT_TRANSITION}>
+          <AddCharacterTile onClick={() => dispatch({ type: "ADD_TALENT", data: {} })} />
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
@@ -4886,7 +4905,7 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
         reconcileCount={data.locations.filter(l => assetReconcileStatus(l, "locations", data).needs).length}
         onReconcileAll={() => requestReconcile({ scope: "section", type: "locations" })}
       />
-      <div style={{
+      <motion.div layout transition={LAYOUT_TRANSITION} style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
         gap: 12,
@@ -4896,19 +4915,23 @@ function LocationTab({ data, dispatch, onFocusAsset }) {
           const aspectCSS = asp.includes(":") ? asp.replace(":", "/") : `${asp}/1`;
           return (
             <>
-              {data.locations.map(l => (
-                <div key={l.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
-                  <LocationTile location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
-                  {assetReconcileStatus(l, "locations", data).needs && (
-                    <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "locations", id: l.id }); }} />
-                  )}
-                </div>
-              ))}
-              <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} aspectCSS={aspectCSS} />
+              <AnimatePresence>
+                {data.locations.map(l => (
+                  <motion.div key={l.id} {...TILE_ENTER} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+                    <LocationTile location={l} onClick={() => { setViewingId(l.id); onFocusAsset?.("location", l.id); }} aspectCSS={aspectCSS} />
+                    {assetReconcileStatus(l, "locations", data).needs && (
+                      <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "locations", id: l.id }); }} />
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              <motion.div layout transition={LAYOUT_TRANSITION}>
+                <AddTile label="Add Location" iconName="map" onClick={() => dispatch({ type: "ADD_LOCATION", data: {} })} aspectCSS={aspectCSS} />
+              </motion.div>
             </>
           );
         })()}
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -5112,21 +5135,25 @@ function ElementTab({ data, dispatch, onFocusAsset }) {
         reconcileCount={data.products.filter(p => assetReconcileStatus(p, "products", data).needs).length}
         onReconcileAll={() => requestReconcile({ scope: "section", type: "products" })}
       />
-      <div style={{
+      <motion.div layout transition={LAYOUT_TRANSITION} style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
         gap: 12,
       }}>
-        {data.products.map(p => (
-          <div key={p.id} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
-            <ElementTile product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
-            {assetReconcileStatus(p, "products", data).needs && (
-              <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "products", id: p.id }); }} />
-            )}
-          </div>
-        ))}
-        <AddTile label="Add Element" iconName="box" onClick={() => dispatch({ type: "ADD_PRODUCT", data: {} })} />
-      </div>
+        <AnimatePresence>
+          {data.products.map(p => (
+            <motion.div key={p.id} {...TILE_ENTER} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+              <ElementTile product={p} onClick={() => { setViewingId(p.id); onFocusAsset?.("product", p.id); }} />
+              {assetReconcileStatus(p, "products", data).needs && (
+                <ReconcileChip onClick={e => { e.stopPropagation(); requestReconcile({ scope: "object", type: "products", id: p.id }); }} />
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <motion.div layout transition={LAYOUT_TRANSITION}>
+          <AddTile label="Add Element" iconName="box" onClick={() => dispatch({ type: "ADD_PRODUCT", data: {} })} />
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
@@ -5970,7 +5997,9 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
             const cols = isMobile ? 2 : (aspNum < 1 ? 4 : 3);
             return (
           <div style={{ paddingTop: 20, marginTop: 16 }}>
-            <div
+            <motion.div
+              layout
+              transition={LAYOUT_TRANSITION}
               onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
               onDrop={onDr}
               style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16 }}
@@ -6033,7 +6062,9 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                 if (insertAt >= remaining.length) items.push(dropPreview);
                 return items;
               })()}
-              <div
+              <motion.div
+                layout
+                transition={LAYOUT_TRANSITION}
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragRef.current.id) { const endPos = data.frames.length - 1; if (endPos !== dragRef.current.targetPos) { dragRef.current.targetPos = endPos; setDropIndex(endPos); } } }}
                 onDrop={onDr}
                 onClick={() => dispatch({ type: "ADD_FRAME" })}
@@ -6045,8 +6076,8 @@ function OneSheetWorkspace({ data, selectedFrameId, highlightedFrames, onSelectF
                 }}
               >
                 <span style={{ fontSize: 24, fontWeight: 200, color: "var(--warm-15)" }}>+</span>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           </div>
             );
           })()}
