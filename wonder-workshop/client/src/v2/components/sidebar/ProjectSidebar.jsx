@@ -207,7 +207,7 @@ export function ProjectSidebar({
       display: "flex", flexDirection: "column",
       height: floating ? "100%" : "100vh", overflow: "hidden",
     }}>
-      <div style={{
+      {!floating && <div style={{
         height: 64,
         flexShrink: 0,
         display: "flex",
@@ -254,9 +254,9 @@ export function ProjectSidebar({
             <path d="M6.25 3.25v9.5" stroke="currentColor" strokeWidth="1.4" opacity="0.65"/>
           </svg>
         </button>
-      </div>
+      </div>}
 
-      <div style={{ padding: "18px 14px" }}>
+      <div style={{ padding: floating ? "18px 14px 18px" : "18px 14px" }}>
         <Group
           aria-label="New storyboard actions"
           className="w-full overflow-hidden rounded-[10px]"

@@ -6764,14 +6764,20 @@ function BriefForm({
 
   return (
     <div style={{ position: "relative", minHeight: "100%" }}>
-      <div style={{ minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "6vh 5%", position: "relative", zIndex: 1 }}>
-        <Reveal delay={120}>
-          {/* Create card — dark glass over the orange backdrop, centered (Figma:
-              Wonder Homescreen). Project name + folder, the "what are we making"
-              brief with inline add-files (+) and Improve-with-AI (sparkle), then
+      <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "6vh 5%", position: "relative", zIndex: 1 }}>
+        <div style={{ width: "min(600px, 92vw)" }}>
+        <Reveal delay={60}>
+          <h1 style={{ fontFamily: "var(--f)", fontSize: "clamp(34px, 5.2vw, 54px)", fontWeight: 250, lineHeight: 1.04, letterSpacing: "-0.04em", color: "#fbf7f2", margin: "0 0 22px 2px" }}>
+            Welcome to the Workshop
+          </h1>
+        </Reveal>
+        <Reveal delay={160}>
+          {/* Create card — dark glass over the orange backdrop (Figma: Wonder
+              Homescreen). Project name + folder, the "what are we making" brief
+              with inline add-files (+) and Improve-with-AI (sparkle), then
               length / aspect / Create. */}
           <div style={{
-            width: "min(720px, 100%)",
+            width: "100%",
             background: "rgba(20, 17, 16, 0.42)",
             backdropFilter: "blur(28px)",
             WebkitBackdropFilter: "blur(28px)",
@@ -6892,6 +6898,7 @@ function BriefForm({
                     triggerIcon={<DropdownAssetIcon src={iconClockUrl} size={16} />}
                     triggerLabel={`${meta.format || "30"}s`}
                     renderIcon={() => <DropdownAssetIcon src={iconClockUrl} size={18} />}
+                    popupClassName="w-max min-w-[140px] max-w-[min(320px,calc(100vw-32px))]"
                   />
                 </div>
                 <div style={{ width: 118 }}>
@@ -6903,6 +6910,7 @@ function BriefForm({
                     triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={16} />}
                     triggerLabel={meta.aspect || "16:9"}
                     renderIcon={(value, color, size = 18) => <RatioIcon ratio={value} color={color} size={size} />}
+                    popupClassName="w-max min-w-[230px] max-w-[min(360px,calc(100vw-32px))]"
                   />
                 </div>
               </div>
@@ -6932,6 +6940,7 @@ function BriefForm({
             )}
           </div>
         </Reveal>
+        </div>
       </div>
     </div>
   );
