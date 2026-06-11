@@ -7064,7 +7064,11 @@ export default function WorkshopV2() {
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [selectedFrameId, setSelectedFrameId] = useState(null);
   const [productionFrameId, setProductionFrameId] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(readAIChatDrawerOpenPreference);
+  // Chat defaults CLOSED on phones (it's a full-screen overlay there, so opening
+  // it by default would hide the storyboard); honors the saved preference on desktop.
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth <= 768 ? false : readAIChatDrawerOpenPreference(),
+  );
   const isMobile = useIsMobile();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -9149,7 +9153,9 @@ export default function WorkshopV2() {
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          {built && <>
+          {/* Secondary controls are hidden on mobile — the floating Projects pill
+              owns the top-left there, and aspect/length/save would overlap it. */}
+          {built && !isMobile && <>
             <AspectRatioControl
               value={data.meta.aspect}
               onChange={(newRatio) => handleAspectChange(newRatio)}
@@ -9172,10 +9178,13 @@ export default function WorkshopV2() {
 
         {built && (
           <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end", justifySelf: "end" }}>
-            <PremiumButton variant="ghost" onClick={() => dispatch({ type: "UNDO" })} disabled={past.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Undo (Ctrl+Z)">{"↩"}</PremiumButton>
-            <PremiumButton variant="ghost" onClick={() => dispatch({ type: "REDO" })} disabled={future.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Redo (Ctrl+Shift+Z)">{"↪"}</PremiumButton>
-
-            <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
+            {!isMobile && (
+              <>
+                <PremiumButton variant="ghost" onClick={() => dispatch({ type: "UNDO" })} disabled={past.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Undo (Ctrl+Z)">{"↩"}</PremiumButton>
+                <PremiumButton variant="ghost" onClick={() => dispatch({ type: "REDO" })} disabled={future.length === 0} style={{ padding: "5px 8px", fontSize: 14 }} title="Redo (Ctrl+Shift+Z)">{"↪"}</PremiumButton>
+                <div style={{ width: 1, height: 14, background: "var(--warm-08)", margin: "0 6px" }} />
+              </>
+            )}
 
             <Button variant="outline" onClick={() => setExportOpen(true)}>
               <SectionIcon name="download" color="currentColor" /> Export
@@ -9252,14 +9261,22 @@ export default function WorkshopV2() {
 
         {/* Sidebar -- always AI Chat */}
         {built && (
-          <div style={{
+          <div style={isMobile ? {
+            // Mobile: a full-screen overlay when open, and removed from the flow
+            // when closed — so the one-sheet gets the full width instead of being
+            // crushed by a 380px panel on a ~390px screen.
+            position: "fixed", inset: 0, zIndex: 300,
+            display: sidebarOpen ? "block" : "none",
+            background: "rgba(10,9,9,0.97)",
+            backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+          } : {
             width: sidebarOpen ? 380 : 0, flexShrink: 0, overflow: "hidden",
             borderLeft: sidebarOpen ? "1px solid var(--warm-06)" : "none",
             background: "transparent",
             backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
             transition: "width 0.35s cubic-bezier(0.22,1,0.36,1)",
           }}>
-            <div style={{ width: 380, height: "100%" }}>
+            <div style={{ width: isMobile ? "100%" : 380, height: "100%" }}>
               <SidebarPanel onClose={() => setSidebarOpen(false)}>
                 <AIChatPanel data={data} dispatch={dispatch}
                   chatMessages={chatMessages} chatBusy={chatBusy}
