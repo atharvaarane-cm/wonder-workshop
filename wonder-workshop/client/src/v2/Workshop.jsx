@@ -6672,6 +6672,9 @@ function BriefForm({
   const [files, setFiles] = useState([]);
   const [fileDragOver, setFileDragOver] = useState(false);
   const [improving, setImproving] = useState(false);
+  const [improveOpen, setImproveOpen] = useState(false);
+  const [improveCustomMode, setImproveCustomMode] = useState(false);
+  const [customText, setCustomText] = useState("");
   const fileRef = useRef(null);
 
   const addFiles = (fl) => {
@@ -6680,65 +6683,41 @@ function BriefForm({
   };
   const removeFile = (i) => setFiles(prev => prev.filter((_, idx) => idx !== i));
 
-  // Improve with AI — expands the user's rough brief into a richer
-  // creative brief with concrete location / mood / element / character
-  // / camera detail. Direct port of v1's improvePrompt() pattern;
-  // same system prompt, same /api/chat path, same intent: turn a
-  // 1-sentence idea into a 100-180 word grounded paragraph.
-  async function improveBrief() {
+  // Improve with AI — rewrites the rough brief in one of three styles, all kept
+  // pipeline-aware (named characters / locations / hero props the generator can
+  // extract into separate image references). Treatment = evocative/artistic;
+  // Script = concise, action-led; Custom = follow the user's own instruction.
+  async function improveBrief(mode = "treatment", customInstruction = "") {
     const text = (meta.treatment || "").trim();
     if (!text || improving || generating) return;
     setImproving(true);
+    setImproveOpen(false);
+    setImproveCustomMode(false);
     try {
-      // This brief is going to be fed into Wonder Workshop's brief
-      // generator, which extracts STRUCTURED data from it: named
-      // characters (each becomes a separately-generated reference +
-      // 8 view shots), named locations (each becomes an establishing
-      // shot), named elements/props (each becomes a product shot),
-      // and a numbered storyboard where every shot's description uses
-      // @-handles to reference those entities so they re-tile back
-      // together with consistent identity across frames.
-      //
-      // So the AI's job here is NOT just "make this sound prettier" —
-      // it's "rewrite this so the structured-extraction step produces
-      // a clean, sensible entity list and shot sequence that the
-      // image-gen pipeline can fulfill well."
+      // Shared, pipeline-aware base — every mode must preserve the entities the
+      // downstream brief generator extracts (each named character/location/hero
+      // prop becomes its own generated reference + storyboard tags).
+      const base = [
+        "You are rewriting a creative brief that feeds an AI pipeline which generates an image for every named character, location, and hero prop, plus a 6-9 frame storyboard that references them.",
+        "PRESERVE every character, brand, location, and action from the input — never drop or invent entities. Give characters short proper names (e.g. 'Maya', 'Coach Rivera') so they can be tagged consistently. Refer to any brand/product EXACTLY as written — no invented variants, flavors, or SKUs. Don't single out minor background dressing as props.",
+      ];
+      const styles = {
+        treatment: [
+          "FORMAT: a TREATMENT — evocative, artistic, atmospheric prose. Lean into tone, mood, a specific color palette (named hues, not 'warm'), lighting, texture, and the emotional arc. Make it read like a director's vision.",
+          "One or two flowing paragraphs, 120-200 words. No headings, labels, quotes, or preamble — return only the treatment.",
+        ],
+        script: [
+          "FORMAT: a SCRIPT-style brief — direct, concise, present tense. Describe the specific ACTIONS of each named character and what happens in each named location, beat by beat, in order. Be literal and shootable about who does what, where. Minimal flourish — prioritize concrete action over mood.",
+          "120-200 words. No headings, labels, quotes, or preamble — return only the rewritten brief.",
+        ],
+        custom: [
+          `FORMAT: apply the user's own request for how to help — "${customInstruction}". Rewrite the brief accordingly while keeping every named entity.`,
+          "120-200 words. No headings, labels, quotes, or preamble — return only the rewritten brief.",
+        ],
+      };
+      const sys = [...base, "", ...(styles[mode] || styles.treatment)].join("\n");
       const messages = [
-        { role: "system", content: [
-          "You are EXPANDING a rough creative idea into a detailed campaign brief that will be fed into an AI pipeline that generates images for every named character, location, and prop in the brief — and a 6-9 frame storyboard where each frame references them.",
-          "",
-          "Your output MUST be LONGER and MORE SPECIFIC than the input — never a summary, never a paraphrase.",
-          "",
-          "PRESERVE EVERYTHING from the input — every character, every brand name, every action must appear in the output. Then ADD concrete sensory detail. Optimize for the downstream pipeline:",
-          "",
-          "CHARACTERS (each becomes a generated reference + headshots + full body):",
-          "- Keep the COUNT and identity from the input — don't invent characters that weren't implied.",
-          "- For each character, give a specific look: age range, ethnicity (or 'open casting'), hair, build, wardrobe with color + fabric, demeanor.",
-          "- Use a short proper name (e.g. 'Maya', 'Coach Rivera') so it can be tagged consistently. Avoid generic 'a woman' / 'the runner' — name them.",
-          "",
-          "LOCATIONS (each becomes a generated establishing shot):",
-          "- Name the primary location with a short proper-noun-style label ('Bushwick rooftop', 'Sunset Beach', 'Times Square Diner') even if it's invented.",
-          "- Add time of day, weather, era, architecture, signage, key environmental textures.",
-          "- If multiple locations are needed, name each one distinctly.",
-          "",
-          "ELEMENTS / HERO PROPS (each gets its own product shot):",
-          "- Only call out HERO items the camera will actually feature (the Pepsi can, the Air Force 1s, the iPhone). Each one will be generated as a separate product reference.",
-          "- DON'T name minor background dressing like 'string lights' or 'terracotta planters' — those waste the pipeline's effort and clutter the asset list. Let those exist in the prose without being singled out as props.",
-          "- Refer to any product/brand EXACTLY as the user wrote it. Do NOT substitute a more specific sub-brand, variant, flavor, or SKU they didn't ask for — if they wrote 'Pepsi', keep it 'Pepsi' (never 'Pepsi Zero Sugar', 'Pepsi Wild Cherry', etc.). Only use a more specific product name if the user explicitly named that variant.",
-          "",
-          "MOOD + LIGHTING:",
-          "- Specific color palette (named hues, not 'warm'), lighting setup (key/fill/rim, practical sources), atmosphere, pacing/music feel.",
-          "",
-          "CAMERA / RENDER:",
-          "- Shot variety (wide / medium / close), lens feel (24mm, 50mm, 85mm), depth of field, film stock or digital look.",
-          "",
-          "BANNED WORDS: 'vibrant', 'lively', 'carefree', 'bustling', 'beautiful', 'great' — replace with specific concrete imagery.",
-          "",
-          "FORMAT:",
-          "- ONE flowing paragraph, 120-200 words.",
-          "- No headings, no bullets, no labels, no quotes, no preamble.",
-          "- Return ONLY the expanded brief paragraph, ready to drop into the generation tool.",
-        ].join("\n") },
+        { role: "system", content: sys },
         { role: "user", content: text },
       ];
       const res = await fetch("/api/chat", {
@@ -6749,9 +6728,7 @@ function BriefForm({
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const payload = await res.json();
       const expanded = (payload?.message?.content || "").trim().replace(/^["'`]+|["'`]+$/g, "");
-      if (expanded) {
-        setMeta(m => ({ ...m, treatment: expanded }));
-      }
+      if (expanded) setMeta(m => ({ ...m, treatment: expanded }));
     } catch (e) {
       console.error("[improve brief]", e);
     } finally {
@@ -6765,9 +6742,9 @@ function BriefForm({
   return (
     <div style={{ position: "relative", minHeight: "100%" }}>
       <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "6vh 5%", position: "relative", zIndex: 1 }}>
-        <div style={{ width: "min(600px, 92vw)" }}>
+        <div style={{ width: "min(800px, 92vw)" }}>
         <Reveal delay={60}>
-          <h1 style={{ fontFamily: "var(--f)", fontSize: "clamp(34px, 5.2vw, 54px)", fontWeight: 250, lineHeight: 1.04, letterSpacing: "-0.04em", color: "#fbf7f2", margin: "0 0 22px 2px" }}>
+          <h1 style={{ fontFamily: "var(--f)", fontSize: "clamp(40px, 7vw, 76px)", fontWeight: 250, lineHeight: 1.02, letterSpacing: "-0.045em", color: "#fbf7f2", margin: "0 0 24px 2px" }}>
             Welcome to the Workshop
           </h1>
         </Reveal>
@@ -6777,10 +6754,10 @@ function BriefForm({
               with inline add-files (+) and Improve-with-AI (sparkle), then
               length / aspect / Create. */}
           <div style={{
-            width: "100%",
-            background: "rgba(20, 17, 16, 0.42)",
-            backdropFilter: "blur(28px)",
-            WebkitBackdropFilter: "blur(28px)",
+            width: "100%", maxHeight: 600,
+            background: "rgba(16, 14, 13, 0.7)",
+            backdropFilter: "blur(40px) saturate(1.1)",
+            WebkitBackdropFilter: "blur(40px) saturate(1.1)",
             border: "1px solid rgba(255, 255, 255, 0.1)",
             boxShadow: "0 30px 90px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07)",
             borderRadius: 26, padding: 24,
@@ -6832,7 +6809,7 @@ function BriefForm({
                 disabled={improving}
                 placeholder="What are we making?"
                 className="[&_[data-slot=textarea]]:pt-4 [&_[data-slot=textarea]]:pb-14 [&_[data-slot=textarea]]:px-5"
-                style={{ minHeight: 150, resize: "vertical", lineHeight: 1.8, opacity: improving ? 0.6 : 1 }}
+                style={{ minHeight: 280, resize: "vertical", lineHeight: 1.8, opacity: improving ? 0.6 : 1 }}
               />
               <button
                 type="button"
@@ -6851,24 +6828,97 @@ function BriefForm({
               >+</button>
               <button
                 type="button"
-                onClick={improveBrief}
+                onClick={() => { if (meta.treatment?.trim() && !improving) setImproveOpen(o => !o); }}
                 disabled={!meta.treatment?.trim() || improving || generating}
-                title="Improve with AI — expand a rough idea into a grounded brief"
+                title="Improve with AI"
                 style={{
-                  position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
+                  position: "absolute", right: 14, bottom: 14, zIndex: 6, overflow: "hidden",
                   width: 30, height: 30, borderRadius: 9,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "rgba(255, 255, 255, 0.06)", border: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: improveOpen ? "rgba(255,255,255,0.16)" : "rgba(255, 255, 255, 0.06)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
                   cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
                   opacity: meta.treatment?.trim() && !improving ? 1 : 0.4,
                   outline: "none", transition: "background 0.14s ease, opacity 0.14s ease",
                 }}
-                onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                onMouseEnter={e => { if (!e.currentTarget.disabled && !improveOpen) e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+                onMouseLeave={e => { if (!improveOpen) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
               >
                 {improving && <ShimmerSweep color="rgba(255,255,255,0.38)" />}
                 <DropdownAssetIcon src={iconSparkleUrl} size={14} style={{ filter: "brightness(0) invert(1)", opacity: 0.85, position: "relative", zIndex: 1 }} />
               </button>
+              {improveOpen && (
+                <div onClick={() => { setImproveOpen(false); setImproveCustomMode(false); }} style={{ position: "fixed", inset: 0, zIndex: 5 }} />
+              )}
+              {/* Improve-with-AI slide-out menu — rewrite the brief as a Treatment
+                  (artistic), a Script (action-led), or via a custom instruction. */}
+              <div style={{
+                position: "absolute", right: 12, bottom: 52, zIndex: 6,
+                width: 268, padding: 6, borderRadius: 14,
+                background: "rgba(26, 23, 22, 0.97)", border: "1px solid rgba(255,255,255,0.12)",
+                backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+                boxShadow: "0 18px 50px rgba(0,0,0,0.55)",
+                opacity: improveOpen ? 1 : 0,
+                transform: improveOpen ? "translateY(0)" : "translateY(8px)",
+                pointerEvents: improveOpen ? "auto" : "none",
+                transition: "opacity 0.16s ease, transform 0.16s ease",
+              }}>
+                {!improveCustomMode ? (
+                  <>
+                    {[
+                      { mode: "treatment", title: "Treatment", desc: "Evocative, artistic, descriptive" },
+                      { mode: "script", title: "Script", desc: "Direct, concise character & location action" },
+                    ].map(opt => (
+                      <button
+                        key={opt.mode}
+                        type="button"
+                        onClick={() => improveBrief(opt.mode)}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 10px", borderRadius: 9, border: "none", background: "transparent", color: "var(--warm)", cursor: "pointer", outline: "none" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.07)"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      >
+                        <div style={{ fontFamily: "var(--f)", fontSize: 13.5, fontWeight: 600 }}>{opt.title}</div>
+                        <div style={{ fontFamily: "var(--f)", fontSize: 11.5, fontWeight: 400, color: "var(--warm-35)", marginTop: 1 }}>{opt.desc}</div>
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setImproveCustomMode(true)}
+                      style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 10px", borderRadius: 9, border: "none", background: "transparent", color: "var(--warm)", cursor: "pointer", outline: "none" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.07)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      <div style={{ fontFamily: "var(--f)", fontSize: 13.5, fontWeight: 600 }}>Tell the AI…</div>
+                      <div style={{ fontFamily: "var(--f)", fontSize: 11.5, fontWeight: 400, color: "var(--warm-35)", marginTop: 1 }}>Describe the help you want</div>
+                    </button>
+                  </>
+                ) : (
+                  <div style={{ padding: 4 }}>
+                    <textarea
+                      value={customText}
+                      onChange={e => setCustomText(e.target.value)}
+                      placeholder="e.g. make it punchier, add a twist, focus on the product…"
+                      autoFocus
+                      rows={3}
+                      onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && customText.trim()) improveBrief("custom", customText.trim()); }}
+                      style={{ width: "100%", boxSizing: "border-box", resize: "none", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 10px", color: "var(--warm)", fontFamily: "var(--f)", fontSize: 12.5, lineHeight: 1.5, outline: "none" }}
+                    />
+                    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => setImproveCustomMode(false)}
+                        style={{ flex: "0 0 auto", padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "var(--warm-50)", cursor: "pointer", outline: "none", fontFamily: "var(--f)", fontSize: 12, fontWeight: 500 }}
+                      >Back</button>
+                      <button
+                        type="button"
+                        onClick={() => customText.trim() && improveBrief("custom", customText.trim())}
+                        disabled={!customText.trim()}
+                        style={{ flex: 1, padding: "6px 12px", borderRadius: 8, border: "none", background: customText.trim() ? "#f4f1ec" : "rgba(255,255,255,0.1)", color: customText.trim() ? "#15120f" : "var(--warm-35)", cursor: customText.trim() ? "pointer" : "not-allowed", outline: "none", fontFamily: "var(--f)", fontSize: 12, fontWeight: 600 }}
+                      >Apply</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {files.length > 0 && (
