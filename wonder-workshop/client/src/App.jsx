@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "@/components/ui/toast";
 import WorkshopV2 from "./v2/Workshop.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
+import AuthGate from "./v2/AuthGate.jsx";
 import { purgeLegacyV1Storage } from "./v2/persistence.js";
 
 export default function App() {
@@ -14,7 +15,9 @@ export default function App() {
       <AnchoredToastProvider>
         <ToastEventBridge />
         <ErrorBoundary>
-          <WorkshopV2 />
+          <AuthGate>
+            <WorkshopV2 />
+          </AuthGate>
         </ErrorBoundary>
         {/* Tiny build-ID tag — lets anyone glance and confirm their build
             (vs a stale cached tab). Unobtrusive, bottom-right, non-interactive. */}
