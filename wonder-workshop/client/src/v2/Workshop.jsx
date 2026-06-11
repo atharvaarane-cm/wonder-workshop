@@ -6764,212 +6764,175 @@ function BriefForm({
 
   return (
     <div style={{ position: "relative", minHeight: "100%" }}>
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "5vh 5% 4vh", position: "relative", zIndex: 1 }}>
-      <Reveal delay={30}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: "3%" }}>
-            <WLogo color="rgba(224,224,224,0.25)" size={28} />
-            <HomeBackgroundSwitch value={homeBackground} onChange={onHomeBackgroundChange} />
-          </div>
-          <h1 style={{ fontFamily: "var(--f)", fontSize: "clamp(30px, 6vw, 48px)", fontWeight: 200, lineHeight: 1.1, letterSpacing: "-0.05em", marginBottom: 12, color: "var(--warm)" }}>
-            Welcome to the Workshop.
-          </h1>
-          <p style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, marginBottom: "5%" }}>
-            Write a brief, a script, or a sentence. Add reference files for more context. AI builds the boards.
-          </p>
-        </div>
-      </Reveal>
-
-      <Reveal delay={520}>
-        {/* Form card sits over the W backdrop, so it needs near-solid
-            opacity + a backdrop blur to keep inputs and labels readable.
-            Subtle inner highlight + soft shadow lift it off the bg. */}
-        <div style={{
-          background: "rgba(14, 14, 16, 0.88)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
-          borderRadius: 14, padding: "3%", marginBottom: "2%",
-        }}>
-          <div style={{ marginBottom: formRowGap, position: "relative" }}>
-            <span aria-hidden="true" style={{
-              position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)",
-              zIndex: 2, pointerEvents: "none", display: "inline-flex", alignItems: "center",
+      <div style={{ minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "6vh 5%", position: "relative", zIndex: 1 }}>
+        <Reveal delay={120}>
+          {/* Create card — dark glass over the orange backdrop, centered (Figma:
+              Wonder Homescreen). Project name + folder, the "what are we making"
+              brief with inline add-files (+) and Improve-with-AI (sparkle), then
+              length / aspect / Create. */}
+          <div style={{
+            width: "min(720px, 100%)",
+            background: "rgba(20, 17, 16, 0.42)",
+            backdropFilter: "blur(28px)",
+            WebkitBackdropFilter: "blur(28px)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            boxShadow: "0 30px 90px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07)",
+            borderRadius: 26, padding: 24,
+            display: "flex", flexDirection: "column", gap: 14,
+          }}>
+            {/* Row 1 — project name + folder */}
+            <div style={{
+              display: "flex", alignItems: "stretch",
+              background: "rgba(8, 7, 7, 0.5)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: 14, overflow: "hidden",
             }}>
-              <DropdownAssetIcon src={iconStoryboardTitleUrl} size={17} />
-            </span>
-            <Input
-              type="text"
-              size="lg"
-              value={meta.title}
-              onChange={e => setMeta(m => ({ ...m, title: e.target.value }))}
-              placeholder="Enter storyboard title..."
-              className="[&_[data-slot=input]]:pl-11"
-            />
-          </div>
-          <div style={{ marginBottom: formRowGap, position: "relative" }}>
-            <Textarea value={meta.treatment} onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
-              size="lg"
-              disabled={improving}
-              placeholder="Storyboard Brief..."
-              className="[&_[data-slot=textarea]]:pt-2 [&_[data-slot=textarea]]:pb-16"
-              style={{ minHeight: 160, resize: "vertical", lineHeight: 1.85, opacity: improving ? 0.6 : 1 }} />
-              <button
-                onClick={improveBrief}
-                disabled={!meta.treatment?.trim() || improving || generating}
-                type="button"
-                title="Use Gemini to expand a rough idea into a 100-180 word grounded brief"
+              <input
+                type="text"
+                value={meta.title}
+                onChange={e => setMeta(m => ({ ...m, title: e.target.value }))}
+                placeholder="Project Name"
                 style={{
-                  position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: 25, padding: "0 8px", borderRadius: 7,
-                  background: "linear-gradient(0deg, rgba(0, 0, 0, 0.17) 0%, rgba(102, 102, 102, 0.153) 100%), linear-gradient(0deg, rgba(219, 219, 219, 0.6), rgba(219, 219, 219, 0.6)), linear-gradient(92deg, #429FD6 3.61%, #7762E7 24.14%, #A45EE1 39.21%, #CB4FCB 56.02%, #FF3598 70.65%, #ED7180 85.72%, #E9886D 100%)",
-                  border: "0.5px solid color(display-p3 1 1 1 / 0.5)",
-                  color: "#1a1c1f",
-                  cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
-                  outline: "none",
-                  fontFamily: "var(--f)", fontSize: 13, fontWeight: 500,
-                  letterSpacing: "-0.01em",
-                  opacity: meta.treatment?.trim() && !improving ? 1 : 0.05,
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)",
-                  transition: "filter 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease",
+                  flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none",
+                  color: "var(--warm)", fontFamily: "var(--f)", fontSize: 16, fontWeight: 400,
+                  padding: "16px 18px",
                 }}
-                onMouseEnter={e => {
-                  if (e.currentTarget.disabled) return;
-                  e.currentTarget.style.filter = "brightness(1.05)";
-                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.65), 0 2px 8px rgba(0,0,0,0.22)";
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.filter = "none";
-                  e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(0,0,0,0.24)";
-                }}
-              >
-                {improving && <ShimmerSweep color="rgba(255,255,255,0.38)" />}
-                <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <DropdownAssetIcon
-                    src={iconSparkleUrl}
-                    size={11}
-                    style={{ filter: "brightness(0) saturate(100%) invert(9%) sepia(9%) saturate(703%) hue-rotate(177deg) brightness(95%) contrast(91%)" }}
-                  />
-                  {improving ? "Improving…" : "Improve with AI"}
-                </span>
-              </button>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: formRowGap }}>
-            <RootMenuDropdown
-              value={meta.client}
-              options={[
-                { value: "", label: "No Folder" },
-                ...(folders.length ? [{ type: "separator" }] : []),
-                ...folders.map(folder => ({ value: folder, label: folder })),
-              ]}
-              onChange={client => setMeta(m => ({ ...m, client }))}
-              triggerIcon={<DropdownAssetIcon src={iconFolderUrl} size={18} />}
-              triggerLabel={meta.client || "Select Folder"}
-              renderIcon={(value, _color, size = 18) => value
-                ? <DropdownAssetIcon src={iconFolderUrl} size={size} />
-                : <span aria-hidden="true" style={{ display: "block", width: size, height: size, flexShrink: 0 }} />
-              }
-              popupClassName="w-max min-w-[var(--anchor-width)] max-w-[min(420px,calc(100vw-32px))]"
-            />
-            <RootMenuDropdown
-              value={meta.format}
-              options={BRIEF_LENGTHS.map(s => {
-                const seconds = s.replace(/s$/, "");
-                return { value: seconds, label: `${seconds} sec` };
-              })}
-              onChange={v => setMeta(m => ({ ...m, format: v }))}
-              triggerIcon={<DropdownAssetIcon src={iconClockUrl} size={18} />}
-              triggerLabel={`Length: ${meta.format || "30"} sec`}
-              renderIcon={() => <DropdownAssetIcon src={iconClockUrl} size={18} />}
-            />
-            <RootMenuDropdown
-              value={meta.aspect}
-              options={BRIEF_RATIOS.map(r => ({ value: r.id, label: r.label }))}
-              onChange={v => setMeta(m => ({ ...m, aspect: v }))}
-              triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={18} />}
-              triggerLabel={`Aspect: ${meta.aspect || "16:9"}`}
-              renderIcon={(value, color, size = 18) => <RatioIcon ratio={value} color={color} size={size} />}
-            />
-          </div>
-
-          {/* File upload zone */}
-          <div>
-            <div
-              onDragOver={e => { e.preventDefault(); setFileDragOver(true); }}
-              onDragLeave={() => setFileDragOver(false)}
-              onDrop={e => { e.preventDefault(); setFileDragOver(false); addFiles(e.dataTransfer.files); }}
-              onClick={() => fileRef.current.click()}
-              style={{
-                border: `1.5px dashed ${fileDragOver ? "rgba(255,255,255,0.3)" : "var(--warm-10)"}`,
-                borderRadius: 10, padding: "26px 16px 24px", textAlign: "center",
-                cursor: "pointer", transition: "all 0.2s ease",
-                background: fileDragOver ? "rgba(255,255,255,0.02)" : "#1b1b1b",
-              }}
-            >
-              <div style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
-                fontFamily: "var(--f)", fontSize: 15, fontWeight: 500, color: "var(--warm)",
-                marginBottom: 10, letterSpacing: "-0.01em",
-              }}>
-                <DropdownAssetIcon src={iconDropfilesUrl} size={18} />
-                <span>Add Reference Files</span>
-              </div>
-              <div style={{ fontFamily: "var(--f)", fontSize: 13, fontWeight: 300, color: "var(--warm-25)" }}>
-                Drop treatments, scripts, images, or mood boards here or click to browse
+              />
+              <div style={{ width: 1, background: "rgba(255, 255, 255, 0.08)" }} />
+              <div style={{ display: "flex", alignItems: "center", paddingRight: 4 }}>
+                <RootMenuDropdown
+                  value={meta.client}
+                  style={{ marginBottom: 0 }}
+                  options={[
+                    { value: "", label: "General" },
+                    ...(folders.length ? [{ type: "separator" }] : []),
+                    ...folders.map(folder => ({ value: folder, label: folder })),
+                  ]}
+                  onChange={client => setMeta(m => ({ ...m, client }))}
+                  triggerIcon={<DropdownAssetIcon src={iconFolderUrl} size={16} />}
+                  triggerLabel={meta.client || "General"}
+                  renderIcon={() => <DropdownAssetIcon src={iconFolderUrl} size={16} />}
+                  popupClassName="w-max min-w-[160px] max-w-[min(420px,calc(100vw-32px))]"
+                />
               </div>
             </div>
-            <input ref={fileRef} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt,.rtf"
-              onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
+
+            {/* Row 2 — what are we making + inline add-files / improve */}
+            <div style={{ position: "relative" }}>
+              <Textarea
+                value={meta.treatment}
+                onChange={e => setMeta(m => ({ ...m, treatment: e.target.value }))}
+                size="lg"
+                disabled={improving}
+                placeholder="What are we making?"
+                className="[&_[data-slot=textarea]]:pt-4 [&_[data-slot=textarea]]:pb-14 [&_[data-slot=textarea]]:px-5"
+                style={{ minHeight: 150, resize: "vertical", lineHeight: 1.8, opacity: improving ? 0.6 : 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current && fileRef.current.click()}
+                title="Add reference files (treatments, scripts, images, mood boards)"
+                style={{
+                  position: "absolute", left: 14, bottom: 14, zIndex: 3,
+                  width: 30, height: 30, borderRadius: 9,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "rgba(255, 255, 255, 0.06)", border: "1px solid rgba(255, 255, 255, 0.1)",
+                  color: "var(--warm-50)", cursor: "pointer", outline: "none", fontSize: 19, lineHeight: 1,
+                  transition: "background 0.14s ease, color 0.14s ease",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "var(--warm)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = "var(--warm-50)"; }}
+              >+</button>
+              <button
+                type="button"
+                onClick={improveBrief}
+                disabled={!meta.treatment?.trim() || improving || generating}
+                title="Improve with AI — expand a rough idea into a grounded brief"
+                style={{
+                  position: "absolute", right: 14, bottom: 14, zIndex: 3, overflow: "hidden",
+                  width: 30, height: 30, borderRadius: 9,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "rgba(255, 255, 255, 0.06)", border: "1px solid rgba(255, 255, 255, 0.1)",
+                  cursor: meta.treatment?.trim() && !improving ? "pointer" : "not-allowed",
+                  opacity: meta.treatment?.trim() && !improving ? 1 : 0.4,
+                  outline: "none", transition: "background 0.14s ease, opacity 0.14s ease",
+                }}
+                onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+              >
+                {improving && <ShimmerSweep color="rgba(255,255,255,0.38)" />}
+                <DropdownAssetIcon src={iconSparkleUrl} size={14} style={{ filter: "brightness(0) invert(1)", opacity: 0.85, position: "relative", zIndex: 1 }} />
+              </button>
+            </div>
 
             {files.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {files.map((f, i) => (
-                  <div key={i} style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    padding: "4px 8px 4px 6px", borderRadius: 6,
-                    background: "var(--warm-04)", border: "1px solid var(--warm-06)",
-                  }}>
-                    <span style={{
-                      fontFamily: "var(--f)", fontSize: 8, fontWeight: 700, color: "var(--warm-25)",
-                      background: "var(--warm-06)", padding: "2px 4px", borderRadius: 3, letterSpacing: "0.02em",
-                    }}>{fmtType(f.type)}</span>
-                    <span style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 400, color: "var(--warm-35)" }}>{f.name}</span>
-                    <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 300, color: "var(--warm-15)" }}>{fmtSize(f.size)}</span>
-                    <button onClick={e => { e.stopPropagation(); removeFile(i); }} style={{
-                      width: 16, height: 16, borderRadius: 3, border: "none",
-                      background: "transparent", color: "var(--warm-25)", cursor: "pointer",
-                      fontFamily: "var(--f)", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", outline: "none",
-                    }}>&times;</button>
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 6px", borderRadius: 6, background: "var(--warm-04)", border: "1px solid var(--warm-06)" }}>
+                    <span style={{ fontFamily: "var(--f)", fontSize: 8, fontWeight: 700, color: "var(--warm-25)", background: "var(--warm-06)", padding: "2px 4px", borderRadius: 3 }}>{fmtType(f.type)}</span>
+                    <span style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-35)" }}>{f.name}</span>
+                    <span style={{ fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-15)" }}>{fmtSize(f.size)}</span>
+                    <button onClick={() => removeFile(i)} style={{ width: 16, height: 16, borderRadius: 3, border: "none", background: "transparent", color: "var(--warm-25)", cursor: "pointer", fontSize: 11, outline: "none" }}>&times;</button>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </Reveal>
+            <input ref={fileRef} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt,.rtf"
+              onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
 
-      <Reveal delay={680}>
-        <div style={{ marginTop: 28 }}>
-          <GenerateStoryboardButton
-            generating={generating}
-            onClick={() => !generating && onGenerate(meta)}
-          />
-          {error ? (
-            <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "#FF8A80" }}>
-              {error}
-            </p>
-          ) : (
-            <p style={{ textAlign: "center", marginTop: 16, fontFamily: "var(--f)", fontSize: 12, fontWeight: 400, color: "var(--warm-20)" }}>
-              {generating
-                ? "Talking to Gemini — characters, locations, and a 9-frame storyboard incoming. Usually ~10–20 seconds."
-                : "Creates talent, locations, products, and a complete shot sequence"}
-            </p>
-          )}
-        </div>
-      </Reveal>
-    </div>
+            {/* Row 3 — length + aspect + Create */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 118 }}>
+                  <RootMenuDropdown
+                    value={meta.format}
+                    style={{ marginBottom: 0 }}
+                    options={BRIEF_LENGTHS.map(s => { const sec = s.replace(/s$/, ""); return { value: sec, label: `${sec} sec` }; })}
+                    onChange={v => setMeta(m => ({ ...m, format: v }))}
+                    triggerIcon={<DropdownAssetIcon src={iconClockUrl} size={16} />}
+                    triggerLabel={`${meta.format || "30"}s`}
+                    renderIcon={() => <DropdownAssetIcon src={iconClockUrl} size={18} />}
+                  />
+                </div>
+                <div style={{ width: 118 }}>
+                  <RootMenuDropdown
+                    value={meta.aspect}
+                    style={{ marginBottom: 0 }}
+                    options={BRIEF_RATIOS.map(r => ({ value: r.id, label: r.label }))}
+                    onChange={v => setMeta(m => ({ ...m, aspect: v }))}
+                    triggerIcon={<DropdownAssetIcon src={iconAspectUrl} size={16} />}
+                    triggerLabel={meta.aspect || "16:9"}
+                    renderIcon={(value, color, size = 18) => <RatioIcon ratio={value} color={color} size={size} />}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !generating && onGenerate(meta)}
+                disabled={generating}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  padding: "12px 26px", borderRadius: 999, border: "none",
+                  background: "#f4f1ec", color: "#15120f",
+                  fontFamily: "var(--f)", fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em",
+                  cursor: generating ? "default" : "pointer", outline: "none",
+                  boxShadow: "0 2px 14px rgba(0, 0, 0, 0.25)", opacity: generating ? 0.7 : 1,
+                  transition: "filter 0.12s ease",
+                }}
+                onMouseEnter={e => { if (!generating) e.currentTarget.style.filter = "brightness(0.96)"; }}
+                onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
+              >
+                <DropdownAssetIcon src={iconSparkleUrl} size={14} style={{ filter: "brightness(0)", opacity: 0.85 }} />
+                {generating ? "Creating…" : "Create"}
+              </button>
+            </div>
+
+            {error && (
+              <p style={{ margin: "2px 2px 0", fontFamily: "var(--f)", fontSize: 12, color: "#FF8A80" }}>{error}</p>
+            )}
+          </div>
+        </Reveal>
+      </div>
     </div>
   );
 }
@@ -8893,7 +8856,7 @@ export default function WorkshopV2() {
         }
       `}</style>
 
-      {!built && <HomeBackground mode={homeBackground} />}
+      {!built && <HomeBackground mode="orange" />}
       <div className="grain" />
       {exportOpen && (() => {
         // v2 export uses the proven v1 OnePager component instead of v2's
