@@ -3206,6 +3206,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const [genComplete, setGenComplete] = useState(false);
   const [cameraInfoOpen, setCameraInfoOpen] = useState(false);
   const [heroHovered, setHeroHovered] = useState(false);
+  const [editingDesc, setEditingDesc] = useState(false);
   const fileInputRef = useRef(null);
   const fIdx = data.frames.findIndex(f => f.id === frame.id);
   const update = (field, value) => dispatch({ type: "UPDATE_FRAME", frameId: frame.id, field, value });
@@ -3363,7 +3364,28 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
           {/* Description (renamed from Brief) */}
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Description</label>
-            <textarea value={frame.brief} onChange={e => { update("brief", e.target.value); onStageChange?.("description", "Description"); }} style={{ ...inp, minHeight: 90, resize: "vertical", lineHeight: 1.75 }} />
+            {/* Click-to-edit: read-only view renders @-handles as the same
+                colored, clickable chips used elsewhere; click the prose to
+                edit it as plain text, click a chip to open that asset in chat. */}
+            {editingDesc ? (
+              <textarea
+                value={frame.brief}
+                autoFocus
+                onChange={e => { update("brief", e.target.value); onStageChange?.("description", "Description"); }}
+                onBlur={() => setEditingDesc(false)}
+                style={{ ...inp, minHeight: 90, resize: "vertical", lineHeight: 1.75 }}
+              />
+            ) : (
+              <div
+                onClick={() => setEditingDesc(true)}
+                title="Click to edit"
+                style={{ ...inp, minHeight: 90, lineHeight: 1.75, cursor: "text", whiteSpace: "pre-wrap" }}
+              >
+                {frame.brief?.trim()
+                  ? renderMentions(frame.brief, data, { onMentionClick: (asset) => { onFocusChat?.(); toast(`${asset.name} ${asset.handle || ""} ready to discuss in chat`, { kind: "info", ttl: 2500 }); } })
+                  : <span style={{ color: "var(--warm-25)" }}>Describe this shot…</span>}
+              </div>
+            )}
             {/* Tagged-asset preview — same colored chip palette as the
                 storyboard sheet. Only entities present in the project
                 show as chips; @-words that don't match a real asset
