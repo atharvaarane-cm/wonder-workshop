@@ -3198,6 +3198,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const fIdx = data.frames.findIndex(f => f.id === frame.id);
   const update = (field, value) => dispatch({ type: "UPDATE_FRAME", frameId: frame.id, field, value });
   const updateCamera = (fields) => dispatch({ type: "UPDATE_FRAME_CAMERA", frameId: frame.id, fields });
+  const isMobile = useIsMobile();
   const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
   const loc = data.locations.find(l => l.id === frame.locationId);
   const hasImage = !!frame.uploadedImage;
@@ -3235,7 +3236,7 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
   const isPortrait = aspNum < 1;
 
   return (
-    <div style={{ padding: "0 24px 32px", maxWidth: isPortrait ? 1100 : 960, margin: "0 auto", background: "transparent" }}>
+    <div style={{ padding: isMobile ? "0 16px 120px" : "0 24px 32px", maxWidth: isPortrait ? 1100 : 960, margin: "0 auto", background: "transparent" }}>
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0 20px" }}>
         <PremiumButton variant="ghost" onClick={onBack} style={{ gap: 6, padding: "6px 12px" }}>
@@ -8841,7 +8842,7 @@ export default function WorkshopV2() {
       ...getThemeVars(isDark),
       background: "transparent",
       position: "relative",
-      minHeight: "100vh", fontFamily: "var(--f)", color: "var(--warm)",
+      minHeight: "100dvh", fontFamily: "var(--f)", color: "var(--warm)",
       opacity: ready ? 1 : 0, transition: "opacity 0.8s ease, background 0.4s ease, color 0.4s ease",
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -9050,7 +9051,7 @@ export default function WorkshopV2() {
         </div>
       )}
 
-      <div style={{ display: "flex", height: "100vh", minHeight: 0, overflow: "hidden", position: "relative", zIndex: 1 }}>
+      <div style={{ display: "flex", height: "100dvh", minHeight: 0, overflow: "hidden", position: "relative", zIndex: 1 }}>
         {/* Left: project sidebar. On mobile it collapses to an off-canvas
             drawer (hamburger + backdrop) so the homepage gets full width
             on a phone — Ravi's offsite flag. One instance, conditionally
@@ -9111,7 +9112,7 @@ export default function WorkshopV2() {
               {mobileNavOpen && (
                 <div onClick={() => setMobileNavOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 200 }} />
               )}
-              <div style={{ position: "fixed", top: 64, left: 16, zIndex: 201, width: 272, height: "min(620px, calc(100vh - 84px))", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", boxShadow: mobileNavOpen ? "0 24px 60px rgba(0,0,0,0.55)" : "none", transform: mobileNavOpen ? "translateY(0)" : "translateY(-10px)", opacity: mobileNavOpen ? 1 : 0, pointerEvents: mobileNavOpen ? "auto" : "none", transition: "opacity 0.18s ease, transform 0.18s ease" }}>
+              <div style={{ position: "fixed", top: 64, left: 16, zIndex: 201, width: 272, height: "min(620px, calc(100dvh - 84px))", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", boxShadow: mobileNavOpen ? "0 24px 60px rgba(0,0,0,0.55)" : "none", transform: mobileNavOpen ? "translateY(0)" : "translateY(-10px)", opacity: mobileNavOpen ? 1 : 0, pointerEvents: mobileNavOpen ? "auto" : "none", transition: "opacity 0.18s ease, transform 0.18s ease" }}>
                 {sb}
               </div>
             </>
