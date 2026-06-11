@@ -77,6 +77,7 @@ export function ProjectSidebar({
   reconcileFlags = {},
   onCleanupDuplicates,
   homeBackdrop = false,
+  floating = false,
 }) {
   // Count extra same-name project rows (anything beyond the first per name)
   // — these are almost always fork-orphans from the old "Regenerate All"
@@ -198,13 +199,13 @@ export function ProjectSidebar({
 
   return (
     <div style={{
-      width: 256, flexShrink: 0,
-      borderRight: homeBackdrop ? "1px solid rgba(255,255,255,0.08)" : "1px solid var(--warm-06)",
-      background: homeBackdrop ? "rgba(0,0,0,0.46)" : "rgba(0,0,0,0.72)",
-      backdropFilter: homeBackdrop ? "blur(20px) saturate(1.05)" : undefined,
-      WebkitBackdropFilter: homeBackdrop ? "blur(20px) saturate(1.05)" : undefined,
+      width: floating ? "100%" : 256, flexShrink: 0,
+      borderRight: floating ? "none" : (homeBackdrop ? "1px solid rgba(255,255,255,0.08)" : "1px solid var(--warm-06)"),
+      background: floating ? "rgba(12,11,11,0.85)" : (homeBackdrop ? "rgba(0,0,0,0.46)" : "rgba(0,0,0,0.72)"),
+      backdropFilter: "blur(20px) saturate(1.05)",
+      WebkitBackdropFilter: "blur(20px) saturate(1.05)",
       display: "flex", flexDirection: "column",
-      height: "100vh", overflow: "hidden",
+      height: floating ? "100%" : "100vh", overflow: "hidden",
     }}>
       <div style={{
         height: 64,

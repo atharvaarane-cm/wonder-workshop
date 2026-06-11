@@ -8983,8 +8983,13 @@ export default function WorkshopV2() {
             on a phone — Ravi's offsite flag. One instance, conditionally
             wrapped, so props aren't duplicated. */}
         {(() => {
+          // Fixed sidebar only when inside a project on desktop. On the create
+          // screen (and on mobile) the project nav floats over the background,
+          // opened from a top-left dropdown pill — per the Figma homescreen.
+          const useFloating = isMobile || !built;
           const sb = (
             <ProjectSidebar
+              floating={useFloating}
               homeBackdrop={!built}
               mode={built && activeProjectId ? "project" : "root"}
               projects={[DEMO_PROJECT_META, ...projects.filter(p => p.id !== DEMO_PROJECT_META.id)]}
@@ -9014,18 +9019,26 @@ export default function WorkshopV2() {
               onRenameFolder={handleRenameFolder}
             />
           );
-          if (!isMobile) return sb;
+          if (!useFloating) return sb;
           return (
             <>
+              {/* Top-left dropdown pill — opens the project nav as a floating
+                  panel over the background instead of a fixed sidebar. */}
               <button
-                aria-label="Open project menu"
+                aria-label="Projects menu"
                 onClick={() => setMobileNavOpen(o => !o)}
-                style={{ position: "fixed", top: 10, left: 10, zIndex: 220, width: 38, height: 38, borderRadius: 9, border: "1px solid var(--warm-12)", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", color: "var(--warm)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 17, lineHeight: 1 }}
-              >☰</button>
+                style={{ position: "fixed", top: 12, left: 16, zIndex: 220, display: "inline-flex", alignItems: "center", gap: 9, height: 44, padding: "0 12px 0 11px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(8,7,7,0.6)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", color: "var(--warm)", cursor: "pointer", outline: "none", boxShadow: "0 6px 20px rgba(0,0,0,0.3)" }}
+              >
+                <WLogo color="rgba(224,224,224,0.9)" size={20} />
+                <span aria-hidden="true" style={{ width: 1, height: 18, background: "rgba(255,255,255,0.14)" }} />
+                <DropdownAssetIcon src={iconFolderUrl} size={15} />
+                <span style={{ fontFamily: "var(--f)", fontSize: 14, fontWeight: 500 }}>Projects</span>
+                <SectionIcon name="chevron-down" size={13} color="var(--warm-50)" />
+              </button>
               {mobileNavOpen && (
-                <div onClick={() => setMobileNavOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
+                <div onClick={() => setMobileNavOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 200 }} />
               )}
-              <div style={{ position: "fixed", left: 0, top: 0, height: "100dvh", zIndex: 201, transform: mobileNavOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.25s ease", boxShadow: mobileNavOpen ? "2px 0 24px rgba(0,0,0,0.5)" : "none" }}>
+              <div style={{ position: "fixed", top: 64, left: 16, zIndex: 201, width: 272, height: "min(620px, calc(100vh - 84px))", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", boxShadow: mobileNavOpen ? "0 24px 60px rgba(0,0,0,0.55)" : "none", transform: mobileNavOpen ? "translateY(0)" : "translateY(-10px)", opacity: mobileNavOpen ? 1 : 0, pointerEvents: mobileNavOpen ? "auto" : "none", transition: "opacity 0.18s ease, transform 0.18s ease" }}>
                 {sb}
               </div>
             </>
