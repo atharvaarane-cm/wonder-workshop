@@ -96,6 +96,7 @@ import {
   createFolder,
   deleteFolder,
   renameFolder,
+  refreshProjects,
 } from "./persistence.js";
 
 /*
@@ -7233,6 +7234,20 @@ export default function WorkshopV2() {
     past: [], present: bootstrap.current.data || INITIAL_STATE, future: [],
   });
   const data = present;
+
+  // Cloud mode: the sync listProjects()/listFolders() serve a (possibly empty)
+  // cache on first paint; hydrate the real list from Supabase on mount. In local
+  // mode refreshProjects() is a sync no-op returning the list, so this is a
+  // harmless one-time refresh either way.
+  useEffect(() => {
+    let active = true;
+    Promise.resolve(refreshProjects()).then(() => {
+      if (!active) return;
+      setProjects(listProjects());
+      setFolders(listFolders());
+    });
+    return () => { active = false; };
+  }, []);
 
   const [ready, setReady] = useState(false);
   // If we restored a project, skip the BriefForm landing and go straight
