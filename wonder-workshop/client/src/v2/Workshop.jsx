@@ -8647,23 +8647,35 @@ export default function WorkshopV2() {
         }
       });
     }
-    // Mood board — use the brief's imagePrompts (Gemini returns 4
-    // cinematic visual descriptions). Each becomes a mood tile with
-    // the description as caption + generated image.
-    for (const prompt of (opts.imagePrompts || [])) {
+    // Mood board — use the brief's imagePrompts (Gemini returns 4 cinematic
+    // visual descriptions). Seed a placeholder tile per prompt UP FRONT and
+    // mark it pending, so the tiles + the Mood sidebar tab shimmer WHILE they
+    // generate (previously the tile was only created on success, so there was
+    // nothing to shimmer during generation). Then fill in the image when it
+    // lands, or surface a retryable failure.
+    const moodPrompts = (opts.imagePrompts || []);
+    const moodBase = (initialData.moodBoard?.length || 0); // avoid id collision with any existing tiles
+    const moodIds = moodPrompts.map((_, i) => `m${moodBase + i + 1}`);
+    moodPrompts.forEach((prompt, i) => {
+      applyGen({ type: "ADD_MOOD", data: { id: moodIds[i], caption: String(prompt).slice(0, 80), image: null, generationStatus: "generating" } });
+      markPending(`mood.${moodIds[i]}`);
+    });
+    moodPrompts.forEach((prompt, i) => {
       phaseA2Tasks.push(async () => {
         try {
           const url = await withRetry(() => generateImage(moodPrompt(prompt), { ratio: "1:1" }));
-          applyGen({
-            type: "ADD_MOOD",
-            data: { caption: String(prompt).slice(0, 80), image: url },
-          });
+          applyGen({ type: "UPLOAD_MOOD_IMAGE", id: moodIds[i], dataUrl: url });
+          applyGen({ type: "UPDATE_MOOD", id: moodIds[i], field: "generationStatus", value: "complete" });
           log("info", `mood tile done: "${String(prompt).slice(0, 40)}…"`);
         } catch (err) {
           log("error", `mood tile failed`, { error: String(err?.message || err) });
+          applyGen({ type: "UPDATE_MOOD", id: moodIds[i], field: "generationStatus", value: "error" });
+          markFailed(`mood.${moodIds[i]}`);
+        } finally {
+          markDone(`mood.${moodIds[i]}`);
         }
       });
-    }
+    });
 
     log("info", `Phase A2: ${phaseA2Tasks.length} tasks queued`);
     await runPool(phaseA2Tasks);
