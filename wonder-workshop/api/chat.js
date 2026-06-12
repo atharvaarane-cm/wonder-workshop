@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { gate } from './_lib/auth.js'
 
 // One Gemini API key can call any Gemini model (text + image), so we
 // accept either env var and fall back. Means setting just one of the
@@ -8,6 +9,7 @@ const genAI = new GoogleGenerativeAI(apiKey)
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await gate(req, res))) return // auth gate (no-op until cloud env is set)
 
   const { messages = [], stream = false, tools = [] } = req.body
 

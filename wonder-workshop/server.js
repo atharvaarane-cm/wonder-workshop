@@ -1,10 +1,20 @@
 import express from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { gate, AUTH_ENABLED } from './api/_lib/auth.js';
 
 const app = express();
 const PORT = 4200;
 
 app.use(express.json({ limit: '20mb' }));
+
+// Auth gate for every /api POST (mirrors the Vercel routes). No-op unless the
+// Supabase env is set on the server (SUPABASE_URL/ANON in the root .env.local),
+// so plain local dev is unchanged; set those to exercise the cloud auth path.
+app.use('/api', async (req, res, next) => {
+  if (req.method !== 'POST' || req.path === '/ping') return next();
+  if (!(await gate(req, res))) return;
+  next();
+});
 
 // ---------------------------------------------------------------
 // Gemini setup. Mirrors api/chat.js + api/image-gemini.js so local

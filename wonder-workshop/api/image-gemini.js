@@ -6,6 +6,8 @@
 // Requires GEMINI_IMAGE_API_KEY in env. Model can be overridden with
 // GEMINI_IMAGE_MODEL if Google ships a newer/cheaper one.
 
+import { gate } from './_lib/auth.js'
+
 const DEFAULT_MODEL = 'gemini-3-pro-image-preview'
 
 // Gemini accepts an aspectRatio hint via imageConfig; we map our common
@@ -39,6 +41,7 @@ function isSafeRemoteImageUrl(raw) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await gate(req, res))) return // auth gate (no-op until cloud env is set)
 
   // Either env var works — one Gemini key can call any model.
   const apiKey = process.env.GEMINI_IMAGE_API_KEY || process.env.GEMINI_API_KEY

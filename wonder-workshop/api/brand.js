@@ -1,3 +1,5 @@
+import { gate } from './_lib/auth.js'
+
 const KNOWN_BRANDS = {
   starbucks: {
     brand: 'Starbucks',
@@ -178,6 +180,7 @@ async function extractSiteColors(sourceUrl) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!(await gate(req, res))) return; // auth gate (no-op until cloud env is set)
 
   const { brand = '' } = req.body || {};
   const key = normalizeBrandName(brand);

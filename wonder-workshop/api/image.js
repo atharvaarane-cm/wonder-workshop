@@ -1,5 +1,8 @@
+import { gate } from './_lib/auth.js'
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await gate(req, res))) return // auth gate (no-op until cloud env is set)
 
   const { prompt, width = 896, height = 512, seed } = req.body || {}
   if (!prompt) return res.status(400).json({ error: 'Prompt required' })
