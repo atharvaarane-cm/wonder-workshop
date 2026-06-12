@@ -1,4 +1,3 @@
-/* global __BUILD_ID__ */
 import { Component } from "react";
 
 // Root error boundary for the whole workshop.

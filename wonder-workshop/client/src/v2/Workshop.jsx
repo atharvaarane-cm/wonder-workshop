@@ -3022,125 +3022,6 @@ function totalDuration(frames) {
   return sum > 0 ? `${sum % 1 === 0 ? sum : sum.toFixed(1)}s` : null;
 }
 
-function SheetFrame({ frame, index, data, aspectCSS = "2.39/1", selected, highlighted, isDragSrc, dispatch, onRetry, onDragStart, onDragOver, onDragLeave, onDragEnd, onDrop, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  // Watch the pending bus too — bulk/auto regen marks every frame pending
-  // up-front but flips imageStatus to "generating" only as each reaches the
-  // worker pool, so without this a queued frame would sit with no shimmer
-  // (the asset slots already do this; SheetFrame was the odd one out).
-  const isPending = usePending(`frame.${frame.id}`);
-  const loc = data.locations.find(l => l.id === frame.locationId);
-  const prods = data.products.filter(p => frame.productIds.includes(p.id));
-  const talents = data.talent.filter(t => frame.talentIds.includes(t.id));
-  const lensHint = LENS_TYPES.find(lt => lt.value === frame.lens)?.hint || "";
-  const handleImageError = () => {
-    dispatch({ type: "CLEAR_FRAME_IMAGE", frameId: frame.id, status: "error" });
-  };
-
-  const frameCardClassName = [
-    "overflow-hidden rounded-lg transition-colors",
-    selected ? "ring-1 ring-ring/50" : "",
-    highlighted ? "ring-1 ring-ring/30" : "",
-    hovered ? "border-ring/40" : "",
-  ].filter(Boolean).join(" ");
-
-  return (
-    <Card
-      render={<motion.div />}
-      className={frameCardClassName}
-      layout
-      layoutId={`frame-${frame.id}`}
-      draggable onDragStart={e => onDragStart(e, frame.id)}
-      onDragOver={e => onDragOver(e, index)}
-      onDragLeave={onDragLeave}
-      onDragEnd={onDragEnd} onDrop={onDrop} onClick={onClick}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      whileHover={isDragSrc ? undefined : { y: -2, scale: HOVER_SCALE }}
-      whileTap={isDragSrc ? undefined : { scale: TAP_SCALE }}
-      transition={TAP_SPRING}
-      style={{
-        cursor: isDragSrc ? "grabbing" : "pointer",
-        opacity: isDragSrc ? 0.15 : 1,
-        animation: highlighted ? "highlightPulse 1.5s ease" : "none",
-      }}
-    >
-      {/* Header bar */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "6px 10px",
-        borderBottom: "1px solid var(--warm-04)",
-      }}>
-        <span style={{ fontFamily: "var(--f)", fontSize: 10, fontWeight: 600, color: "var(--warm-35)", letterSpacing: "0.04em" }}>{frame.number}</span>
-        <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-20)", letterSpacing: "0.04em" }}>
-          {frame.shotType} {"\xB7"} {MOVEMENT_TYPES.find(m => m.value === frame.movement)?.label || "Static"}
-        </span>
-      </div>
-
-      {/* Clean thumbnail. Vignette darkens the empty-state gradient
-          for empty frames so the placeholder doesn't look flat. When
-          an image IS loaded, only the image shows — no overlay, no
-          film-strip bars (Logan asked to remove them). */}
-      <div style={{ aspectRatio: aspectCSS, background: frame.uploadedImage ? "transparent" : FILM[index % FILM.length], position: "relative", overflow: "hidden" }}>
-        {frame.uploadedImage && <img src={frame.uploadedImage} alt="" onError={handleImageError} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
-        {!frame.uploadedImage && (
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 80% at center, transparent 0%, rgba(0,0,0,0.4) 100%)" }} />
-        )}
-        {(frame.imageStatus === "generating" || isPending) && <ShimmerOverlay />}
-        {/* Error state — frame failed during bulk auto-gen (usually
-            a Gemini rate limit). Show a Retry pill so the user doesn't
-            have to leave the storyboard to recover the missing frame. */}
-        {frame.imageStatus === "error" && !frame.uploadedImage && (
-          <div style={{
-            position: "absolute", inset: 0, zIndex: 3,
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            gap: 8, padding: 10,
-            background: "rgba(0,0,0,0.42)",
-          }}>
-            <div style={{
-              fontFamily: "var(--f)", fontSize: 10, fontWeight: 600,
-              color: "rgba(255,255,255,0.92)", letterSpacing: "0.06em", textTransform: "uppercase",
-            }}>Generation failed</div>
-            {onRetry && (
-              <button
-                onClick={e => { e.stopPropagation(); onRetry(frame.id); }}
-                style={{
-                  fontFamily: "var(--f)", fontSize: 11, fontWeight: 500,
-                  color: "#fff", background: "rgba(255,255,255,0.12)",
-                  border: "1px solid rgba(255,255,255,0.4)", borderRadius: 999,
-                  padding: "4px 12px", cursor: "pointer", letterSpacing: "0.04em",
-                }}
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer bar — location name on the left, editable duration on
-          the right. Duration commits on blur via UPDATE_FRAME. */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "5px 10px",
-        borderTop: "1px solid var(--warm-04)",
-      }}>
-        <span style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 400, color: "var(--warm-20)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{loc?.name || "—"}</span>
-        <FrameDuration
-          duration={frame.duration}
-          onChange={v => dispatch?.({ type: "UPDATE_FRAME", frameId: frame.id, field: "duration", value: v })}
-        />
-      </div>
-
-      {/* Brief — @-handles render as colored chips by entity type */}
-      <div style={{ padding: "8px 10px 10px" }}>
-        <div style={{ fontFamily: "var(--f)", fontSize: 11, fontWeight: 300, color: "var(--warm-35)", lineHeight: 1.7, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-          {renderMentions(frame.brief, data)}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 // -- COMPASS WIDGET (SVG camera angle selector) ---------------
 
 function CompassWidget({ value, onChange, size = 100 }) {
@@ -6792,9 +6673,18 @@ function BriefForm({
   const [customText, setCustomText] = useState("");
   const fileRef = useRef(null);
 
-  const addFiles = (fl) => {
-    const nf = Array.from(fl).map(f => ({ name: f.name, size: f.size, type: f.type }));
-    setFiles(prev => [...prev, ...nf]);
+  // Reference files were captured but silently ignored. Now read text-based
+  // ones (treatments/scripts as .txt/.md/etc.) and feed them into the brief;
+  // anything we can't read as text is kept visible but flagged "not used" so
+  // nothing is silently swallowed.
+  const isTextReadable = (f) => /^text\//.test(f.type || "") || /\.(txt|md|markdown|csv|json|text)$/i.test(f.name || "");
+  const addFiles = async (fl) => {
+    const incoming = await Promise.all(Array.from(fl).map(async f => {
+      let text = null;
+      if (isTextReadable(f)) { try { text = (await f.text()).slice(0, 20000); } catch { text = null; } }
+      return { name: f.name, size: f.size, type: f.type, text, used: !!text };
+    }));
+    setFiles(prev => [...prev, ...incoming]);
   };
   const removeFile = (i) => setFiles(prev => prev.filter((_, idx) => idx !== i));
 
@@ -6944,7 +6834,7 @@ function BriefForm({
               <button
                 type="button"
                 onClick={() => fileRef.current && fileRef.current.click()}
-                title="Add reference files (treatments, scripts, images, mood boards)"
+                title="Attach a treatment or script — text files (.txt/.md) are read into the brief"
                 style={{
                   position: "absolute", left: 14, bottom: 14, zIndex: 3,
                   width: 30, height: 30, borderRadius: 9,
@@ -7075,6 +6965,7 @@ function BriefForm({
                     <span style={{ fontFamily: "var(--f)", fontSize: 8, fontWeight: 700, color: "var(--warm-25)", background: "var(--warm-06)", padding: "2px 4px", borderRadius: 3 }}>{fmtType(f.type)}</span>
                     <span style={{ fontFamily: "var(--f)", fontSize: 11, color: "var(--warm-35)" }}>{f.name}</span>
                     <span style={{ fontFamily: "var(--f)", fontSize: 10, color: "var(--warm-15)" }}>{fmtSize(f.size)}</span>
+                    <span title={f.used ? "Read into the brief" : "Not used yet — add a .txt/.md treatment or script"} style={{ fontFamily: "var(--f)", fontSize: 9, fontWeight: 600, color: f.used ? "#9CECB1" : "var(--warm-25)" }}>{f.used ? "read" : "not used"}</span>
                     <button onClick={() => removeFile(i)} style={{ width: 16, height: 16, borderRadius: 3, border: "none", background: "transparent", color: "var(--warm-25)", cursor: "pointer", fontSize: 11, outline: "none" }}>&times;</button>
                   </div>
                 ))}
@@ -7113,7 +7004,11 @@ function BriefForm({
               </div>
               <button
                 type="button"
-                onClick={() => !generating && onGenerate(meta)}
+                onClick={() => {
+                  if (generating) return;
+                  const referenceText = files.filter(f => f.text).map(f => `--- Reference: ${f.name} ---\n${f.text}`).join("\n\n");
+                  onGenerate(meta, referenceText ? { referenceText } : {});
+                }}
                 disabled={generating}
                 style={{
                   position: "relative", overflow: "hidden",
@@ -8312,6 +8207,9 @@ export default function WorkshopV2() {
         meta.title ? `${meta.title}` : null,
         meta.client ? `for ${meta.client}` : null,
         meta.treatment ? `\n\n${meta.treatment}` : null,
+        // Reference files the user attached on the create screen (treatments,
+        // scripts) — grounding material for the brief, not the brief itself.
+        opts.referenceText ? `\n\nReference material the user attached (treatments / scripts). Use it to ground the brief — its characters, locations, products, tone:\n${opts.referenceText}` : null,
         `\n\nFormat: ${meta.format}s, ${meta.aspect} aspect ratio.`,
       ].filter(Boolean).join(" ").trim();
 
