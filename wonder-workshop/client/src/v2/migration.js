@@ -2,6 +2,7 @@
 // shape that v2/Workshop.jsx's reducer expects. This is the bridge that
 // lets v2's UI run on the real Gemini-generated brief instead of mock
 // INITIAL_STATE. Pure function; no side effects.
+import { uid, SCHEMA_VERSION } from "./ids.js";
 
 function autoHandle(name) {
   return "@" + (name || "").split(" ")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -64,7 +65,7 @@ function assembleTalent(brief) {
     if (c?.name) items.push({ v1: c, role: "Supporting" });
   }
   return items.map((t, i) => ({
-    id: `t${i + 1}`,
+    id: uid("t"),
     name: t.v1.name,
     handle: autoHandle(t.v1.name),
     role: t.role,
@@ -98,7 +99,7 @@ function assembleLocations(brief) {
     if (e?.heroName || e?.heroEnvironment) items.push(e);
   }
   return items.map((e, i) => ({
-    id: `l${i + 1}`,
+    id: uid("l"),
     name: e.heroName || `Location ${i + 1}`,
     handle: autoHandle(e.heroName || `loc${i + 1}`),
     type: "ai",
@@ -113,7 +114,7 @@ function assembleLocations(brief) {
 
 function assembleProducts(brief) {
   return (brief?.productElements || []).map((p, i) => ({
-    id: `p${i + 1}`,
+    id: uid("p"),
     name: p.name || `Element ${i + 1}`,
     handle: autoHandle(p.name || `el${i + 1}`),
     category: "Product",
@@ -142,7 +143,7 @@ function assembleFrames(brief) {
     const movement = mapMovement(s.camera);
     const heightFromShot = movement === "crane" ? "high" : "eye";
     return {
-      id: `f${i + 1}`,
+      id: uid("f"),
       number: s.num || String(i + 1).padStart(2, "0"),
       shotType: mapFraming(s.framing),
       // camera caption gets re-derived by UPDATE_FRAME_CAMERA — set a
@@ -172,6 +173,7 @@ export function v1BriefToV2Data(brief) {
   const cd = brief?.creativeDirection || {};
   const pi = brief?.projectInfo || {};
   return {
+    schemaVersion: SCHEMA_VERSION,
     meta: {
       title: pi.projectName || brief?.title || "Untitled",
       client: pi.clientName || cd.brand || "",
@@ -191,8 +193,8 @@ export function v1BriefToV2Data(brief) {
     // v1 strips moodBoard/environments per Ed's UX rule (users add via
     // buttons), so brief.moodBoard is usually missing — keep v2's
     // moodBoard array but seed it empty so the user adds mood refs.
-    moodBoard: (brief?.moodBoard || []).map((m, i) => ({
-      id: m.id || `m${i + 1}`,
+    moodBoard: (brief?.moodBoard || []).map((m) => ({
+      id: m.id || uid("m"),
       caption: m.caption || "",
       image: m.image || null,
       generationStatus: "idle",

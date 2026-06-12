@@ -23,6 +23,7 @@ const TILE_ENTER = {
 };
 import { generateBrief, chatWithTools, regenerateShotList, suggestReconciliation, suggestOrphanCleanup } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
+import { uid, SCHEMA_VERSION } from "./ids.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -687,6 +688,7 @@ function readAIChatDrawerOpenPreference() {
 }
 
 const INITIAL_STATE = {
+  schemaVersion: SCHEMA_VERSION,
   meta: {
     title: "THE LONG RUN",
     client: "Nike",
@@ -847,9 +849,8 @@ function applyAction(state, action) {
       return { ...state, versionHistory: { ...state.versionHistory, [slotKey]: next } };
     }
     case "ADD_FRAME": {
-      const maxId = Math.max(0, ...state.frames.map(f => parseInt(f.id.slice(1))));
       const nf = {
-        id: "f" + (maxId + 1), number: "00", shotType: "MED", camera: "Static",
+        id: uid("f"), number: "00", shotType: "MED", camera: "Static",
         brief: "New frame — describe the shot.", talentIds: [],
         locationId: state.locations[0]?.id || null, productIds: [],
         cameraAngle: "front", cameraHeight: "eye", lens: "normal", movement: "static",
@@ -940,8 +941,7 @@ function applyAction(state, action) {
         }),
       };
     case "ADD_TALENT": {
-      const mx = Math.max(0, ...state.talent.map(t => parseInt(t.id.slice(1))));
-      const merged = { id: "t" + (mx + 1), name: "New Talent", role: "Supporting", initials: "NT", note: "", headshot: null, generatedAngles: null, generationStatus: "idle", ...action.data };
+      const merged = { id: uid("t"), name: "New Talent", role: "Supporting", initials: "NT", note: "", headshot: null, generatedAngles: null, generationStatus: "idle", ...action.data };
       merged.handle = uniqueHandle(autoHandle(merged.name), state);
       return { ...state, talent: [...state.talent, merged] };
     }
@@ -971,8 +971,7 @@ function applyAction(state, action) {
       return { ...state, products: nextProducts, versionHistory: nextHistory };
     }
     case "ADD_PRODUCT": {
-      const mx = Math.max(0, ...state.products.map(p => parseInt(p.id.slice(1))));
-      const merged = { id: "p" + (mx + 1), name: "New Product", category: "Other", focus: "Medium", hue: "#888888", referenceImage: null, generationStatus: "idle", ...action.data };
+      const merged = { id: uid("p"), name: "New Product", category: "Other", focus: "Medium", hue: "#888888", referenceImage: null, generationStatus: "idle", ...action.data };
       merged.handle = uniqueHandle(autoHandle(merged.name), state);
       return { ...state, products: [...state.products, merged] };
     }
@@ -1002,8 +1001,7 @@ function applyAction(state, action) {
       return { ...state, locations: nextLocations, versionHistory: nextHistory };
     }
     case "ADD_LOCATION": {
-      const mx = Math.max(0, ...state.locations.map(l => parseInt(l.id.slice(1))));
-      const merged = { id: "l" + (mx + 1), name: "New Location", handle: "", type: "ai", colors: ["#444", "#555", "#666", "#777"], referenceImage: null, generationStatus: "idle", generatedImage: null, ...action.data };
+      const merged = { id: uid("l"), name: "New Location", handle: "", type: "ai", colors: ["#444", "#555", "#666", "#777"], referenceImage: null, generationStatus: "idle", generatedImage: null, ...action.data };
       merged.handle = uniqueHandle(autoHandle(merged.name), state);
       return { ...state, locations: [...state.locations, merged] };
     }
@@ -1023,8 +1021,7 @@ function applyAction(state, action) {
     case "UPLOAD_BRAND_LOGO":
       return { ...state, brand: { ...(state.brand || {}), logo: action.dataUrl } };
     case "ADD_MOOD": {
-      const mx = Math.max(0, ...((state.moodBoard || []).map(m => parseInt(String(m.id).slice(1)) || 0)));
-      const merged = { id: "m" + (mx + 1), caption: "", image: null, generationStatus: "idle", ...action.data };
+      const merged = { id: uid("m"), caption: "", image: null, generationStatus: "idle", ...action.data };
       return { ...state, moodBoard: [...(state.moodBoard || []), merged] };
     }
     case "UPDATE_MOOD":
@@ -7181,7 +7178,7 @@ function ensureLocationInTreatment(v2Data) {
   if (!locs.length) {
     // Model ignored the always-one-location rule — synthesize a minimal one.
     locs = [{
-      id: "l1", name: "Main Location", handle: "@location", type: "ai",
+      id: uid("l"), name: "Main Location", handle: "@location", type: "ai",
       colors: ["#444", "#555", "#666", "#777"], note: "", referenceImage: null,
       generationStatus: "idle", generatedImage: null, locked: false,
     }];
@@ -7530,12 +7527,10 @@ export default function WorkshopV2() {
       if (frame && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: frame.id, field: "brief", value: fe.newBrief }); touchedFrameIds.push(frame.id); }
     }
     // Add any NEW frames (e.g. an establishing shot for a new location). Assign
-    // explicit sequential ids so we can track them for regeneration.
-    let base = Math.max(0, ...(d.frames || []).map(f => parseInt(String(f.id).slice(1)) || 0));
+    // explicit ids so we can track them for regeneration.
     for (const nf of (newFrames || [])) {
       if (!nf?.brief) continue;
-      base += 1;
-      const id = "f" + base;
+      const id = uid("f");
       const afterFrameId = nf.afterFrameNumber
         ? ((d.frames || []).find(f => f.number === String(nf.afterFrameNumber).padStart(2, "0"))?.id || null)
         : null;
@@ -7949,11 +7944,9 @@ export default function WorkshopV2() {
           if (fr && fe.newBrief) { dispatch({ type: "UPDATE_FRAME", frameId: fr.id, field: "brief", value: fe.newBrief }); reconciledFrameIds.push(fr.id); }
         }
         // Add new frames (e.g. an establishing shot for a location).
-        let fbase = Math.max(0, ...(current.frames || []).map(f => parseInt(String(f.id).slice(1)) || 0));
         for (const nfr of (suggestion.newFrames || [])) {
           if (!nfr?.brief) continue;
-          fbase += 1;
-          const id = "f" + fbase;
+          const id = uid("f");
           const afterFrameId = nfr.afterFrameNumber
             ? ((current.frames || []).find(f => f.number === String(nfr.afterFrameNumber).padStart(2, "0"))?.id || null)
             : null;
@@ -8654,8 +8647,7 @@ export default function WorkshopV2() {
     // nothing to shimmer during generation). Then fill in the image when it
     // lands, or surface a retryable failure.
     const moodPrompts = (opts.imagePrompts || []);
-    const moodBase = (initialData.moodBoard?.length || 0); // avoid id collision with any existing tiles
-    const moodIds = moodPrompts.map((_, i) => `m${moodBase + i + 1}`);
+    const moodIds = moodPrompts.map(() => uid("m"));
     moodPrompts.forEach((prompt, i) => {
       applyGen({ type: "ADD_MOOD", data: { id: moodIds[i], caption: String(prompt).slice(0, 80), image: null, generationStatus: "generating" } });
       markPending(`mood.${moodIds[i]}`);
