@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePending } from "../../Workshop.jsx";
+import { isFrameStale } from "../../frameStatus.js";
 
 const TAP_SPRING = { type: "spring", stiffness: 420, damping: 30, mass: 0.6 };
 const HOVER_SCALE = 1.012;
@@ -231,6 +232,16 @@ function StoryboardFrameCardComponent({
             />
           )}
           {(isGenerating || isQueued) && <ShimmerOverlay label={isGenerating ? "Generating…" : "Queued"} />}
+          {isFrameStale(frame) && !isGenerating && !isQueued && (
+            <div
+              className="absolute right-2 top-2 z-[4] flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em]"
+              style={{ background: "rgba(245,166,35,0.16)", borderColor: "#F5A623", color: "#F5A623", backdropFilter: "blur(6px)" }}
+              title="The brief changed after this image was made — regenerate to match"
+            >
+              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#F5A623" }} />
+              Edited
+            </div>
+          )}
           {!frame.uploadedImage && !isGenerating && !isQueued && frame.imageStatus !== "error" && onRetry && (
             <div className="absolute inset-0 z-[3] flex items-center justify-center bg-black/20 p-2.5">
               <button

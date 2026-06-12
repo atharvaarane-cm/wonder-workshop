@@ -24,6 +24,7 @@ const TILE_ENTER = {
 import { generateBrief, chatWithTools, regenerateShotList, suggestReconciliation, suggestOrphanCleanup } from "../hooks/useBrief.js";
 import { v1BriefToV2Data } from "./migration.js";
 import { uid, SCHEMA_VERSION } from "./ids.js";
+import { isFrameStale } from "./frameStatus.js";
 import { briefFromV2Data } from "./briefFromV2Data.js";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -836,7 +837,9 @@ function applyAction(state, action) {
     case "UPLOAD_FRAME_IMAGE":
       return {
         ...state,
-        frames: state.frames.map(f => f.id === action.frameId ? { ...f, uploadedImage: action.dataUrl, imageStatus: "uploaded" } : f),
+        // Snapshot the brief at image time so we can detect when later edits
+        // make the picture stale (isFrameStale).
+        frames: state.frames.map(f => f.id === action.frameId ? { ...f, uploadedImage: action.dataUrl, imageStatus: "uploaded", imageBrief: f.brief || "" } : f),
         versionHistory: appendVersion(state.versionHistory, `frame.${action.frameId}`, action.dataUrl),
       };
     // Remove one saved version from a slot's history (the version-tracker's
@@ -3294,6 +3297,19 @@ function ProductionView({ frame, data, dispatch, onBack, onPrev, onNext, hasPrev
                 {frame.brief?.trim()
                   ? renderMentions(frame.brief, data, { onMentionClick: (asset) => { onFocusChat?.(); toast(`${asset.name} ${asset.handle || ""} ready to discuss in chat`, { kind: "info", ttl: 2500 }); } })
                   : <span style={{ color: "var(--warm-25)" }}>Describe this shot…</span>}
+              </div>
+            )}
+            {isFrameStale(frame) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "8px 11px", borderRadius: 8, background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.3)" }}>
+                <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: "#F5A623", flexShrink: 0 }} />
+                <span style={{ flex: 1, fontFamily: "var(--f)", fontSize: 12, color: "#F5A623", lineHeight: 1.4 }}>
+                  The brief changed after this image was made — it may be out of date.
+                </span>
+                <button
+                  onClick={handleGenerate}
+                  title="Regenerate this frame's image to match the edited brief"
+                  style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 11px", borderRadius: 7, cursor: "pointer", background: "rgba(245,166,35,0.16)", border: "1px solid #F5A623", color: "#F5A623", outline: "none", fontFamily: "var(--f)", fontSize: 11, fontWeight: 600 }}
+                >Regenerate</button>
               </div>
             )}
             {/* Tagged-asset preview — same colored chip palette as the
