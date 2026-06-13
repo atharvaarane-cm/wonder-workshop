@@ -8457,18 +8457,25 @@ export default function WorkshopV2() {
     // came back blank. Two in flight eases the pressure without making the
     // whole batch crawl.
     const IMG_CONCURRENCY = 2;
-    // Up to 5 retries (was 3) with jittered exponential backoff
-    // (~1.5s → 3s → 6s → 12s → 18s cap). The extra attempts + jitter let the
-    // per-minute rate-limit window recover instead of giving up early, which
-    // is what left empty headshot/full-body slots and failed frames.
+    // Up to 5 retries with jittered exponential backoff (~1.5s → 3s → 6s → 12s →
+    // 18s cap) so the per-minute RATE-LIMIT window can recover instead of giving
+    // up early (the cause of empty slots / failed frames).
+    // BUT cap TIMEOUTS separately: a request that keeps hitting the 90s timeout is
+    // genuinely stuck/slow and won't recover by hammering it — 5×90s ≈ 8 minutes
+    // of spinning (this is what left mood tiles "generating" for ages). Give up
+    // after 2 timeouts (~3 min) so it fails fast and shows its Retry affordance.
+    const MAX_TIMEOUTS = 2;
     async function withRetry(task, attempts = 5) {
       let delay = 1500;
+      let timeouts = 0;
       for (let i = 0; ; i++) {
         try {
           return await task();
         } catch (err) {
-          const retryable = err?.status === 429 || (err?.status >= 500 && err?.status < 600) || !err?.status;
-          if (!retryable || i >= attempts) throw err;
+          const status = err?.status;
+          if (status === 504) timeouts++; // imageGen marks its 90s abort as 504
+          const retryable = status === 429 || (status >= 500 && status < 600) || !status;
+          if (!retryable || i >= attempts || timeouts >= MAX_TIMEOUTS) throw err;
           // Jitter so the 2 workers don't retry in lockstep and re-collide.
           const jitter = delay * (0.5 + Math.random() * 0.5);
           await new Promise(r => setTimeout(r, jitter));
