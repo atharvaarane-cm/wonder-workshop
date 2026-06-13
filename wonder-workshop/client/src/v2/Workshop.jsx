@@ -8534,17 +8534,22 @@ export default function WorkshopV2() {
     }
     await Promise.allSettled(phaseA1);
 
-    // Phase A2 — everything that can run after the primary headshots
-    // exist (so they can be used as reference images for identity
-    // preservation). Pushed as closures and run through the shared
-    // worker pool so we don't overrun Gemini's per-minute rate limit.
-    const phaseA2Tasks = [];
+    // Phase A2 — everything that can run after the primary headshots exist.
+    // Split into two buckets by what the STORYBOARD actually needs:
+    //   refTasks = locations + products  → frames reference these images, so the
+    //              frames wait for them.
+    //   bgTasks  = extra talent angles + full-body + mood → NOT referenced by
+    //              frames, so they run in the background and must NEVER block the
+    //              storyboard. (A stuck mood gen used to hang the whole A2 pool so
+    //              the frames never generated at all.)
+    const refTasks = [];
+    const bgTasks = [];
 
     for (const t of initialData.talent || []) {
       const primaryRef = generated.talent.get(t.id);
       if (!primaryRef) continue; // primary failed — skip the rest
       for (const view of HEAD_VIEWS_EXTRA) {
-        phaseA2Tasks.push(async () => {
+        bgTasks.push(async () => {
           try {
             const url = await withRetry(() => generateImage(talentHeadshotPrompt(t, view), {
               ratio: "1:1",
@@ -8561,7 +8566,7 @@ export default function WorkshopV2() {
         });
       }
       for (const view of FULLBODY_VIEWS) {
-        phaseA2Tasks.push(async () => {
+        bgTasks.push(async () => {
           try {
             const url = await withRetry(() => generateImage(talentFullBodyPrompt(t, view), {
               ratio: "3:4",
@@ -8588,7 +8593,7 @@ export default function WorkshopV2() {
     }
 
     for (const l of initialData.locations || []) {
-      phaseA2Tasks.push(async () => {
+      refTasks.push(async () => {
         applyGen({ type: "UPDATE_LOCATION_GENERATION", id: l.id, status: "generating" });
         try {
           const url = await withRetry(() => generateImage(locationPrompt(l), { ratio: aspect }));
@@ -8604,7 +8609,7 @@ export default function WorkshopV2() {
       });
     }
     for (const p of initialData.products || []) {
-      phaseA2Tasks.push(async () => {
+      refTasks.push(async () => {
         applyGen({ type: "UPDATE_PRODUCT_GENERATION", id: p.id, status: "generating" });
         try {
           const url = await withRetry(() => generateImage(productPrompt(p), { ratio: "1:1" }));
@@ -8632,7 +8637,7 @@ export default function WorkshopV2() {
       markPending(`mood.${moodIds[i]}`);
     });
     moodPrompts.forEach((prompt, i) => {
-      phaseA2Tasks.push(async () => {
+      bgTasks.push(async () => {
         try {
           const url = await withRetry(() => generateImage(moodPrompt(prompt), { ratio: "1:1" }));
           applyGen({ type: "UPLOAD_MOOD_IMAGE", id: moodIds[i], dataUrl: url });
@@ -8648,8 +8653,11 @@ export default function WorkshopV2() {
       });
     });
 
-    log("info", `Phase A2: ${phaseA2Tasks.length} tasks queued`);
-    await runPool(phaseA2Tasks);
+    // Generate the frame reference images (locations + products) first — the
+    // storyboard needs them. The background bucket (angles/full-body/mood) is
+    // deferred and queued AFTER the frames below, so it can't block them.
+    log("info", `Phase A2 refs: ${refTasks.length} queued; background: ${bgTasks.length} deferred`);
+    await runPool(refTasks);
 
     // Phase B — frames with reference images. Detect @-handle mentions
     // inline (matching the reducer's AUTO_DETECT_MENTIONS logic) so we
@@ -8686,8 +8694,12 @@ export default function WorkshopV2() {
         markDone(`frame.${f.id}`);
       }
     });
-    log("info", `Phase B: ${frameTasks.length} frames queued`);
-    await runPool(frameTasks);
+    // Phase B — frames first (priority), then the deferred background tasks, in
+    // ONE pool so total concurrency stays bounded (2). Frames drain before any
+    // background task is even started, so a slow/stuck mood or angle gen can no
+    // longer prevent the storyboard from generating.
+    log("info", `Phase B: ${frameTasks.length} frames queued (+${bgTasks.length} background after)`);
+    await runPool([...frameTasks, ...bgTasks]);
     log("info", `Done. ${frameSuccess} succeeded, ${frameFail} failed.`);
     if (frameFail === 0) {
       toast("All images generated. Refine anything that needs a tweak.", { kind: "success", ttl: 4500 });
