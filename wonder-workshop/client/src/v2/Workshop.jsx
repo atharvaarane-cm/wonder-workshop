@@ -25,6 +25,22 @@ import { generateBrief, chatWithTools, regenerateShotList, suggestReconciliation
 import { v1BriefToV2Data } from "./migration.js";
 import { uid, SCHEMA_VERSION } from "./ids.js";
 import { isFrameStale } from "./frameStatus.js";
+import { buildSlots } from "./genPlan.js";
+import { supabase, hasSupabase } from "./supabaseClient.js";
+
+// Server-side generation: when ON (and cloud is configured), "Create" enqueues a
+// generation_job for the background worker instead of generating in the tab, and
+// a Realtime subscription fills the storyboard in live. Default OFF — generation
+// stays client-side until this is proven. Flip via VITE_SERVER_GEN=1 (build) or
+// ?servergen=1 (runtime, for testing).
+const SERVER_GEN = (() => {
+  try {
+    if (!hasSupabase) return false;
+    const flag = import.meta.env?.VITE_SERVER_GEN === "1";
+    const qs = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("servergen") === "1";
+    return flag || qs;
+  } catch { return false; }
+})();
 import { briefFromV2Data } from "./briefFromV2Data.js";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -807,6 +823,35 @@ function applyAction(state, action) {
         ...clearStaleGenerationState(action.data),
         meta: { ...action.data.meta, ...(action.metaOverrides || {}) },
       };
+    case "MERGE_GENERATED_IMAGES": {
+      // Server-side generation: the worker writes images into the cloud project;
+      // a Realtime update brings that data here. Overlay ONLY image fields onto
+      // the current state (by id) so the storyboard fills in live without
+      // clobbering the user's text edits or resetting anything else.
+      const inc = action.data || {};
+      const merge = (cur, src, fields) => {
+        const byId = new Map((src || []).filter(x => x && x.id != null).map(x => [x.id, x]));
+        let changed = false;
+        const out = (cur || []).map(item => {
+          const s = byId.get(item.id);
+          if (!s) return item;
+          const patch = {};
+          for (const f of fields) if (s[f] != null && JSON.stringify(s[f]) !== JSON.stringify(item[f])) patch[f] = s[f];
+          if (!Object.keys(patch).length) return item;
+          changed = true;
+          return { ...item, ...patch };
+        });
+        return changed ? out : cur;
+      };
+      const talent = merge(state.talent, inc.talent, ["headshot", "headshots", "fullBody", "generatedAngles", "generationStatus"]);
+      const locations = merge(state.locations, inc.locations, ["generatedImage", "generationStatus"]);
+      const products = merge(state.products, inc.products, ["referenceImage", "generationStatus"]);
+      const moodBoard = merge(state.moodBoard, inc.moodBoard, ["image", "generationStatus"]);
+      const frames = merge(state.frames, inc.frames, ["uploadedImage", "imageStatus", "imageBrief"]);
+      // Nothing new → return the same ref so the reducer doesn't log an undo step.
+      if (talent === state.talent && locations === state.locations && products === state.products && moodBoard === state.moodBoard && frames === state.frames) return state;
+      return { ...state, talent, locations, products, moodBoard, frames };
+    }
     case "SET_META":
       return { ...state, meta: { ...state.meta, ...action.meta } };
     case "UPDATE_META": {
@@ -7222,6 +7267,22 @@ export default function WorkshopV2() {
     return () => { active = false; };
   }, []);
 
+  // Server-side generation: subscribe to the active project's row so images the
+  // background worker writes stream into the storyboard live (merged in, not
+  // clobbering local edits). Only in server-gen mode; no-op otherwise.
+  useEffect(() => {
+    if (!SERVER_GEN || !supabase || !activeProjectId || isDemoProjectId(activeProjectId)) return;
+    const channel = supabase
+      .channel(`ww-proj-${activeProjectId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "workshop_projects", filter: `id=eq.${activeProjectId}` },
+        (payload) => { const d = payload?.new?.data; if (d) dispatch({ type: "MERGE_GENERATED_IMAGES", data: d }); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeProjectId]);
+
   const [ready, setReady] = useState(false);
   // If we restored a project, skip the BriefForm landing and go straight
   // to the OneSheet — the user already has a project to work in.
@@ -8410,7 +8471,8 @@ export default function WorkshopV2() {
       // Kick off auto image generation in the background. Don't await
       // it here — we want the OneSheet to be interactive immediately
       // and have images stream in as they complete.
-      autoGenerateAssets(v2Data, meta.aspect, { imagePrompts, projectId: newId });
+      if (SERVER_GEN) enqueueGenerationJob(newId, imagePrompts);
+      else autoGenerateAssets(v2Data, meta.aspect, { imagePrompts, projectId: newId });
     } catch (e) {
       console.error("[handleGenerate] failed", e);
       setGenerationError(e?.message || "Generation failed. Try again.");
@@ -8425,6 +8487,31 @@ export default function WorkshopV2() {
   //       reference images attached for identity preservation
   // Phase A images get tracked in a local Map so phase B can attach
   // them even though our React state updates are still propagating.
+  // Server-side path: instead of generating in the tab, seed the mood
+  // placeholders, make sure the full project is saved to the cloud (the worker
+  // reads it), build the slot list, and enqueue a generation_job. The Realtime
+  // subscription below fills the storyboard in as the worker writes images — so
+  // it keeps going even if the user closes the tab. Falls back to client-side
+  // generation if enqueueing fails, so the user is never left with nothing.
+  async function enqueueGenerationJob(projectId, imagePrompts) {
+    try {
+      (imagePrompts || []).forEach((prompt) => {
+        dispatch({ type: "ADD_MOOD", data: { id: uid("m"), caption: String(prompt).slice(0, 80), image: null, generationStatus: "generating" } });
+      });
+      await new Promise((r) => setTimeout(r, 60)); // let the reducer flush the mood items
+      const data = dataRef.current;
+      await saveProjectAsync(projectId, clearStaleGenerationState(data));
+      const slots = buildSlots(data);
+      const { error } = await supabase.from("generation_jobs").insert({ project_id: projectId, total: slots.length, slots });
+      if (error) throw new Error(error.message);
+      log("info", `Enqueued server-side generation job: ${slots.length} slots`);
+    } catch (e) {
+      console.error("[enqueue] failed — falling back to client-side generation", e);
+      const d = dataRef.current;
+      autoGenerateAssets(d, d?.meta?.aspect || "16:9", { imagePrompts, projectId });
+    }
+  }
+
   // Errors are surfaced via the reducer's "error" generationStatus on
   // the affected asset — generation keeps moving for everything else.
   async function autoGenerateAssets(initialData, aspect, opts = {}) {
