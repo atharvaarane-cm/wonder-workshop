@@ -7141,6 +7141,39 @@ function ensureLocationInTreatment(v2Data) {
     : `Set at ${setting}.`;
 }
 
+// The project name in the workspace breadcrumb — double-click to rename in place.
+// Commits to meta.title; the autosave then syncs the project-list name (the row's
+// `name` column is derived from meta.title on save), so the two stay in step.
+function EditableProjectName({ title, onRename }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(title);
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (editing) { setVal(title); requestAnimationFrame(() => { inputRef.current?.focus(); inputRef.current?.select(); }); }
+  }, [editing, title]);
+  const commit = () => {
+    const t = (val || "").trim();
+    setEditing(false);
+    if (t && t !== title) onRename(t);
+  };
+  const base = { color: "var(--warm-60)", fontFamily: "var(--f)", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") { e.preventDefault(); setEditing(false); } }}
+        style={{ ...base, background: "var(--warm-08)", border: "1px solid var(--warm-20)", borderRadius: 6, padding: "2px 8px", outline: "none", maxWidth: 280 }}
+      />
+    );
+  }
+  return (
+    <span onDoubleClick={() => setEditing(true)} title="Double-click to rename" style={{ ...base, cursor: "text" }}>{title}</span>
+  );
+}
+
 export default function WorkshopV2() {
   // First mount: check for a #share=<base64> URL hash first (read-only
   // shared brief), then resolve the active project id. If a project's already active,
@@ -9421,7 +9454,10 @@ export default function WorkshopV2() {
                 {current(`Frame ${prodFrame.number}`)}
               </>
             ) : (
-              current(data.meta?.title || "Untitled")
+              <EditableProjectName
+                title={data.meta?.title || "Untitled"}
+                onRename={(t) => dispatch({ type: "UPDATE_META", field: "title", value: t })}
+              />
             )}
           </div>
         );
