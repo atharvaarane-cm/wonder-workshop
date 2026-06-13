@@ -7077,6 +7077,38 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
+// Hold a screen Wake Lock while `active` (i.e. while images are generating) so
+// the device doesn't sleep mid-run and stall it. Best-effort: needs a supporting
+// browser AND the tab foregrounded — the OS releases the lock when the tab is
+// hidden, so we re-request on visibilitychange. This only prevents *sleep while
+// looking at it*; it does NOT keep generation alive after you switch apps / lock
+// the phone (that needs server-side generation — see the design doc).
+function useWakeLockWhile(active) {
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    if (!active || typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+    let cancelled = false;
+    const acquire = async () => {
+      if (cancelled || document.visibilityState !== "visible" || sentinelRef.current) return;
+      try {
+        const s = await navigator.wakeLock.request("screen");
+        if (cancelled) { s.release().catch(() => {}); return; }
+        sentinelRef.current = s;
+        s.addEventListener("release", () => { sentinelRef.current = null; });
+      } catch { /* unsupported, denied, or not foreground — ignore */ }
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") acquire(); };
+    acquire();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      sentinelRef.current?.release?.().catch(() => {});
+      sentinelRef.current = null;
+    };
+  }, [active]);
+}
+
 // Every project must have at least one location, and the brief/treatment must
 // actually NAME it — otherwise it reads wrong AND trips the reconcile check
 // ("missing from brief" → amber dot) even though it's used in every board. The
@@ -8923,6 +8955,8 @@ export default function WorkshopV2() {
 
   // Any image generation in flight → drives the chat's "working" spinner.
   const anyRegenerating = useAnyPending();
+  // Keep the screen awake while generating so the device doesn't sleep mid-run.
+  useWakeLockWhile(anyRegenerating);
 
   // Left-rail nav — clicking a tab selects it; clicking the ALREADY
   // active tab fires a "ww-asset-tab-reset" event so any drilled-in
