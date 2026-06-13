@@ -175,8 +175,10 @@ function noteSaved(id, savedData, newVersion) {
   ]);
 }
 
+// Returns true on a durable write, false on failure (the save-status UI relies on
+// this boolean — matches localPersistence.saveProjectAsync's contract).
 export async function saveProjectAsync(id, data) {
-  if (!supabase) return;
+  if (!supabase) return false;
   let payload = data;
   try {
     payload = await offloadImages(id, data);
@@ -191,10 +193,10 @@ export async function saveProjectAsync(id, data) {
       .from("workshop_projects")
       .upsert({ id, name: metaName(payload), folder: metaFolder(payload), data: payload }, { onConflict: "id" })
       .select("updated_at")
-      .single();
-    if (error) { console.error("[cloud] saveProject failed:", error.message); return; }
+      .maybeSingle();
+    if (error) { console.error("[cloud] saveProject failed:", error.message); return false; }
     noteSaved(id, payload, ret?.updated_at);
-    return;
+    return true;
   }
 
   // Optimistic concurrency: only overwrite the row we last saw. If someone else
@@ -211,8 +213,8 @@ export async function saveProjectAsync(id, data) {
       .select("updated_at")
       .maybeSingle();
 
-    if (error) { console.error("[cloud] saveProject failed:", error.message); return; }
-    if (ret) { noteSaved(id, toSave, ret.updated_at); return; } // updated our row → done
+    if (error) { console.error("[cloud] saveProject failed:", error.message); return false; }
+    if (ret) { noteSaved(id, toSave, ret.updated_at); return true; } // updated our row → done
 
     // Conflict: re-read the current server state + version and merge onto it.
     const { data: cur, error: re } = await supabase
@@ -220,12 +222,13 @@ export async function saveProjectAsync(id, data) {
       .select("data,updated_at")
       .eq("id", id)
       .single();
-    if (re || !cur) { console.warn("[cloud] conflict re-read failed:", re?.message); return; }
+    if (re || !cur) { console.warn("[cloud] conflict re-read failed:", re?.message); return false; }
     toSave = mergeProjectData(baseCache.get(id), toSave, cur.data);
     expected = cur.updated_at;
     console.info("[cloud] merged a concurrent edit, retrying save");
   }
   console.warn("[cloud] save gave up after repeated conflicts — local changes kept, will retry on next edit");
+  return false;
 }
 
 // Fire-and-forget variants for the optimistic save paths (autosave). The local
