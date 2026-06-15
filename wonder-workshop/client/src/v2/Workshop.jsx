@@ -41,6 +41,11 @@ const SERVER_GEN = (() => {
     return flag || qs;
   } catch { return false; }
 })();
+// Cost/abuse guard for server-side generation. The DB enforces the real limits
+// (see migration 20260615_generation_jobs_limits.sql); this is the matching
+// client-side ceiling so we don't even attempt a pathological job (and degrade
+// to client-side generation instead). Keep in sync with max_slots in the trigger.
+const MAX_JOB_SLOTS = 250;
 import { briefFromV2Data } from "./briefFromV2Data.js";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8502,7 +8507,13 @@ export default function WorkshopV2() {
       const data = dataRef.current;
       await saveProjectAsync(projectId, clearStaleGenerationState(data));
       const slots = buildSlots(data);
-      const { error } = await supabase.from("generation_jobs").insert({ project_id: projectId, total: slots.length, slots });
+      // Defensive client-side ceiling; the DB trigger enforces the real cap +
+      // the per-user active-job limit (a raw insert can't get around those).
+      if (slots.length > MAX_JOB_SLOTS) throw new Error(`job too large (${slots.length} slots)`);
+      // Stamp the owner so the per-user active-job limit can key on it.
+      const { data: authData } = await supabase.auth.getUser();
+      const owner = authData?.user?.id || null;
+      const { error } = await supabase.from("generation_jobs").insert({ project_id: projectId, owner, total: slots.length, slots });
       if (error) throw new Error(error.message);
       log("info", `Enqueued server-side generation job: ${slots.length} slots`);
     } catch (e) {
