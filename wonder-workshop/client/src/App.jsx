@@ -1,9 +1,17 @@
 import { useEffect } from "react";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "@/components/ui/toast";
 import WorkshopV2 from "./v2/Workshop.jsx";
+import ProductionLab from "./v2/ProductionLab.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import AuthGate from "./v2/AuthGate.jsx";
 import { purgeLegacyV1Storage } from "./v2/persistence.js";
+
+// Flag-gated prototype surface. ?mode=production swaps the storyboard tool for
+// the Production Lab probe (Studio-Tools-style product → marketing variants).
+// Throwaway/exploratory; default is unchanged.
+const PRODUCTION_MODE =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("mode") === "production";
 
 export default function App() {
   useEffect(() => {
@@ -16,7 +24,7 @@ export default function App() {
         <ToastEventBridge />
         <ErrorBoundary>
           <AuthGate>
-            <WorkshopV2 />
+            {PRODUCTION_MODE ? <ProductionLab /> : <WorkshopV2 />}
           </AuthGate>
         </ErrorBoundary>
         {/* Tiny build-ID tag — lets anyone glance and confirm their build
