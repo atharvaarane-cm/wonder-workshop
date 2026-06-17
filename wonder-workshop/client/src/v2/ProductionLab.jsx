@@ -1,247 +1,616 @@
 // Production Lab — PROTOTYPE (flag-gated via ?mode=production).
 //
-// Purpose: de-risk the load-bearing assumption behind a Studio-Tools-style
-// "production mode" — does Workshop's existing reference-image conditioning
-// preserve a REAL PRODUCT (not just a face) well enough for marketing output?
+// A Studio-Tools-style "production mode" for Workshop: a small library of
+// task-specific tools over ONE shared runner (source input + prompt + config bar
+// + Generate), reusing Workshop's live engine (generateImage / upscaleImage —
+// Gemini Nano Banana Pro, the same model Studio Tools recommends).
 //
-// Flow: upload a product photo → pick a built-in creative direction (preset,
-// "no prompting") → generate N variants in multiple sizes. Each variant reuses
-// the SAME engine the storyboard uses (generateImage + referenceImages), with a
-// strong product-preservation instruction. This is a throwaway probe, not the
-// final UX — if fidelity holds, it becomes the seed of the real production mode.
+// Modeled on a teardown of studiotools.ai's logged-in UI. Honest about what's
+// wired: ratio + references + variants + AI-Art-Director + 4K-upscale are real;
+// the credits counter is a cosmetic preview (generation isn't metered yet);
+// Video and Reformat are shown as coming-soon (not built).
+//
+// Throwaway probe to prove the direction + feel, not the final architecture.
 
-import { useState } from "react";
-import { generateImage } from "./imageGen.js";
+import { useRef, useState } from "react";
+import { generateImage, upscaleImage } from "./imageGen.js";
 
-const PRESERVE =
-  "CRITICAL: reproduce the uploaded product EXACTLY as shown in the reference image — " +
-  "identical shape, colour, logo, label text, materials, and proportions. Do NOT redesign, " +
-  "restyle, recolour, or alter the product itself in any way. Only change the surrounding " +
-  "scene, background, surface, and lighting.";
+/* ------------------------------------------------------------------ config */
 
-const PRESETS = [
-  {
-    id: "ecom-white",
-    label: "eCom · Studio White",
-    blurb: "Clean catalogue shot on seamless white",
-    prompt:
-      "Clean studio e-commerce product shot on a seamless pure-white background, soft even " +
-      "softbox lighting, subtle natural contact shadow, centred composition, crisp sharp focus, " +
-      "professional commercial product photography.",
-  },
-  {
-    id: "lifestyle",
-    label: "Lifestyle Scene",
-    blurb: "In-context, editorial, natural light",
-    prompt:
-      "The product placed naturally in a warm, aspirational real-world lifestyle setting that " +
-      "suits its use, shallow depth of field, soft natural window light, tasteful editorial " +
-      "styling and props, photorealistic.",
-  },
-  {
-    id: "gradient-hero",
-    label: "Marketing Hero",
-    blurb: "Bold gradient backdrop, room for copy",
-    prompt:
-      "Bold marketing hero shot of the product on a smooth coloured gradient backdrop, dramatic " +
-      "studio lighting, soft glossy reflection beneath, generous negative space for ad copy, " +
-      "premium high-end feel.",
-  },
-  {
-    id: "outdoor",
-    label: "Outdoor · Golden Hour",
-    blurb: "Natural daylight, authentic surface",
-    prompt:
-      "The product photographed outdoors in natural daylight at golden hour, soft warm light, " +
-      "an organic real-world surface, gentle background bokeh, authentic and premium.",
-  },
+const MODELS = [
+  { id: "nbp", label: "Nano Banana Pro", tag: "Recommended", enabled: true },
+  { id: "nb2", label: "Nano Banana 2", enabled: false },
+  { id: "seedream", label: "Seedream 4.5", enabled: false },
 ];
 
+// Only ratios Gemini actually honors (RATIO_MAP in api/_lib/geminiImage.js),
+// labeled by channel use-case like Studio Tools.
 const RATIOS = [
   { id: "1:1", label: "1:1 · Square" },
   { id: "4:5", label: "4:5 · Portrait" },
-  { id: "16:9", label: "16:9 · Wide" },
   { id: "9:16", label: "9:16 · Story" },
+  { id: "16:9", label: "16:9 · Widescreen" },
+  { id: "4:3", label: "4:3 · Standard" },
+  { id: "21:9", label: "21:9 · Ultra-wide" },
 ];
+
+const RESOLUTIONS = [
+  { id: "1K", label: "1K" },
+  { id: "2K", label: "2K" },
+  { id: "4K", label: "4K · upscaled" },
+];
+
+// "AI Art Director" = the prompt-enrichment Studio Tools bakes in. Workshop
+// already builds rich prompts elsewhere; here we wrap the user's words with
+// production direction so they don't have to prompt-engineer.
+const DIRECTOR_PREAMBLE =
+  "Professional commercial photograph, art-directed for marketing: clean composition, " +
+  "intentional lighting, premium styling, photorealistic, high detail. ";
+const PRESERVE =
+  " CRITICAL: reproduce any uploaded product/reference EXACTLY — identical shape, colour, " +
+  "logo, label text, materials and proportions. Do not redesign or restyle the product; " +
+  "only change the surrounding scene, surface, and lighting.";
 
 const VARIATIONS = [
   "",
   " Slightly different camera angle.",
   " Alternative lighting mood.",
   " Different background tone or surface.",
-  " Tighter crop on the product.",
+  " Tighter crop.",
   " Wider, more environmental composition.",
 ];
+
+const PROMPT_PRESETS = [
+  { folder: "Scene", items: [
+    { label: "Studio white · soft shadow", text: "On a seamless pure-white studio background with a soft natural contact shadow, even softbox lighting, centred." },
+    { label: "Lifestyle · natural light", text: "In a warm, aspirational real-world lifestyle setting, soft window light, shallow depth of field, editorial styling." },
+    { label: "Marketing hero · gradient", text: "On a smooth coloured gradient backdrop, dramatic studio lighting, glossy reflection, generous negative space for ad copy." },
+    { label: "Outdoor · golden hour", text: "Outdoors in natural golden-hour daylight on an organic surface, gentle background bokeh, authentic and premium." },
+  ] },
+  { folder: "Edit", items: [
+    { label: "Remove the background", text: "Remove the background entirely, place on a clean transparent / pure-white backdrop, keep the subject crisp." },
+    { label: "Even studio lighting", text: "Re-light with even, soft, shadowless studio lighting; remove harsh reflections and hotspots." },
+    { label: "Add a bokeh blur", text: "Add a shallow depth-of-field with a soft bokeh background blur behind the subject." },
+    { label: "Remove text & graphics", text: "Remove any background text, watermarks, and graphic overlays; keep the product untouched." },
+  ] },
+];
+
+const SAVED_KEY = "ww_prod_saved_prompts";
+const CREDIT_COST = { image: 30, enhance: 100 };
+
+/* ------------------------------------------------------------------ helpers */
+
+let _id = 0;
+const nid = () => `${Date.now()}-${_id++}`;
 
 async function runPool(tasks, concurrency, onResult) {
   let i = 0;
   async function worker() {
     while (i < tasks.length) {
       const idx = i++;
-      try {
-        const image = await tasks[idx]();
-        onResult(idx, { status: "done", image });
-      } catch (e) {
-        onResult(idx, { status: "error", error: e?.message || "Generation failed" });
-      }
+      try { onResult(idx, { status: "done", image: await tasks[idx]() }); }
+      catch (e) { onResult(idx, { status: "error", error: e?.message || "Generation failed" }); }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker));
 }
 
-export default function ProductionLab() {
-  const [productUrl, setProductUrl] = useState(null);
-  const [presetId, setPresetId] = useState(PRESETS[0].id);
-  const [ratio, setRatio] = useState("1:1");
-  const [count, setCount] = useState(4);
-  const [results, setResults] = useState([]);
-  const [busy, setBusy] = useState(false);
+function fileToDataUrl(file) {
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.readAsDataURL(file);
+  });
+}
 
-  function onFile(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setProductUrl(String(reader.result));
-    reader.readAsDataURL(file);
+function downloadImage(image, name) {
+  const a = document.createElement("a");
+  a.href = image; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ------------------------------------------------------------------ root */
+
+export default function ProductionLab() {
+  const [tool, setTool] = useState("image"); // image | video | reformat | enhance
+  const [generations, setGenerations] = useState([]); // {id, image, ts, meta}
+  const [uploads, setUploads] = useState([]);          // {id, image, ts}
+
+  const addGeneration = (image, meta) =>
+    setGenerations((g) => [{ id: nid(), image, ts: Date.now(), meta }, ...g]);
+  const addUpload = (image) =>
+    setUploads((u) => [{ id: nid(), image, ts: Date.now() }, ...u]);
+
+  const shared = { generations, uploads, addGeneration, addUpload };
+
+  return (
+    <div style={S.app}>
+      <Header />
+      <ToolTabs tool={tool} setTool={setTool} />
+      <div style={S.main}>
+        {tool === "image" && <ImageTool {...shared} />}
+        {tool === "enhance" && <EnhanceTool {...shared} />}
+        {tool === "video" && <ComingSoon title="Convert Image to Video" blurb="Animate a still into a 5–10s clip. Needs a video model (Seedance / Veo / Kling) wired in — not built yet." />}
+        {tool === "reformat" && <ComingSoon title="Reformat Image" blurb="Outpaint an existing asset to a new aspect ratio for any channel. On the roadmap — not built yet." />}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ shell */
+
+function Header() {
+  return (
+    <div style={S.header}>
+      <div style={S.brand}>
+        <span style={S.brandMark}>◆</span> Workshop <span style={S.brandSub}>Production</span>
+      </div>
+      <div style={S.headerRight}>
+        <div style={S.credits} title="Cosmetic preview — generation is not metered in this prototype.">
+          <span style={S.creditNum}>2,400</span> credits <span style={S.previewTag}>preview</span>
+        </div>
+        <a href="?" style={S.backLink}>← Back to Workshop</a>
+      </div>
+    </div>
+  );
+}
+
+const TOOLS = [
+  { id: "image", label: "Image" },
+  { id: "video", label: "Video" },
+];
+const OPTIMIZE = [
+  { id: "reformat", label: "Reformat Image" },
+  { id: "enhance", label: "Enhance or Upscale" },
+];
+
+function ToolTabs({ tool, setTool }) {
+  const [openOpt, setOpenOpt] = useState(false);
+  const optActive = OPTIMIZE.some((o) => o.id === tool);
+  return (
+    <div style={S.tabs}>
+      {TOOLS.map((t) => (
+        <button key={t.id} onClick={() => setTool(t.id)} style={{ ...S.tab, ...(tool === t.id ? S.tabOn : {}) }}>
+          {t.label}
+        </button>
+      ))}
+      <div style={{ position: "relative" }}>
+        <button onClick={() => setOpenOpt((v) => !v)} style={{ ...S.tab, ...(optActive ? S.tabOn : {}) }}>
+          Optimize ▾
+        </button>
+        {openOpt && (
+          <div style={S.optMenu} onMouseLeave={() => setOpenOpt(false)}>
+            {OPTIMIZE.map((o) => (
+              <button key={o.id} onClick={() => { setTool(o.id); setOpenOpt(false); }} style={S.optItem}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ source input */
+
+function SourceInput({ value, onChange, max, generations, uploads, addUpload }) {
+  const [tab, setTab] = useState("add"); // add | gen | up
+  const inputRef = useRef(null);
+
+  async function ingest(files) {
+    const list = Array.from(files || []).filter((f) => f.type.startsWith("image/"));
+    const urls = await Promise.all(list.map(fileToDataUrl));
+    urls.forEach((u) => addUpload(u));
+    onChange([...value, ...urls].slice(0, max));
   }
 
-  async function handleGenerate() {
-    if (!productUrl || busy) return;
-    const preset = PRESETS.find((p) => p.id === presetId) || PRESETS[0];
+  function onPaste(e) {
+    const items = Array.from(e.clipboardData?.items || []).filter((i) => i.type.startsWith("image/"));
+    if (items.length) ingest(items.map((i) => i.getAsFile()));
+  }
+
+  function pick(url) {
+    if (value.includes(url)) onChange(value.filter((u) => u !== url));
+    else onChange([...value, url].slice(0, max));
+  }
+
+  const gallery = tab === "gen" ? generations : uploads;
+
+  return (
+    <div style={S.source} onPaste={onPaste}>
+      <div style={S.sourceTabs}>
+        {[["add", "Add"], ["gen", "My Generations"], ["up", "My Uploads"]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} style={{ ...S.sourceTab, ...(tab === id ? S.sourceTabOn : {}) }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "add" ? (
+        <div style={S.dropzone} onClick={() => inputRef.current?.click()}
+             onDragOver={(e) => e.preventDefault()}
+             onDrop={(e) => { e.preventDefault(); ingest(e.dataTransfer.files); }}>
+          <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+                 onChange={(e) => ingest(e.target.files)} />
+          <div style={S.dropHint}>Drag &amp; drop images, paste, or browse</div>
+          <div style={S.dropSub}>Up to {max} reference images</div>
+        </div>
+      ) : (
+        <div style={S.pickGrid}>
+          {gallery.length === 0 && <div style={S.emptySmall}>{tab === "gen" ? "No generations yet" : "No uploads yet"}</div>}
+          {gallery.map((g) => (
+            <button key={g.id} onClick={() => pick(g.image)} style={{ ...S.pickThumb, ...(value.includes(g.image) ? S.pickOn : {}) }}>
+              <img src={g.image} alt="" style={S.pickImg} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {value.length > 0 && (
+        <div style={S.refStrip}>
+          {value.map((u, i) => (
+            <div key={i} style={S.refChip}>
+              <img src={u} alt="" style={S.refImg} />
+              <button style={S.refX} onClick={() => onChange(value.filter((x) => x !== u))}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ image tool */
+
+function ImageTool({ generations, uploads, addUpload, addGeneration }) {
+  const [refs, setRefs] = useState([]);
+  const [prompt, setPrompt] = useState("");
+  const [model] = useState("nbp");
+  const [ratio, setRatio] = useState("1:1");
+  const [resolution, setResolution] = useState("2K");
+  const [variants, setVariants] = useState(4);
+  const [director, setDirector] = useState(true);
+  const [results, setResults] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [libOpen, setLibOpen] = useState(false);
+
+  const canGo = (prompt.trim() || refs.length) && !busy;
+  const cost = CREDIT_COST.image * variants * (resolution === "4K" ? 2 : 1);
+
+  async function generate() {
+    if (!canGo) return;
+    const base = director ? DIRECTOR_PREAMBLE + prompt + (refs.length ? PRESERVE : "") : prompt;
     setBusy(true);
-    setResults(Array.from({ length: count }, (_, i) => ({ id: i, status: "generating" })));
-    const tasks = Array.from({ length: count }, (_, i) => () => {
-      const prompt = `${preset.prompt}${VARIATIONS[i % VARIATIONS.length]} ${PRESERVE}`;
-      return generateImage(prompt, { ratio, referenceImages: [productUrl] });
+    setResults(Array.from({ length: variants }, (_, i) => ({ id: i, status: "generating" })));
+    const tasks = Array.from({ length: variants }, (_, i) => async () => {
+      let img = await generateImage(`${base}${VARIATIONS[i % VARIATIONS.length]}`, { ratio, referenceImages: refs });
+      if (resolution === "4K") { try { img = await upscaleImage(img, "4k", ratio); } catch { /* keep base */ } }
+      return img;
     });
     await runPool(tasks, 2, (idx, patch) => {
       setResults((prev) => prev.map((r) => (r.id === idx ? { ...r, ...patch } : r)));
+      if (patch.status === "done") addGeneration(patch.image, { tool: "image", ratio });
     });
     setBusy(false);
   }
 
-  function download(image, i) {
-    const a = document.createElement("a");
-    a.href = image;
-    a.download = `production-${presetId}-${i + 1}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  return (
+    <div style={S.workspace}>
+      <div style={S.inputCol}>
+        <SourceInput value={refs} onChange={setRefs} max={4}
+                     generations={generations} uploads={uploads} addUpload={addUpload} />
+      </div>
+
+      <div style={S.promptCol}>
+        <div style={S.promptHead}>
+          <span style={S.colLabel}>Prompt</span>
+          <button style={S.libBtn} onClick={() => setLibOpen(true)}>⊞ Prompt Library</button>
+        </div>
+        <textarea
+          value={prompt} onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Describe the image you want to generate…"
+          style={S.textarea}
+        />
+        <div style={S.utilRow}>
+          <span style={S.how} title="Upload a product, describe the scene, keep AI Art Director on, and Generate. Your product is preserved; the scene changes.">ⓘ How it works</span>
+          <label style={S.toggleWrap} title="Auto-enriches your prompt with production-grade creative direction.">
+            <span style={S.toggleLabel}>AI Art Director</span>
+            <input type="checkbox" checked={director} onChange={(e) => setDirector(e.target.checked)} style={{ display: "none" }} />
+            <span style={{ ...S.toggle, ...(director ? S.toggleOn : {}) }}><span style={{ ...S.knob, ...(director ? S.knobOn : {}) }} /></span>
+          </label>
+        </div>
+
+        <ResultsGallery results={results} onDownload={(img, i) => downloadImage(img, `image-${i + 1}.png`)} />
+      </div>
+
+      <ConfigBar
+        left={
+          <>
+            <Field label="Model">
+              <div style={S.modelBox}>
+                {MODELS.find((m) => m.id === model)?.label}
+                <span style={S.recBadge}>Recommended</span>
+              </div>
+            </Field>
+            <Field label="Ratio">
+              <select value={ratio} onChange={(e) => setRatio(e.target.value)} style={S.select}>
+                {RATIOS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Resolution">
+              <select value={resolution} onChange={(e) => setResolution(e.target.value)} style={S.select}>
+                {RESOLUTIONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+              </select>
+            </Field>
+          </>
+        }
+        variants={variants} setVariants={setVariants}
+        cost={cost} busy={busy} canGo={canGo} onGenerate={generate}
+      />
+
+      {libOpen && <PromptLibrary onPick={(t) => { setPrompt((p) => (p ? p + " " : "") + t); setLibOpen(false); }} onClose={() => setLibOpen(false)} currentPrompt={prompt} />}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ enhance tool */
+
+function EnhanceTool({ generations, uploads, addUpload, addGeneration }) {
+  const [refs, setRefs] = useState([]);
+  const [resolution, setResolution] = useState("4K");
+  const [variants, setVariants] = useState(1);
+  const [results, setResults] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  const source = refs[0];
+  const canGo = !!source && !busy;
+  const cost = CREDIT_COST.enhance * variants;
+
+  async function generate() {
+    if (!canGo) return;
+    setBusy(true);
+    setResults(Array.from({ length: variants }, (_, i) => ({ id: i, status: "generating" })));
+    const tasks = Array.from({ length: variants }, () => async () => {
+      const img = await upscaleImage(source, resolution.toLowerCase(), "1:1");
+      return img;
+    });
+    await runPool(tasks, 2, (idx, patch) => {
+      setResults((prev) => prev.map((r) => (r.id === idx ? { ...r, ...patch } : r)));
+      if (patch.status === "done") addGeneration(patch.image, { tool: "enhance" });
+    });
+    setBusy(false);
   }
 
   return (
-    <div style={S.page}>
-      <div style={S.header}>
-        <div style={S.title}>Production Lab</div>
-        <div style={S.badge}>prototype · ?mode=production</div>
+    <div style={S.workspace}>
+      <div style={S.inputCol}>
+        <SourceInput value={refs} onChange={setRefs} max={1}
+                     generations={generations} uploads={uploads} addUpload={addUpload} />
       </div>
-      <div style={S.sub}>
-        Upload a product photo, pick a direction, generate marketing variants. Tests whether
-        reference-conditioning preserves the product. Reuses the live generation engine.
-      </div>
-
-      <div style={S.body}>
-        {/* Controls */}
-        <div style={S.panel}>
-          <label style={S.drop}>
-            <input
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => onFile(e.target.files?.[0])}
-            />
-            {productUrl ? (
-              <img src={productUrl} alt="product" style={S.thumb} />
-            ) : (
-              <span style={S.dropHint}>Click to upload a product photo</span>
-            )}
-          </label>
-
-          <div style={S.fieldLabel}>Creative direction</div>
-          <div style={S.presetList}>
-            {PRESETS.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setPresetId(p.id)}
-                style={{ ...S.preset, ...(presetId === p.id ? S.presetOn : {}) }}
-              >
-                <div style={S.presetLabel}>{p.label}</div>
-                <div style={S.presetBlurb}>{p.blurb}</div>
-              </button>
-            ))}
-          </div>
-
-          <div style={S.fieldLabel}>Aspect ratio</div>
-          <select value={ratio} onChange={(e) => setRatio(e.target.value)} style={S.select}>
-            {RATIOS.map((r) => (
-              <option key={r.id} value={r.id}>{r.label}</option>
-            ))}
-          </select>
-
-          <div style={S.fieldLabel}>Variants</div>
-          <select value={count} onChange={(e) => setCount(Number(e.target.value))} style={S.select}>
-            {[2, 4, 6].map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
-
-          <button
-            onClick={handleGenerate}
-            disabled={!productUrl || busy}
-            style={{ ...S.generate, ...(!productUrl || busy ? S.generateOff : {}) }}
-          >
-            {busy ? "Generating…" : `Generate ${count} variants`}
-          </button>
+      <div style={S.promptCol}>
+        <div style={S.promptHead}><span style={S.colLabel}>Enhance &amp; Upscale</span></div>
+        <div style={S.enhanceNote}>
+          Sharpen detail and upscale to large-format resolution while preserving the image exactly.
+          Uses Workshop&apos;s reference-conditioned upscale.
         </div>
+        <ResultsGallery results={results} onDownload={(img, i) => downloadImage(img, `enhanced-${i + 1}.png`)} />
+      </div>
+      <ConfigBar
+        left={
+          <>
+            <Field label="Model"><div style={S.modelBox}>Seed-style Upscale<span style={S.recBadge}>Recommended</span></div></Field>
+            <Field label="Target">
+              <select value={resolution} onChange={(e) => setResolution(e.target.value)} style={S.select}>
+                <option value="2K">2K</option><option value="4K">4K</option>
+              </select>
+            </Field>
+          </>
+        }
+        variants={variants} setVariants={setVariants}
+        cost={cost} busy={busy} canGo={canGo} onGenerate={generate}
+      />
+    </div>
+  );
+}
 
-        {/* Results */}
-        <div style={S.results}>
-          {results.length === 0 && <div style={S.empty}>Results will appear here.</div>}
-          <div style={S.grid}>
-            {results.map((r) => (
-              <div key={r.id} style={S.tile}>
-                {r.status === "generating" && <div style={S.shimmer}>generating…</div>}
-                {r.status === "error" && <div style={S.error}>{r.error}</div>}
-                {r.status === "done" && (
-                  <>
-                    <img src={r.image} alt={`variant ${r.id + 1}`} style={S.resultImg} />
-                    <button style={S.dl} onClick={() => download(r.image, r.id)}>Download</button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
+/* ------------------------------------------------------------------ shared bits */
+
+function ConfigBar({ left, variants, setVariants, cost, busy, canGo, onGenerate }) {
+  return (
+    <div style={S.configBar}>
+      <div style={S.configLeft}>{left}</div>
+      <div style={S.configRight}>
+        <Field label="Variants">
+          <input type="number" min={1} max={6} value={variants}
+                 onChange={(e) => setVariants(Math.max(1, Math.min(6, Number(e.target.value) || 1)))}
+                 style={S.numInput} />
+        </Field>
+        <button onClick={onGenerate} disabled={!canGo} style={{ ...S.generate, ...(!canGo ? S.generateOff : {}) }}>
+          {busy ? "Generating…" : `Generate (${cost} credits)`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={S.field}>
+      <span style={S.fieldLabel}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function ResultsGallery({ results, onDownload }) {
+  if (results.length === 0) return <div style={S.resultsEmpty}>Results will appear here.</div>;
+  return (
+    <div style={S.grid}>
+      {results.map((r) => (
+        <div key={r.id} style={S.tile}>
+          {r.status === "generating" && <div style={S.shimmer}>generating…</div>}
+          {r.status === "error" && <div style={S.tileErr}>{r.error}</div>}
+          {r.status === "done" && (
+            <>
+              <img src={r.image} alt="" style={S.tileImg} />
+              <button style={S.dl} onClick={() => onDownload(r.image, r.id)}>Download</button>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PromptLibrary({ onPick, onClose, currentPrompt }) {
+  const [saved, setSaved] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch { return []; }
+  });
+  function saveCurrent() {
+    if (!currentPrompt.trim()) return;
+    const next = [currentPrompt.trim(), ...saved].slice(0, 30);
+    setSaved(next);
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(next)); } catch { /* ignore quota */ }
+  }
+  return (
+    <div style={S.modalBack} onClick={onClose}>
+      <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={S.modalHead}>
+          <span style={S.modalTitle}>Prompt Library</span>
+          <button style={S.modalClose} onClick={onClose}>×</button>
+        </div>
+        <div style={S.modalBody}>
+          <div style={S.libFolder}>Saved ({saved.length})</div>
+          {saved.length === 0 && <div style={S.emptySmall}>No saved prompts</div>}
+          {saved.map((t, i) => (
+            <button key={i} style={S.libItem} onClick={() => onPick(t)}>{t}</button>
+          ))}
+          {PROMPT_PRESETS.map((f) => (
+            <div key={f.folder}>
+              <div style={S.libFolder}>Presets · {f.folder}</div>
+              {f.items.map((it) => (
+                <button key={it.label} style={S.libItem} onClick={() => onPick(it.text)}>
+                  <strong style={S.libItemLabel}>{it.label}</strong>
+                  <span style={S.libItemText}>{it.text}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={S.modalFoot}>
+          <button style={S.saveBtn} onClick={saveCurrent} disabled={!currentPrompt.trim()}>Save current prompt</button>
         </div>
       </div>
     </div>
   );
 }
 
+function ComingSoon({ title, blurb }) {
+  return (
+    <div style={S.coming}>
+      <div style={S.comingTitle}>{title}</div>
+      <div style={S.comingBadge}>Coming soon</div>
+      <div style={S.comingBlurb}>{blurb}</div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ styles */
+
+const C = { bg: "#0b0b0d", panel: "#161618", panel2: "#1b1b1e", line: "#2a2a30", line2: "#34343c", text: "#e8e8ea", dim: "#9a9aa2", faint: "#6c6c74", accent: "#6b8afd", accentInk: "#0b0b0d" };
+
 const S = {
-  page: { minHeight: "100vh", background: "#0e0e10", color: "#e8e8ea", padding: "28px 32px", fontFamily: "Inter, system-ui, sans-serif" },
-  header: { display: "flex", alignItems: "center", gap: 12 },
-  title: { fontSize: 22, fontWeight: 700 },
-  badge: { fontSize: 11, color: "#9aa", border: "1px solid #333", borderRadius: 999, padding: "2px 10px" },
-  sub: { color: "#9aa", fontSize: 13, maxWidth: 640, marginTop: 6, marginBottom: 22 },
-  body: { display: "flex", gap: 28, alignItems: "flex-start" },
-  panel: { width: 300, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 },
-  drop: { display: "flex", alignItems: "center", justifyContent: "center", height: 180, border: "1px dashed #3a3a40", borderRadius: 12, cursor: "pointer", background: "#161618", overflow: "hidden" },
-  dropHint: { color: "#888", fontSize: 13 },
-  thumb: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" },
-  fieldLabel: { fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: "#888", marginTop: 8 },
-  presetList: { display: "flex", flexDirection: "column", gap: 6 },
-  preset: { textAlign: "left", padding: "8px 10px", borderRadius: 10, border: "1px solid #2a2a30", background: "#161618", color: "#e8e8ea", cursor: "pointer" },
-  presetOn: { borderColor: "#6b8afd", background: "#1b2030" },
-  presetLabel: { fontSize: 13, fontWeight: 600 },
-  presetBlurb: { fontSize: 11, color: "#999", marginTop: 2 },
-  select: { padding: "8px 10px", borderRadius: 10, border: "1px solid #2a2a30", background: "#161618", color: "#e8e8ea", fontSize: 13 },
-  generate: { marginTop: 14, padding: "11px 14px", borderRadius: 10, border: "none", background: "#6b8afd", color: "#0b0b0d", fontWeight: 700, fontSize: 14, cursor: "pointer" },
-  generateOff: { background: "#2a2a30", color: "#777", cursor: "not-allowed" },
-  results: { flex: 1 },
-  empty: { color: "#666", fontSize: 13, paddingTop: 40, textAlign: "center" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 },
-  tile: { position: "relative", aspectRatio: "1 / 1", borderRadius: 12, overflow: "hidden", background: "#161618", border: "1px solid #222", display: "flex", alignItems: "center", justifyContent: "center" },
-  shimmer: { color: "#888", fontSize: 12, animation: "pulse 1.4s ease-in-out infinite" },
-  error: { color: "#e88", fontSize: 11, padding: 12, textAlign: "center" },
-  resultImg: { width: "100%", height: "100%", objectFit: "cover" },
-  dl: { position: "absolute", bottom: 8, right: 8, fontSize: 11, padding: "5px 9px", borderRadius: 8, border: "none", background: "rgba(0,0,0,0.65)", color: "#fff", cursor: "pointer" },
+  app: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "Inter, system-ui, sans-serif", display: "flex", flexDirection: "column" },
+
+  header: { height: 52, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", borderBottom: `1px solid ${C.line}` },
+  brand: { fontSize: 15, fontWeight: 700, letterSpacing: "0.01em" },
+  brandMark: { color: C.accent, marginRight: 6 },
+  brandSub: { color: C.dim, fontWeight: 500, marginLeft: 4 },
+  headerRight: { display: "flex", alignItems: "center", gap: 16 },
+  credits: { fontSize: 12, color: C.dim, border: `1px solid ${C.line}`, borderRadius: 999, padding: "4px 12px" },
+  creditNum: { color: C.text, fontWeight: 700 },
+  previewTag: { marginLeft: 6, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: C.faint, border: `1px solid ${C.line2}`, borderRadius: 4, padding: "1px 4px" },
+  backLink: { fontSize: 12, color: C.dim, textDecoration: "none" },
+
+  tabs: { display: "flex", gap: 4, padding: "10px 20px 0", borderBottom: `1px solid ${C.line}` },
+  tab: { padding: "8px 16px", fontSize: 13, fontWeight: 600, color: C.dim, background: "transparent", border: "none", borderBottom: "2px solid transparent", cursor: "pointer" },
+  tabOn: { color: C.text, borderBottom: `2px solid ${C.accent}` },
+  optMenu: { position: "absolute", top: "100%", left: 0, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: 6, minWidth: 200, zIndex: 50, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" },
+  optItem: { display: "block", width: "100%", textAlign: "left", padding: "8px 10px", fontSize: 13, color: C.text, background: "transparent", border: "none", borderRadius: 7, cursor: "pointer" },
+
+  main: { flex: 1, display: "flex", flexDirection: "column", minHeight: 0 },
+  workspace: { flex: 1, display: "grid", gridTemplateColumns: "320px 1fr", gridTemplateRows: "1fr auto", gap: 0, minHeight: 0 },
+  inputCol: { borderRight: `1px solid ${C.line}`, padding: 18, overflowY: "auto" },
+  promptCol: { padding: 18, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto" },
+
+  source: {},
+  sourceTabs: { display: "flex", gap: 4, marginBottom: 12 },
+  sourceTab: { flex: 1, padding: "7px 6px", fontSize: 11, fontWeight: 600, color: C.dim, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, cursor: "pointer" },
+  sourceTabOn: { color: C.text, background: C.panel2, borderColor: C.line2 },
+  dropzone: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 180, border: `1px dashed ${C.line2}`, borderRadius: 12, background: C.panel, cursor: "pointer", gap: 6 },
+  dropHint: { fontSize: 13, color: C.dim },
+  dropSub: { fontSize: 11, color: C.faint },
+  pickGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, maxHeight: 220, overflowY: "auto" },
+  pickThumb: { aspectRatio: "1/1", padding: 0, border: `2px solid transparent`, borderRadius: 8, overflow: "hidden", background: C.panel, cursor: "pointer" },
+  pickOn: { borderColor: C.accent },
+  pickImg: { width: "100%", height: "100%", objectFit: "cover" },
+  emptySmall: { fontSize: 12, color: C.faint, padding: "16px 0", gridColumn: "1 / -1", textAlign: "center" },
+  refStrip: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 },
+  refChip: { position: "relative", width: 52, height: 52, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.line2}` },
+  refImg: { width: "100%", height: "100%", objectFit: "cover" },
+  refX: { position: "absolute", top: 0, right: 0, width: 18, height: 18, lineHeight: "16px", fontSize: 13, border: "none", background: "rgba(0,0,0,0.7)", color: "#fff", cursor: "pointer" },
+
+  promptHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  colLabel: { fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: C.faint },
+  libBtn: { fontSize: 12, color: C.dim, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" },
+  textarea: { width: "100%", minHeight: 90, resize: "vertical", padding: 12, fontSize: 14, color: C.text, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, fontFamily: "inherit", boxSizing: "border-box" },
+  utilRow: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, marginBottom: 14 },
+  how: { fontSize: 12, color: C.faint, cursor: "help" },
+  toggleWrap: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" },
+  toggleLabel: { fontSize: 12, color: C.dim },
+  toggle: { width: 36, height: 20, borderRadius: 999, background: C.line2, position: "relative", transition: "background .15s" },
+  toggleOn: { background: C.accent },
+  knob: { position: "absolute", top: 2, left: 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .15s" },
+  knobOn: { left: 18 },
+
+  resultsEmpty: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, fontSize: 13, minHeight: 160 },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 },
+  tile: { position: "relative", aspectRatio: "1/1", borderRadius: 12, overflow: "hidden", background: C.panel, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" },
+  shimmer: { fontSize: 12, color: C.faint },
+  tileErr: { fontSize: 11, color: "#e88", padding: 12, textAlign: "center" },
+  tileImg: { width: "100%", height: "100%", objectFit: "cover" },
+  dl: { position: "absolute", right: 8, bottom: 8, fontSize: 11, padding: "5px 9px", borderRadius: 8, border: "none", background: "rgba(0,0,0,0.65)", color: "#fff", cursor: "pointer" },
+
+  configBar: { gridColumn: "1 / -1", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, padding: "12px 20px", borderTop: `1px solid ${C.line}`, background: C.panel2, flexWrap: "wrap" },
+  configLeft: { display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" },
+  configRight: { display: "flex", gap: 14, alignItems: "flex-end" },
+  field: { display: "flex", flexDirection: "column", gap: 5 },
+  fieldLabel: { fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: C.faint },
+  modelBox: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.text, padding: "8px 10px", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 9 },
+  recBadge: { fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 4, padding: "1px 5px" },
+  select: { padding: "8px 10px", fontSize: 13, color: C.text, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 9, minWidth: 130 },
+  numInput: { width: 64, padding: "8px 10px", fontSize: 13, color: C.text, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 9 },
+  generate: { padding: "11px 20px", fontSize: 14, fontWeight: 700, color: C.accentInk, background: C.accent, border: "none", borderRadius: 10, cursor: "pointer" },
+  generateOff: { background: C.line2, color: C.faint, cursor: "not-allowed" },
+
+  enhanceNote: { fontSize: 13, color: C.dim, lineHeight: 1.5, marginBottom: 16, maxWidth: 520 },
+
+  modalBack: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 },
+  modal: { width: 520, maxHeight: "78vh", display: "flex", flexDirection: "column", background: C.panel, border: `1px solid ${C.line2}`, borderRadius: 14, overflow: "hidden" },
+  modalHead: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${C.line}` },
+  modalTitle: { fontSize: 15, fontWeight: 700 },
+  modalClose: { fontSize: 20, lineHeight: 1, color: C.dim, background: "transparent", border: "none", cursor: "pointer" },
+  modalBody: { padding: 14, overflowY: "auto" },
+  libFolder: { fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: C.faint, margin: "14px 0 8px" },
+  libItem: { display: "flex", flexDirection: "column", gap: 3, width: "100%", textAlign: "left", padding: "9px 11px", marginBottom: 6, fontSize: 13, color: C.text, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 9, cursor: "pointer" },
+  libItemLabel: { fontSize: 13, fontWeight: 600 },
+  libItemText: { fontSize: 11, color: C.dim, lineHeight: 1.4 },
+  modalFoot: { padding: 14, borderTop: `1px solid ${C.line}` },
+  saveBtn: { width: "100%", padding: "10px", fontSize: 13, fontWeight: 600, color: C.text, background: C.panel2, border: `1px solid ${C.line2}`, borderRadius: 9, cursor: "pointer" },
+
+  coming: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 40 },
+  comingTitle: { fontSize: 22, fontWeight: 700 },
+  comingBadge: { fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 999, padding: "3px 12px" },
+  comingBlurb: { fontSize: 14, color: C.dim, maxWidth: 480, textAlign: "center", lineHeight: 1.5 },
 };
