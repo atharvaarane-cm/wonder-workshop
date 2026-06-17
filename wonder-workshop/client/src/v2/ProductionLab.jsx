@@ -133,6 +133,14 @@ export default function ProductionLab() {
   const [uploads, setUploads] = useState([]);   // session-only inputs {id, image}
   const [seed, setSeed] = useState(null);       // edit-an-asset → preload a tool
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem(THEME_KEY) || "dark"; } catch { return "dark"; }
+  });
+  const toggleTheme = () => setTheme((t) => {
+    const next = t === "dark" ? "light" : "dark";
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+    return next;
+  });
 
   // Load persistent history once (cloud only; empty locally).
   useEffect(() => {
@@ -175,10 +183,10 @@ export default function ProductionLab() {
   const shared = { generations: imageGenerations, uploads, addUpload: (image) => setUploads((u) => [{ id: nid(), image }, ...u]), saveAsset, seed };
 
   return (
-    <div style={S.app}>
+    <div style={{ ...S.app, ...themeVars(theme) }}>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" />
       <style>{"@keyframes wwspin { to { transform: rotate(360deg); } }"}</style>
-      <Header historyCount={assets.length} onHistory={() => setTool("history")} />
+      <Header historyCount={assets.length} onHistory={() => setTool("history")} theme={theme} onToggleTheme={toggleTheme} />
       <ToolTabs tool={tool} setTool={setTool} />
       <div style={S.main}>
         {tool === "image" && <ImageTool {...shared} />}
@@ -193,7 +201,7 @@ export default function ProductionLab() {
 
 /* ------------------------------------------------------------------ shell */
 
-function Header({ historyCount = 0, onHistory }) {
+function Header({ historyCount = 0, onHistory, theme, onToggleTheme }) {
   return (
     <div style={S.header}>
       <div style={S.brand}>
@@ -201,6 +209,9 @@ function Header({ historyCount = 0, onHistory }) {
       </div>
       <div style={S.headerRight}>
         <button style={S.navBtn} onClick={onHistory}>My Generations{historyCount ? ` (${historyCount})` : ""}</button>
+        <button style={S.navBtn} onClick={onToggleTheme} title="Switch theme">
+          {theme === "dark" ? "☾ Dark" : "☀ Light"}
+        </button>
         <div style={S.credits} title="Cosmetic preview — generation is not metered in this prototype.">
           <span style={S.creditNum}>2,400</span> credits <span style={S.previewTag}>preview</span>
         </div>
@@ -730,20 +741,36 @@ function HistoryView({ assets, loading, onEdit, onDelete, cloud }) {
 
 /* ------------------------------------------------------------------ styles */
 
-// Design tokens transcribed from studiotools.ai's computed CSS: light theme,
-// Sora type, and the signature rose->orange gradient on primary actions.
+// Two palettes, switchable at runtime. DARK = Workshop-native (default); LIGHT =
+// studiotools.ai's verified system (white + rose->orange gradient). Implemented
+// via CSS custom properties so the static style object below stays theme-agnostic
+// (S references var(--x); the root sets the values per theme — see themeVars).
+const THEMES = {
+  dark: {
+    bg: "#0b0b0d", panel: "#161618", panel2: "#1b1b1e", line: "#2a2a30", line2: "#34343c",
+    text: "#e8e8ea", dim: "#9a9aa2", faint: "#6c6c74", accent: "#6b8afd", accentInk: "#0b0b0d",
+    grad: "linear-gradient(90deg,#6b8afd,#7c6bfd)", pillBg: "#2f2f37", pillInk: "#e8e8ea",
+  },
+  light: {
+    bg: "#FFFFFF", panel: "#F7F7F6", panel2: "#F2F2F1", line: "#E5E7EB", line2: "#D1D5DB",
+    text: "#161413", dim: "#6B7280", faint: "#9CA3AF", accent: "#F43F5E", accentInk: "#FFFFFF",
+    grad: "linear-gradient(90deg,#E11D48,#F97316)", pillBg: "#161413", pillInk: "#FFFFFF",
+  },
+};
+function themeVars(t) {
+  const p = THEMES[t] || THEMES.dark;
+  return {
+    "--bg": p.bg, "--panel": p.panel, "--panel2": p.panel2, "--line": p.line, "--line2": p.line2,
+    "--text": p.text, "--dim": p.dim, "--faint": p.faint, "--accent": p.accent, "--accentInk": p.accentInk,
+    "--grad": p.grad, "--pillBg": p.pillBg, "--pillInk": p.pillInk,
+  };
+}
+const THEME_KEY = "ww_prod_theme";
+
 const C = {
-  bg: "#FFFFFF",        // page
-  panel: "#F7F7F6",     // input / tile / card-interior light grey
-  panel2: "#F2F2F1",    // muted pills, config bar
-  line: "#E5E7EB",      // card / input borders
-  line2: "#D1D5DB",     // stronger border / disabled
-  text: "#161413",      // near-black text
-  dim: "#6B7280",       // muted grey
-  faint: "#9CA3AF",     // faint grey
-  accent: "#F43F5E",    // accent text / badges (rose)
-  accentInk: "#FFFFFF", // text on gradient
-  grad: "linear-gradient(90deg, #E11D48, #F97316)", // THE brand accent
+  bg: "var(--bg)", panel: "var(--panel)", panel2: "var(--panel2)", line: "var(--line)", line2: "var(--line2)",
+  text: "var(--text)", dim: "var(--dim)", faint: "var(--faint)", accent: "var(--accent)", accentInk: "var(--accentInk)",
+  grad: "var(--grad)", pillBg: "var(--pillBg)", pillInk: "var(--pillInk)",
 };
 
 const S = {
@@ -774,7 +801,7 @@ const S = {
   source: {},
   sourceTabs: { display: "flex", gap: 4, marginBottom: 12 },
   sourceTab: { flex: 1, padding: "7px 6px", fontSize: 11, fontWeight: 600, color: C.dim, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, cursor: "pointer" },
-  sourceTabOn: { color: "#fff", background: C.text, borderColor: C.text },
+  sourceTabOn: { color: C.pillInk, background: C.pillBg, borderColor: C.pillBg },
   dropzone: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 180, border: `1px dashed ${C.line2}`, borderRadius: 12, background: C.panel, cursor: "pointer", gap: 6 },
   dropHint: { fontSize: 13, color: C.dim },
   dropSub: { fontSize: 11, color: C.faint },
@@ -819,7 +846,7 @@ const S = {
   select: { padding: "8px 10px", fontSize: 13, color: C.text, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 9, minWidth: 130 },
   numInput: { width: 64, padding: "8px 10px", fontSize: 13, color: C.text, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 9 },
   generate: { padding: "11px 22px", fontSize: 14, fontWeight: 700, color: C.accentInk, background: C.grad, border: "none", borderRadius: 10, cursor: "pointer" },
-  generateOff: { background: C.line2, color: "#fff", cursor: "not-allowed" },
+  generateOff: { background: C.line2, color: C.faint, cursor: "not-allowed" },
 
   enhanceNote: { fontSize: 13, color: C.dim, lineHeight: 1.5, marginBottom: 16, maxWidth: 520 },
 
