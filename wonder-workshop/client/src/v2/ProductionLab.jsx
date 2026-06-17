@@ -107,6 +107,15 @@ async function runPool(tasks, concurrency, onResult) {
 function fileToDataUrl(file) {
   return new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.readAsDataURL(file); });
 }
+function useIsMobile(bp = 760) {
+  const [m, setM] = useState(() => (typeof window !== "undefined" ? window.innerWidth < bp : false));
+  useEffect(() => {
+    const onR = () => setM(window.innerWidth < bp);
+    window.addEventListener("resize", onR);
+    return () => window.removeEventListener("resize", onR);
+  }, [bp]);
+  return m;
+}
 
 /* ------------------------------------------------------------------ root */
 
@@ -117,6 +126,7 @@ export default function ProductionLab() {
   const [seed, setSeed] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem(THEME_KEY) || "dark"; } catch { return "dark"; } });
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!hasSupabase) return;
@@ -136,22 +146,22 @@ export default function ProductionLab() {
 
   const imageGenerations = assets.filter((a) => a.kind === "image").map((a) => ({ id: a.id, image: a.url }));
   const addUpload = (image) => setUploads((u) => [{ id: nid(), image }, ...u]);
-  const shared = { generations: imageGenerations, uploads, addUpload, saveAsset, seed };
+  const shared = { generations: imageGenerations, uploads, addUpload, saveAsset, seed, isMobile };
 
   return (
     <div style={{ ...S.app, ...themeVars(theme) }}>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" />
       <style>{"@keyframes wwspin{to{transform:rotate(360deg)}}"}</style>
-      <Header tool={tool} setTool={setTool} historyCount={assets.length} theme={theme} onToggleTheme={toggleTheme} />
+      <Header tool={tool} setTool={setTool} historyCount={assets.length} theme={theme} onToggleTheme={toggleTheme} isMobile={isMobile} />
       <div style={S.body}>
-        <div style={S.column}>
-          {tool !== "history" && tool !== "uploads" && <ToolTabs tool={tool} setTool={setTool} />}
+        <div style={{ ...S.column, ...(isMobile ? S.columnM : {}) }}>
+          {tool !== "history" && tool !== "uploads" && <ToolTabs tool={tool} setTool={setTool} isMobile={isMobile} />}
           {tool === "image" && <ImageTool {...shared} />}
           {tool === "enhance" && <EnhanceTool {...shared} />}
           {tool === "video" && <VideoTool {...shared} />}
           {tool === "reformat" && <ComingSoon title="Reformat Image" blurb="Outpaint an existing asset to a new aspect ratio for any channel. On the roadmap — not built yet." />}
-          {tool === "history" && <GalleryPage title="My Generations" emptyLabel="No content found" emptySub="Create your first piece of content to get started" createLabel="Create New" onCreate={() => setTool("image")} items={assets} loading={loadingHistory} onEdit={editAsset} onDelete={removeAsset} cloud={hasSupabase} />}
-          {tool === "uploads" && <GalleryPage title="My Uploads" emptyLabel="No uploads found" emptySub="Your uploaded source images appear here" createLabel="New Upload" onCreate={() => setTool("image")} items={uploads.map((u) => ({ id: u.id, kind: "image", url: u.image }))} loading={false} cloud />}
+          {tool === "history" && <GalleryPage title="My Generations" emptyLabel="No content found" emptySub="Create your first piece of content to get started" createLabel="Create New" onCreate={() => setTool("image")} items={assets} loading={loadingHistory} onEdit={editAsset} onDelete={removeAsset} cloud={hasSupabase} isMobile={isMobile} />}
+          {tool === "uploads" && <GalleryPage title="My Uploads" emptyLabel="No uploads found" emptySub="Your uploaded source images appear here" createLabel="New Upload" onCreate={() => setTool("image")} items={uploads.map((u) => ({ id: u.id, kind: "image", url: u.image }))} loading={false} cloud isMobile={isMobile} />}
         </div>
       </div>
     </div>
@@ -167,9 +177,33 @@ const NAV_TOOLS = [
   { id: "reformat", label: "Reformat Image" },
 ];
 
-function Header({ tool, setTool, historyCount, theme, onToggleTheme }) {
+function Header({ tool, setTool, historyCount, theme, onToggleTheme, isMobile }) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [acctOpen, setAcctOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  if (isMobile) {
+    return (
+      <div style={{ ...S.header, ...S.headerM }}>
+        <div style={S.brand}><span style={S.brandMark}>◆</span> Workshop</div>
+        <div style={{ position: "relative" }}>
+          <button style={S.acct} onClick={() => setMenuOpen((v) => !v)}>☰</button>
+          {menuOpen && (
+            <div style={{ ...S.menu, right: 0, left: "auto" }} onMouseLeave={() => setMenuOpen(false)}>
+              {NAV_TOOLS.map((t) => <button key={t.id} style={S.menuItem} onClick={() => { setTool(t.id); setMenuOpen(false); }}>{t.label}</button>)}
+              <div style={S.menuSep} />
+              <button style={S.menuItem} onClick={() => { setTool("history"); setMenuOpen(false); }}>My Generations{historyCount ? ` (${historyCount})` : ""}</button>
+              <button style={S.menuItem} onClick={() => { setTool("uploads"); setMenuOpen(false); }}>My Uploads</button>
+              <div style={S.menuSep} />
+              <button style={S.menuItem} onClick={() => { onToggleTheme(); setMenuOpen(false); }}>{theme === "dark" ? "☀ Switch to light" : "☾ Switch to dark"}</button>
+              <a style={S.menuItem} href="?">← Back to Workshop</a>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={S.header}>
       <div style={S.brand}><span style={S.brandMark}>◆</span> Workshop<span style={S.brandSub}>.production</span></div>
@@ -208,16 +242,17 @@ function Header({ tool, setTool, historyCount, theme, onToggleTheme }) {
 const TABS = [{ id: "image", label: "Image" }, { id: "video", label: "Video" }];
 const OPTIMIZE = [{ id: "reformat", label: "Reformat Image" }, { id: "enhance", label: "Enhance or Upscale" }];
 
-function ToolTabs({ tool, setTool }) {
+function ToolTabs({ tool, setTool, isMobile }) {
   const [open, setOpen] = useState(false);
   const optActive = OPTIMIZE.some((o) => o.id === tool);
+  const tabBase = { ...S.tab, ...(isMobile ? S.tabM : {}) };
   return (
     <div style={S.tabs}>
       {TABS.map((t) => (
-        <button key={t.id} onClick={() => setTool(t.id)} style={{ ...S.tab, ...(tool === t.id ? S.tabOn : {}) }}>{t.label}</button>
+        <button key={t.id} onClick={() => setTool(t.id)} style={{ ...tabBase, ...(tool === t.id ? S.tabOn : {}) }}>{t.label}</button>
       ))}
       <div style={{ position: "relative" }}>
-        <button onClick={() => setOpen((v) => !v)} style={{ ...S.tab, ...(optActive ? S.tabOn : {}) }}>Optimize ⌄</button>
+        <button onClick={() => setOpen((v) => !v)} style={{ ...tabBase, ...(optActive ? S.tabOn : {}) }}>Optimize ⌄</button>
         {open && (
           <div style={S.menu} onMouseLeave={() => setOpen(false)}>
             {OPTIMIZE.map((o) => <button key={o.id} style={S.menuItem} onClick={() => { setTool(o.id); setOpen(false); }}>{o.label}</button>)}
@@ -230,8 +265,9 @@ function ToolTabs({ tool, setTool }) {
 
 /* ------------------------------------------------------------------ source input (content only; tabs live in the card header) */
 
-function SourceInput({ tab, value, onChange, max, generations, uploads, addUpload }) {
+function SourceInput({ tab, value, onChange, max, generations, uploads, addUpload, isMobile }) {
   const inputRef = useRef(null);
+  const panelH = isMobile ? { minHeight: 200 } : {};
   async function ingest(files) {
     const list = Array.from(files || []).filter((f) => f.type?.startsWith("image/"));
     const urls = await Promise.all(list.map(fileToDataUrl));
@@ -248,7 +284,7 @@ function SourceInput({ tab, value, onChange, max, generations, uploads, addUploa
   return (
     <div style={S.dropCol} onPaste={onPaste}>
       {tab === "add" ? (
-        <div style={S.dropzone} onClick={() => inputRef.current?.click()}
+        <div style={{ ...S.dropzone, ...panelH }} onClick={() => inputRef.current?.click()}
              onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); ingest(e.dataTransfer.files); }}>
           <input ref={inputRef} type="file" accept="image/*" multiple={max > 1} style={{ display: "none" }} onChange={(e) => ingest(e.target.files)} />
           {value.length === 0 ? (
@@ -268,7 +304,7 @@ function SourceInput({ tab, value, onChange, max, generations, uploads, addUploa
           )}
         </div>
       ) : (
-        <div style={S.pickWrap}>
+        <div style={{ ...S.pickWrap, ...panelH }}>
           {gallery.length === 0 ? <div style={S.emptySmall}>{tab === "gen" ? "No generations yet" : "No uploads yet"}</div> : (
             <div style={S.pickGrid}>
               {gallery.map((g) => (
@@ -296,7 +332,7 @@ function SourcePills({ tab, setTab }) {
 
 /* ------------------------------------------------------------------ image tool */
 
-function ImageTool({ generations, uploads, addUpload, saveAsset, seed }) {
+function ImageTool({ generations, uploads, addUpload, saveAsset, seed, isMobile }) {
   const [tab, setTab] = useState("add");
   const [refs, setRefs] = useState(() => seed?.refs || []);
   const [prompt, setPrompt] = useState(() => seed?.prompt || "");
@@ -336,9 +372,9 @@ function ImageTool({ generations, uploads, addUpload, saveAsset, seed }) {
           <SourcePills tab={tab} setTab={setTab} />
           <button style={S.libBtn} onClick={() => setLibOpen(true)}>▥ Prompt Library</button>
         </div>
-        <div style={S.cardBody}>
-          <SourceInput tab={tab} value={refs} onChange={setRefs} max={8} generations={generations} uploads={uploads} addUpload={addUpload} />
-          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the image you want to generate…" style={S.cardTextarea} />
+        <div style={{ ...S.cardBody, ...(isMobile ? S.cardBodyM : {}) }}>
+          <SourceInput tab={tab} value={refs} onChange={setRefs} max={8} generations={generations} uploads={uploads} addUpload={addUpload} isMobile={isMobile} />
+          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the image you want to generate…" style={{ ...S.cardTextarea, ...(isMobile ? S.cardTextareaM : {}) }} />
         </div>
         <div style={S.cardFoot}>
           <button style={S.howBtn} onClick={() => setHowOpen(true)}>How It Works ?</button>
@@ -356,7 +392,7 @@ function ImageTool({ generations, uploads, addUpload, saveAsset, seed }) {
           <Field label="Ratio"><Select value={ratio} onChange={setRatio} options={RATIOS} /></Field>
           <Field label="Resolution"><Select value={resolution} onChange={setResolution} options={RESOLUTIONS} /></Field>
         </>}
-        variants={variants} setVariants={setVariants} cost={cost} busy={busy} canGo={canGo} onGenerate={generate}
+        variants={variants} setVariants={setVariants} cost={cost} busy={busy} canGo={canGo} onGenerate={generate} isMobile={isMobile}
       />
       <Results results={results} />
 
@@ -368,7 +404,7 @@ function ImageTool({ generations, uploads, addUpload, saveAsset, seed }) {
 
 /* ------------------------------------------------------------------ video tool */
 
-function VideoTool({ generations, uploads, addUpload, saveAsset, seed }) {
+function VideoTool({ generations, uploads, addUpload, saveAsset, seed, isMobile }) {
   const [tab, setTab] = useState("add");
   const [refs, setRefs] = useState(() => seed?.refs || []);
   const [prompt, setPrompt] = useState(() => seed?.prompt || "");
@@ -421,9 +457,9 @@ function VideoTool({ generations, uploads, addUpload, saveAsset, seed }) {
           <SourcePills tab={tab} setTab={setTab} />
           <span style={S.veoTag}>Powered by Veo · ~1–2 min</span>
         </div>
-        <div style={S.cardBody}>
-          <SourceInput tab={tab} value={refs} onChange={setRefs} max={1} generations={generations} uploads={uploads} addUpload={addUpload} />
-          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the motion / what should happen in the clip…" style={S.cardTextarea} />
+        <div style={{ ...S.cardBody, ...(isMobile ? S.cardBodyM : {}) }}>
+          <SourceInput tab={tab} value={refs} onChange={setRefs} max={1} generations={generations} uploads={uploads} addUpload={addUpload} isMobile={isMobile} />
+          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the motion / what should happen in the clip…" style={{ ...S.cardTextarea, ...(isMobile ? S.cardTextareaM : {}) }} />
         </div>
       </div>
 
@@ -434,7 +470,7 @@ function VideoTool({ generations, uploads, addUpload, saveAsset, seed }) {
           <Field label="Resolution"><Select value={resolution} onChange={setResolution} options={VIDEO_RES} /></Field>
           <Field label="Duration"><Select value={duration} onChange={setDuration} options={VIDEO_DURATIONS} /></Field>
         </>}
-        cost={CREDIT_COST.video} busy={working} canGo={canGo} onGenerate={generate}
+        cost={CREDIT_COST.video} busy={working} canGo={canGo} onGenerate={generate} isMobile={isMobile}
       />
 
       <div style={S.videoStage}>
@@ -454,7 +490,7 @@ function VideoTool({ generations, uploads, addUpload, saveAsset, seed }) {
 
 /* ------------------------------------------------------------------ enhance tool */
 
-function EnhanceTool({ generations, uploads, addUpload, saveAsset, seed }) {
+function EnhanceTool({ generations, uploads, addUpload, saveAsset, seed, isMobile }) {
   const [tab, setTab] = useState("add");
   const [refs, setRefs] = useState(() => seed?.refs || []);
   const [resolution, setResolution] = useState("4K");
@@ -484,7 +520,7 @@ function EnhanceTool({ generations, uploads, addUpload, saveAsset, seed }) {
           <span style={S.veoTag}>Sharpen &amp; upscale, preserving the image</span>
         </div>
         <div style={S.cardBodyOne}>
-          <SourceInput tab={tab} value={refs} onChange={setRefs} max={1} generations={generations} uploads={uploads} addUpload={addUpload} />
+          <SourceInput tab={tab} value={refs} onChange={setRefs} max={1} generations={generations} uploads={uploads} addUpload={addUpload} isMobile={isMobile} />
         </div>
       </div>
       <ConfigRow
@@ -492,7 +528,7 @@ function EnhanceTool({ generations, uploads, addUpload, saveAsset, seed }) {
           <Field label="Model"><div style={S.modelBox}>Upscale<span style={S.recBadge}>Recommended</span></div></Field>
           <Field label="Target"><Select value={resolution} onChange={setResolution} options={[{ id: "2K", label: "2K" }, { id: "4K", label: "4K" }]} /></Field>
         </>}
-        variants={variants} setVariants={setVariants} cost={CREDIT_COST.enhance * variants} busy={busy} canGo={canGo} onGenerate={generate}
+        variants={variants} setVariants={setVariants} cost={CREDIT_COST.enhance * variants} busy={busy} canGo={canGo} onGenerate={generate} isMobile={isMobile}
       />
       <Results results={results} />
     </>
@@ -501,17 +537,17 @@ function EnhanceTool({ generations, uploads, addUpload, saveAsset, seed }) {
 
 /* ------------------------------------------------------------------ shared bits */
 
-function ConfigRow({ left, variants, setVariants, cost, busy, canGo, onGenerate }) {
+function ConfigRow({ left, variants, setVariants, cost, busy, canGo, onGenerate, isMobile }) {
   return (
-    <div style={S.configRow}>
+    <div style={{ ...S.configRow, ...(isMobile ? S.configRowM : {}) }}>
       <div style={S.configLeft}>{left}</div>
-      <div style={S.configRight}>
+      <div style={{ ...S.configRight, ...(isMobile ? S.configRightM : {}) }}>
         {setVariants && (
           <Field label="Variants">
             <input type="number" min={1} max={6} value={variants} onChange={(e) => setVariants(Math.max(1, Math.min(6, Number(e.target.value) || 1)))} style={S.numInput} />
           </Field>
         )}
-        <button onClick={onGenerate} disabled={!canGo} style={{ ...S.generate, ...(!canGo ? S.generateOff : {}) }}>{busy ? "Generating…" : `Generate (${cost} credits)`}</button>
+        <button onClick={onGenerate} disabled={!canGo} style={{ ...S.generate, ...(isMobile ? S.generateM : {}), ...(!canGo ? S.generateOff : {}) }}>{busy ? "Generating…" : `Generate (${cost} credits)`}</button>
       </div>
     </div>
   );
@@ -587,13 +623,13 @@ function HowItWorks({ onClose }) {
   );
 }
 
-function GalleryPage({ title, emptyLabel, emptySub, createLabel, onCreate, items, loading, onEdit, onDelete, cloud }) {
+function GalleryPage({ title, emptyLabel, emptySub, createLabel, onCreate, items, loading, onEdit, onDelete, cloud, isMobile }) {
   const [sort, setSort] = useState("new");
   if (!cloud) return <div style={S.coming}><div style={S.comingTitle}>{title} needs the cloud</div><div style={S.comingBlurb}>Supabase isn&apos;t configured here, so this isn&apos;t saved. On wonderworkshop.cm.studio it persists to your account.</div></div>;
   const sorted = sort === "new" ? items : [...items].slice().reverse();
   return (
     <div style={S.galleryPage}>
-      <div style={S.galleryHead}>
+      <div style={{ ...S.galleryHead, ...(isMobile ? S.galleryHeadM : {}) }}>
         <div style={S.galleryTitle}>{title}</div>
         <div style={S.galleryActions}>
           <select value={sort} onChange={(e) => setSort(e.target.value)} style={S.select}><option value="new">Newest First</option><option value="old">Oldest First</option></select>
@@ -654,6 +690,16 @@ const S = {
 
   body: { flex: 1, overflowY: "auto" },
   column: { width: "100%", maxWidth: 1120, margin: "0 auto", padding: "26px 28px 90px" },
+  columnM: { padding: "16px 14px 80px" },
+  headerM: { padding: "0 14px" },
+  tabM: { fontSize: 17 },
+  cardBodyM: { gridTemplateColumns: "1fr" },
+  cardTextareaM: { minHeight: 160, fontSize: 15 },
+  configRowM: { flexDirection: "column", alignItems: "stretch", gap: 14 },
+  configRightM: { justifyContent: "space-between" },
+  generateM: { flex: 1 },
+  galleryHeadM: { flexDirection: "column", alignItems: "flex-start", gap: 12 },
+  menuSep: { height: 1, background: C.line, margin: "6px 4px" },
 
   tabs: { display: "flex", gap: 10, marginBottom: 18 },
   tab: { padding: "4px 2px", fontSize: 21, fontWeight: 700, color: C.faint, background: "transparent", border: "none", borderBottom: "2px solid transparent", cursor: "pointer" },
