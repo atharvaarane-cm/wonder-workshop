@@ -41,6 +41,44 @@ const VIDEO_DURATIONS = [{ id: "4", label: "4s" }, { id: "6", label: "6s" }, { i
 const DIRECTOR_PREAMBLE =
   "Professional commercial photograph, art-directed for marketing: clean composition, " +
   "intentional lighting, premium styling, photorealistic, high detail. ";
+
+// AI Art Director = a real LLM rewrite (gemini-2.5-flash via /api/chat). It turns a
+// rough brief into a structured, production-grade prompt so the user doesn't have
+// to prompt-engineer. Falls back to the static preamble above if the call fails.
+function imageDirectorSystem(hasRefs) {
+  return (
+    "You are an elite commercial-photography art director. Rewrite the user's brief into ONE " +
+    "vivid, production-ready image-generation prompt for a marketing asset. Structure it as " +
+    "Subject → Action/Pose → Setting → Style → Lighting → Lens/Technical → Quality. Be concrete " +
+    "and tasteful and imply a premium, brand-safe commercial finish. Output ONLY the final prompt " +
+    "as plain text — no preamble, no quotes, no bullet points, no explanation. Under 90 words." +
+    (hasRefs
+      ? " A reference product image is provided: the product must be reproduced EXACTLY — identical " +
+        "shape, colour, logo, label text, materials and proportions. Only the surrounding scene, " +
+        "surface and lighting may change; never redesign the product."
+      : "")
+  );
+}
+const VIDEO_DIRECTOR_SYSTEM =
+  "You are a commercial film director. Rewrite the user's idea into ONE concise cinematic " +
+  "image-to-video motion prompt: describe camera movement, subject motion, pacing, and any " +
+  "lighting/atmosphere shift, in one or two flowing sentences. Keep the product and scene " +
+  "consistent with the source image. Output ONLY the final prompt as plain text — no preamble, " +
+  "no quotes, no explanation. Under 50 words.";
+
+async function directPrompt(system, userPrompt) {
+  const res = await fetch("/api/chat", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages: [
+      { role: "system", content: system },
+      { role: "user", content: userPrompt || "(no text brief — use the attached reference image as the subject)" },
+    ] }),
+  });
+  if (!res.ok) throw new Error("art-director call failed");
+  const out = ((await res.json())?.message?.content || "").trim();
+  if (!out) throw new Error("empty art-director response");
+  return out;
+}
 const PRESERVE =
   " CRITICAL: reproduce any uploaded product/reference EXACTLY — identical shape, colour, " +
   "logo, label text, materials and proportions. Do not redesign or restyle the product; " +
@@ -350,8 +388,13 @@ function ImageTool({ generations, uploads, addUpload, saveAsset, seed, isMobile 
 
   async function generate() {
     if (!canGo) return;
-    const base = director ? DIRECTOR_PREAMBLE + prompt + (refs.length ? PRESERVE : "") : prompt;
     setBusy(true);
+    let base = prompt;
+    if (director) {
+      try { base = await directPrompt(imageDirectorSystem(refs.length > 0), prompt); }
+      catch { base = DIRECTOR_PREAMBLE + prompt; } // fallback to static preamble
+      if (refs.length) base += PRESERVE;
+    }
     setResults(Array.from({ length: variants }, (_, i) => ({ id: i, status: "generating" })));
     const tasks = Array.from({ length: variants }, (_, i) => async () => {
       let img = await generateImage(`${base}${VARIATIONS[i % VARIATIONS.length]}`, { ratio, referenceImages: refs });
@@ -414,6 +457,7 @@ function VideoTool({ generations, uploads, addUpload, saveAsset, seed, isMobile 
   const [status, setStatus] = useState("idle");
   const [videoUrl, setVideoUrl] = useState(null);
   const [error, setError] = useState(null);
+  const [director, setDirector] = useState(true);
   const aliveRef = useRef(true);
   useEffect(() => () => { aliveRef.current = false; }, []);
 
@@ -425,8 +469,10 @@ function VideoTool({ generations, uploads, addUpload, saveAsset, seed, isMobile 
     if (!canGo) return;
     setError(null); setVideoUrl(null); setStatus("starting");
     try {
+      let motion = prompt;
+      if (director && prompt.trim()) { try { motion = await directPrompt(VIDEO_DIRECTOR_SYSTEM, prompt); } catch { /* keep raw */ } }
       const startRes = await fetch("/api/video-veo", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, image, aspectRatio: aspect, resolution, durationSeconds: duration }) });
+        body: JSON.stringify({ prompt: motion, image, aspectRatio: aspect, resolution, durationSeconds: duration }) });
       if (!startRes.ok) throw new Error((await startRes.json().catch(() => ({}))).error || "Couldn't start the video");
       const { operation } = await startRes.json();
       setStatus("polling");
@@ -460,6 +506,13 @@ function VideoTool({ generations, uploads, addUpload, saveAsset, seed, isMobile 
         <div style={{ ...S.cardBody, ...(isMobile ? S.cardBodyM : {}) }}>
           <SourceInput tab={tab} value={refs} onChange={setRefs} max={1} generations={generations} uploads={uploads} addUpload={addUpload} isMobile={isMobile} />
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the motion / what should happen in the clip…" style={{ ...S.cardTextarea, ...(isMobile ? S.cardTextareaM : {}) }} />
+        </div>
+        <div style={S.cardFoot}>
+          <label style={S.toggleWrap}>
+            <span style={director ? { ...S.toggle, ...S.toggleOn } : S.toggle}><span style={director ? { ...S.knob, ...S.knobOn } : S.knob} /></span>
+            <input type="checkbox" checked={director} onChange={(e) => setDirector(e.target.checked)} style={{ display: "none" }} />
+            <span style={S.toggleLabel}>AI Art Director</span>
+          </label>
         </div>
       </div>
 
