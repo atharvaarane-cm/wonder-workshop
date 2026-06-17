@@ -176,6 +176,7 @@ export default function ProductionLab() {
 
   return (
     <div style={S.app}>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" />
       <style>{"@keyframes wwspin { to { transform: rotate(360deg); } }"}</style>
       <Header historyCount={assets.length} onHistory={() => setTool("history")} />
       <ToolTabs tool={tool} setTool={setTool} />
@@ -729,10 +730,24 @@ function HistoryView({ assets, loading, onEdit, onDelete, cloud }) {
 
 /* ------------------------------------------------------------------ styles */
 
-const C = { bg: "#0b0b0d", panel: "#161618", panel2: "#1b1b1e", line: "#2a2a30", line2: "#34343c", text: "#e8e8ea", dim: "#9a9aa2", faint: "#6c6c74", accent: "#6b8afd", accentInk: "#0b0b0d" };
+// Design tokens transcribed from studiotools.ai's computed CSS: light theme,
+// Sora type, and the signature rose->orange gradient on primary actions.
+const C = {
+  bg: "#FFFFFF",        // page
+  panel: "#F7F7F6",     // input / tile / card-interior light grey
+  panel2: "#F2F2F1",    // muted pills, config bar
+  line: "#E5E7EB",      // card / input borders
+  line2: "#D1D5DB",     // stronger border / disabled
+  text: "#161413",      // near-black text
+  dim: "#6B7280",       // muted grey
+  faint: "#9CA3AF",     // faint grey
+  accent: "#F43F5E",    // accent text / badges (rose)
+  accentInk: "#FFFFFF", // text on gradient
+  grad: "linear-gradient(90deg, #E11D48, #F97316)", // THE brand accent
+};
 
 const S = {
-  app: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "Inter, system-ui, sans-serif", display: "flex", flexDirection: "column" },
+  app: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "Sora, system-ui, sans-serif", display: "flex", flexDirection: "column" },
 
   header: { height: 52, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", borderBottom: `1px solid ${C.line}` },
   brand: { fontSize: 15, fontWeight: 700, letterSpacing: "0.01em" },
@@ -747,7 +762,7 @@ const S = {
 
   tabs: { display: "flex", gap: 4, padding: "10px 20px 0", borderBottom: `1px solid ${C.line}` },
   tab: { padding: "8px 16px", fontSize: 13, fontWeight: 600, color: C.dim, background: "transparent", border: "none", borderBottom: "2px solid transparent", cursor: "pointer" },
-  tabOn: { color: C.text, borderBottom: `2px solid ${C.accent}` },
+  tabOn: { color: C.text, borderBottom: `2px solid ${C.text}` },
   optMenu: { position: "absolute", top: "100%", left: 0, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: 6, minWidth: 200, zIndex: 50, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" },
   optItem: { display: "block", width: "100%", textAlign: "left", padding: "8px 10px", fontSize: 13, color: C.text, background: "transparent", border: "none", borderRadius: 7, cursor: "pointer" },
 
@@ -759,7 +774,7 @@ const S = {
   source: {},
   sourceTabs: { display: "flex", gap: 4, marginBottom: 12 },
   sourceTab: { flex: 1, padding: "7px 6px", fontSize: 11, fontWeight: 600, color: C.dim, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, cursor: "pointer" },
-  sourceTabOn: { color: C.text, background: C.panel2, borderColor: C.line2 },
+  sourceTabOn: { color: "#fff", background: C.text, borderColor: C.text },
   dropzone: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 180, border: `1px dashed ${C.line2}`, borderRadius: 12, background: C.panel, cursor: "pointer", gap: 6 },
   dropHint: { fontSize: 13, color: C.dim },
   dropSub: { fontSize: 11, color: C.faint },
@@ -800,11 +815,11 @@ const S = {
   field: { display: "flex", flexDirection: "column", gap: 5 },
   fieldLabel: { fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: C.faint },
   modelBox: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.text, padding: "8px 10px", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 9 },
-  recBadge: { fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 4, padding: "1px 5px" },
+  recBadge: { fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", color: C.dim, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 4, padding: "1px 5px" },
   select: { padding: "8px 10px", fontSize: 13, color: C.text, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 9, minWidth: 130 },
   numInput: { width: 64, padding: "8px 10px", fontSize: 13, color: C.text, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 9 },
-  generate: { padding: "11px 20px", fontSize: 14, fontWeight: 700, color: C.accentInk, background: C.accent, border: "none", borderRadius: 10, cursor: "pointer" },
-  generateOff: { background: C.line2, color: C.faint, cursor: "not-allowed" },
+  generate: { padding: "11px 22px", fontSize: 14, fontWeight: 700, color: C.accentInk, background: C.grad, border: "none", borderRadius: 10, cursor: "pointer" },
+  generateOff: { background: C.line2, color: "#fff", cursor: "not-allowed" },
 
   enhanceNote: { fontSize: 13, color: C.dim, lineHeight: 1.5, marginBottom: 16, maxWidth: 520 },
 
@@ -837,6 +852,6 @@ const S = {
 
   coming: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 40 },
   comingTitle: { fontSize: 22, fontWeight: 700 },
-  comingBadge: { fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 999, padding: "3px 12px" },
+  comingBadge: { fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: C.faint, border: `1px solid ${C.line2}`, borderRadius: 999, padding: "3px 12px" },
   comingBlurb: { fontSize: 14, color: C.dim, maxWidth: 480, textAlign: "center", lineHeight: 1.5 },
 };
