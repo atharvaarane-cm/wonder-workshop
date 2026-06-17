@@ -12,7 +12,7 @@
 //
 // Throwaway probe to prove the direction + feel, not the final architecture.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { generateImage, upscaleImage } from "./imageGen.js";
 
 /* ------------------------------------------------------------------ config */
@@ -76,7 +76,21 @@ const PROMPT_PRESETS = [
 ];
 
 const SAVED_KEY = "ww_prod_saved_prompts";
-const CREDIT_COST = { image: 30, enhance: 100 };
+const CREDIT_COST = { image: 30, enhance: 100, video: 100 };
+
+const VIDEO_RATIOS = [
+  { id: "16:9", label: "16:9 · Landscape" },
+  { id: "9:16", label: "9:16 · Vertical" },
+];
+const VIDEO_RES = [
+  { id: "720p", label: "720p" },
+  { id: "1080p", label: "1080p" },
+];
+const VIDEO_DURATIONS = [
+  { id: "4", label: "4s" },
+  { id: "6", label: "6s" },
+  { id: "8", label: "8s" },
+];
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -125,12 +139,13 @@ export default function ProductionLab() {
 
   return (
     <div style={S.app}>
+      <style>{"@keyframes wwspin { to { transform: rotate(360deg); } }"}</style>
       <Header />
       <ToolTabs tool={tool} setTool={setTool} />
       <div style={S.main}>
         {tool === "image" && <ImageTool {...shared} />}
         {tool === "enhance" && <EnhanceTool {...shared} />}
-        {tool === "video" && <ComingSoon title="Convert Image to Video" blurb="Animate a still into a 5–10s clip. Needs a video model (Seedance / Veo / Kling) wired in — not built yet." />}
+        {tool === "video" && <VideoTool {...shared} />}
         {tool === "reformat" && <ComingSoon title="Reformat Image" blurb="Outpaint an existing asset to a new aspect ratio for any channel. On the roadmap — not built yet." />}
       </div>
     </div>
@@ -414,6 +429,124 @@ function EnhanceTool({ generations, uploads, addUpload, addGeneration }) {
   );
 }
 
+/* ------------------------------------------------------------------ video tool */
+
+function VideoTool({ generations, uploads, addUpload }) {
+  const [refs, setRefs] = useState([]);
+  const [prompt, setPrompt] = useState("");
+  const [aspect, setAspect] = useState("16:9");
+  const [resolution, setResolution] = useState("720p");
+  const [duration, setDuration] = useState("8");
+  const [status, setStatus] = useState("idle"); // idle | starting | polling | done | error
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [error, setError] = useState(null);
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
+
+  const image = refs[0];
+  const working = status === "starting" || status === "polling";
+  const canGo = (image || prompt.trim()) && !working;
+  const cost = CREDIT_COST.video;
+
+  async function generate() {
+    if (!canGo) return;
+    setError(null); setVideoUrl(null); setStatus("starting");
+    try {
+      const startRes = await fetch("/api/video-veo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, image, aspectRatio: aspect, resolution, durationSeconds: duration }),
+      });
+      if (!startRes.ok) throw new Error((await startRes.json().catch(() => ({}))).error || "Couldn't start the video");
+      const { operation } = await startRes.json();
+      setStatus("polling");
+      const started = Date.now();
+      while (aliveRef.current) {
+        if (Date.now() - started > 6 * 60 * 1000) throw new Error("Timed out waiting for the video (6 min).");
+        await new Promise((r) => setTimeout(r, 6000));
+        if (!aliveRef.current) return;
+        const pollRes = await fetch(`/api/video-veo?op=${encodeURIComponent(operation)}`);
+        if (!pollRes.ok) throw new Error((await pollRes.json().catch(() => ({}))).error || "Polling failed");
+        const st = await pollRes.json();
+        if (st.done) {
+          const fileRes = await fetch(`/api/video-veo?op=${encodeURIComponent(operation)}&file=1`);
+          if (!fileRes.ok) throw new Error("Video finished but the download failed");
+          const blob = await fileRes.blob();
+          if (!aliveRef.current) return;
+          setVideoUrl(URL.createObjectURL(blob));
+          setStatus("done");
+          return;
+        }
+      }
+    } catch (e) {
+      if (aliveRef.current) { setError(e?.message || "Video generation failed"); setStatus("error"); }
+    }
+  }
+
+  return (
+    <div style={S.workspace}>
+      <div style={S.inputCol}>
+        <SourceInput value={refs} onChange={setRefs} max={1}
+                     generations={generations} uploads={uploads} addUpload={addUpload} />
+      </div>
+      <div style={S.promptCol}>
+        <div style={S.promptHead}><span style={S.colLabel}>Convert Image to Video · Veo</span></div>
+        <textarea
+          value={prompt} onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Describe the motion / what should happen in the clip…"
+          style={S.textarea}
+        />
+        <div style={S.utilRow}>
+          <span style={S.how} title="Veo (Google) generates an 4–8s clip from your image + motion prompt. Takes ~1–2 minutes.">ⓘ Powered by Veo · ~1–2 min</span>
+        </div>
+
+        <div style={S.videoStage}>
+          {status === "idle" && <div style={S.resultsEmpty}>Your video will appear here.</div>}
+          {working && (
+            <div style={S.videoBusy}>
+              <div style={S.spinner} />
+              <div>{status === "starting" ? "Starting Veo…" : "Generating video… (~1–2 min, you can wait here)"}</div>
+            </div>
+          )}
+          {status === "error" && <div style={S.tileErr}>{error}</div>}
+          {status === "done" && videoUrl && (
+            <div style={S.videoWrap}>
+              <video src={videoUrl} controls autoPlay loop style={S.video} />
+              <a href={videoUrl} download="video.mp4" style={S.dlInline}>Download .mp4</a>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={S.configBar}>
+        <div style={S.configLeft}>
+          <Field label="Model"><div style={S.modelBox}>Veo 3.1<span style={S.recBadge}>Recommended</span></div></Field>
+          <Field label="Ratio">
+            <select value={aspect} onChange={(e) => setAspect(e.target.value)} style={S.select}>
+              {VIDEO_RATIOS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Resolution">
+            <select value={resolution} onChange={(e) => setResolution(e.target.value)} style={S.select}>
+              {VIDEO_RES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Duration">
+            <select value={duration} onChange={(e) => setDuration(e.target.value)} style={S.select}>
+              {VIDEO_DURATIONS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={S.configRight}>
+          <button onClick={generate} disabled={!canGo} style={{ ...S.generate, ...(!canGo ? S.generateOff : {}) }}>
+            {working ? "Generating…" : `Generate (${cost} credits)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ shared bits */
 
 function ConfigBar({ left, variants, setVariants, cost, busy, canGo, onGenerate }) {
@@ -608,6 +741,13 @@ const S = {
   libItemText: { fontSize: 11, color: C.dim, lineHeight: 1.4 },
   modalFoot: { padding: 14, borderTop: `1px solid ${C.line}` },
   saveBtn: { width: "100%", padding: "10px", fontSize: 13, fontWeight: 600, color: C.text, background: C.panel2, border: `1px solid ${C.line2}`, borderRadius: 9, cursor: "pointer" },
+
+  videoStage: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 220 },
+  videoBusy: { display: "flex", flexDirection: "column", alignItems: "center", gap: 14, color: C.dim, fontSize: 13 },
+  spinner: { width: 34, height: 34, borderRadius: "50%", border: `3px solid ${C.line2}`, borderTopColor: C.accent, animation: "wwspin 0.9s linear infinite" },
+  videoWrap: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, width: "100%" },
+  video: { maxWidth: "100%", maxHeight: "62vh", borderRadius: 12, background: "#000", border: `1px solid ${C.line}` },
+  dlInline: { fontSize: 12, color: C.dim, textDecoration: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px" },
 
   coming: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 40 },
   comingTitle: { fontSize: 22, fontWeight: 700 },
