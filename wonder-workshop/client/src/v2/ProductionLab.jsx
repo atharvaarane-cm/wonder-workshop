@@ -14,6 +14,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { generateImage, upscaleImage } from "./imageGen.js";
+import { hasSupabase } from "./supabaseClient.js";
+import { saveProductionAsset, listProductionAssets, deleteProductionAsset, downloadUrl } from "./productionAssets.js";
 
 /* ------------------------------------------------------------------ config */
 
@@ -126,27 +128,63 @@ function downloadImage(image, name) {
 /* ------------------------------------------------------------------ root */
 
 export default function ProductionLab() {
-  const [tool, setTool] = useState("image"); // image | video | reformat | enhance
-  const [generations, setGenerations] = useState([]); // {id, image, ts, meta}
-  const [uploads, setUploads] = useState([]);          // {id, image, ts}
+  const [tool, setToolRaw] = useState("image"); // image | video | reformat | enhance | history
+  const [assets, setAssets] = useState([]);     // persistent: production_assets rows
+  const [uploads, setUploads] = useState([]);   // session-only inputs {id, image}
+  const [seed, setSeed] = useState(null);       // edit-an-asset → preload a tool
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
-  const addGeneration = (image, meta) =>
-    setGenerations((g) => [{ id: nid(), image, ts: Date.now(), meta }, ...g]);
-  const addUpload = (image) =>
-    setUploads((u) => [{ id: nid(), image, ts: Date.now() }, ...u]);
+  // Load persistent history once (cloud only; empty locally).
+  useEffect(() => {
+    if (!hasSupabase) return;
+    setLoadingHistory(true);
+    listProductionAssets()
+      .then(setAssets)
+      .catch((e) => console.error("[production] load history failed", e))
+      .finally(() => setLoadingHistory(false));
+  }, []);
 
-  const shared = { generations, uploads, addGeneration, addUpload };
+  // Manual tab switch clears any pending edit-seed; Edit sets it (below).
+  const setTool = (t) => { setSeed(null); setToolRaw(t); };
+
+  // Save a generation to the cloud and prepend to history. Returns the row (or
+  // null when offline) — tools still show the result regardless.
+  async function saveAsset(params) {
+    try {
+      const row = await saveProductionAsset(params);
+      if (row) setAssets((a) => [row, ...a]);
+      return row;
+    } catch (e) {
+      console.error("[production] save asset failed", e);
+      return null;
+    }
+  }
+
+  async function removeAsset(id) {
+    setAssets((a) => a.filter((x) => x.id !== id));
+    try { await deleteProductionAsset(id); } catch (e) { console.error("[production] delete failed", e); }
+  }
+
+  function editAsset(asset) {
+    setSeed({ refs: [asset.url], prompt: asset.prompt || "", settings: asset.settings || {} });
+    setToolRaw(asset.tool === "video" ? "video" : "image");
+  }
+
+  // Past image generations are reusable as inputs in the source picker.
+  const imageGenerations = assets.filter((a) => a.kind === "image").map((a) => ({ id: a.id, image: a.url }));
+  const shared = { generations: imageGenerations, uploads, addUpload: (image) => setUploads((u) => [{ id: nid(), image }, ...u]), saveAsset, seed };
 
   return (
     <div style={S.app}>
       <style>{"@keyframes wwspin { to { transform: rotate(360deg); } }"}</style>
-      <Header />
+      <Header historyCount={assets.length} onHistory={() => setTool("history")} />
       <ToolTabs tool={tool} setTool={setTool} />
       <div style={S.main}>
         {tool === "image" && <ImageTool {...shared} />}
         {tool === "enhance" && <EnhanceTool {...shared} />}
         {tool === "video" && <VideoTool {...shared} />}
         {tool === "reformat" && <ComingSoon title="Reformat Image" blurb="Outpaint an existing asset to a new aspect ratio for any channel. On the roadmap — not built yet." />}
+        {tool === "history" && <HistoryView assets={assets} loading={loadingHistory} onEdit={editAsset} onDelete={removeAsset} cloud={hasSupabase} />}
       </div>
     </div>
   );
@@ -154,13 +192,14 @@ export default function ProductionLab() {
 
 /* ------------------------------------------------------------------ shell */
 
-function Header() {
+function Header({ historyCount = 0, onHistory }) {
   return (
     <div style={S.header}>
       <div style={S.brand}>
         <span style={S.brandMark}>◆</span> Workshop <span style={S.brandSub}>Production</span>
       </div>
       <div style={S.headerRight}>
+        <button style={S.navBtn} onClick={onHistory}>My Generations{historyCount ? ` (${historyCount})` : ""}</button>
         <div style={S.credits} title="Cosmetic preview — generation is not metered in this prototype.">
           <span style={S.creditNum}>2,400</span> credits <span style={S.previewTag}>preview</span>
         </div>
@@ -278,12 +317,12 @@ function SourceInput({ value, onChange, max, generations, uploads, addUpload }) 
 
 /* ------------------------------------------------------------------ image tool */
 
-function ImageTool({ generations, uploads, addUpload, addGeneration }) {
-  const [refs, setRefs] = useState([]);
-  const [prompt, setPrompt] = useState("");
+function ImageTool({ generations, uploads, addUpload, saveAsset, seed }) {
+  const [refs, setRefs] = useState(() => seed?.refs || []);
+  const [prompt, setPrompt] = useState(() => seed?.prompt || "");
   const [model] = useState("nbp");
-  const [ratio, setRatio] = useState("1:1");
-  const [resolution, setResolution] = useState("2K");
+  const [ratio, setRatio] = useState(() => seed?.settings?.ratio || "1:1");
+  const [resolution, setResolution] = useState(() => seed?.settings?.resolution || "2K");
   const [variants, setVariants] = useState(4);
   const [director, setDirector] = useState(true);
   const [results, setResults] = useState([]);
@@ -305,7 +344,7 @@ function ImageTool({ generations, uploads, addUpload, addGeneration }) {
     });
     await runPool(tasks, 2, (idx, patch) => {
       setResults((prev) => prev.map((r) => (r.id === idx ? { ...r, ...patch } : r)));
-      if (patch.status === "done") addGeneration(patch.image, { tool: "image", ratio });
+      if (patch.status === "done") saveAsset({ kind: "image", dataUrl: patch.image, prompt, tool: "image", settings: { ratio, resolution } });
     });
     setBusy(false);
   }
@@ -371,8 +410,8 @@ function ImageTool({ generations, uploads, addUpload, addGeneration }) {
 
 /* ------------------------------------------------------------------ enhance tool */
 
-function EnhanceTool({ generations, uploads, addUpload, addGeneration }) {
-  const [refs, setRefs] = useState([]);
+function EnhanceTool({ generations, uploads, addUpload, saveAsset, seed }) {
+  const [refs, setRefs] = useState(() => seed?.refs || []);
   const [resolution, setResolution] = useState("4K");
   const [variants, setVariants] = useState(1);
   const [results, setResults] = useState([]);
@@ -392,7 +431,7 @@ function EnhanceTool({ generations, uploads, addUpload, addGeneration }) {
     });
     await runPool(tasks, 2, (idx, patch) => {
       setResults((prev) => prev.map((r) => (r.id === idx ? { ...r, ...patch } : r)));
-      if (patch.status === "done") addGeneration(patch.image, { tool: "enhance" });
+      if (patch.status === "done") saveAsset({ kind: "image", dataUrl: patch.image, tool: "enhance", settings: { resolution } });
     });
     setBusy(false);
   }
@@ -431,12 +470,12 @@ function EnhanceTool({ generations, uploads, addUpload, addGeneration }) {
 
 /* ------------------------------------------------------------------ video tool */
 
-function VideoTool({ generations, uploads, addUpload }) {
-  const [refs, setRefs] = useState([]);
-  const [prompt, setPrompt] = useState("");
-  const [aspect, setAspect] = useState("16:9");
-  const [resolution, setResolution] = useState("720p");
-  const [duration, setDuration] = useState("8");
+function VideoTool({ generations, uploads, addUpload, saveAsset, seed }) {
+  const [refs, setRefs] = useState(() => seed?.refs || []);
+  const [prompt, setPrompt] = useState(() => seed?.prompt || "");
+  const [aspect, setAspect] = useState(() => seed?.settings?.aspect || "16:9");
+  const [resolution, setResolution] = useState(() => seed?.settings?.resolution || "720p");
+  const [duration, setDuration] = useState(() => seed?.settings?.duration || "8");
   const [status, setStatus] = useState("idle"); // idle | starting | polling | done | error
   const [videoUrl, setVideoUrl] = useState(null);
   const [error, setError] = useState(null);
@@ -475,6 +514,7 @@ function VideoTool({ generations, uploads, addUpload }) {
           if (!aliveRef.current) return;
           setVideoUrl(URL.createObjectURL(blob));
           setStatus("done");
+          saveAsset({ kind: "video", blob, mime: "video/mp4", prompt, tool: "video", settings: { aspect, resolution, duration } });
           return;
         }
       }
@@ -649,6 +689,44 @@ function ComingSoon({ title, blurb }) {
   );
 }
 
+function HistoryView({ assets, loading, onEdit, onDelete, cloud }) {
+  if (!cloud) return (
+    <div style={S.coming}>
+      <div style={S.comingTitle}>History needs the cloud</div>
+      <div style={S.comingBlurb}>Supabase isn&apos;t configured in this environment, so generations aren&apos;t saved here. On wonderworkshop.cm.studio your generations are stored to your account and appear here.</div>
+    </div>
+  );
+  if (loading) return <div style={S.resultsEmpty}>Loading your generations…</div>;
+  return (
+    <div style={S.historyWrap}>
+      <div style={S.historyHead}>My Generations <span style={S.historyCount}>{assets.length}</span></div>
+      {assets.length === 0 ? (
+        <div style={S.resultsEmpty}>Nothing yet — generate an image or video and it&apos;ll be saved here automatically.</div>
+      ) : (
+        <div style={S.grid}>
+          {assets.map((a) => (
+            <div key={a.id} style={S.tile}>
+              {a.kind === "video" ? (
+                <video src={a.url} style={S.tileImg} muted loop playsInline
+                       onMouseOver={(e) => { e.currentTarget.play().catch(() => {}); }}
+                       onMouseOut={(e) => e.currentTarget.pause()} />
+              ) : (
+                <img src={a.url} alt="" style={S.tileImg} />
+              )}
+              {a.kind === "video" && <span style={S.kindBadge}>▶ video</span>}
+              <div style={S.tileActions}>
+                <button style={S.tileAct} title="Edit / iterate" onClick={() => onEdit(a)}>Edit</button>
+                <button style={S.tileAct} title="Download" onClick={() => downloadUrl(a.url, `${a.kind}-${a.id}.${a.kind === "video" ? "mp4" : "png"}`)}>↓</button>
+                <button style={S.tileAct} title="Delete" onClick={() => onDelete(a.id)}>✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ styles */
 
 const C = { bg: "#0b0b0d", panel: "#161618", panel2: "#1b1b1e", line: "#2a2a30", line2: "#34343c", text: "#e8e8ea", dim: "#9a9aa2", faint: "#6c6c74", accent: "#6b8afd", accentInk: "#0b0b0d" };
@@ -665,6 +743,7 @@ const S = {
   creditNum: { color: C.text, fontWeight: 700 },
   previewTag: { marginLeft: 6, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: C.faint, border: `1px solid ${C.line2}`, borderRadius: 4, padding: "1px 4px" },
   backLink: { fontSize: 12, color: C.dim, textDecoration: "none" },
+  navBtn: { fontSize: 12, fontWeight: 600, color: C.text, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer" },
 
   tabs: { display: "flex", gap: 4, padding: "10px 20px 0", borderBottom: `1px solid ${C.line}` },
   tab: { padding: "8px 16px", fontSize: 13, fontWeight: 600, color: C.dim, background: "transparent", border: "none", borderBottom: "2px solid transparent", cursor: "pointer" },
@@ -741,6 +820,13 @@ const S = {
   libItemText: { fontSize: 11, color: C.dim, lineHeight: 1.4 },
   modalFoot: { padding: 14, borderTop: `1px solid ${C.line}` },
   saveBtn: { width: "100%", padding: "10px", fontSize: 13, fontWeight: 600, color: C.text, background: C.panel2, border: `1px solid ${C.line2}`, borderRadius: 9, cursor: "pointer" },
+
+  historyWrap: { flex: 1, padding: 20, overflowY: "auto" },
+  historyHead: { fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 },
+  historyCount: { fontSize: 12, fontWeight: 600, color: C.dim, border: `1px solid ${C.line}`, borderRadius: 999, padding: "2px 9px" },
+  kindBadge: { position: "absolute", top: 8, left: 8, fontSize: 10, fontWeight: 600, color: "#fff", background: "rgba(0,0,0,0.65)", borderRadius: 6, padding: "2px 7px" },
+  tileActions: { position: "absolute", top: 8, right: 8, display: "flex", gap: 5, opacity: 0.95 },
+  tileAct: { fontSize: 11, fontWeight: 600, padding: "4px 8px", borderRadius: 7, border: "none", background: "rgba(0,0,0,0.7)", color: "#fff", cursor: "pointer" },
 
   videoStage: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 220 },
   videoBusy: { display: "flex", flexDirection: "column", alignItems: "center", gap: 14, color: C.dim, fontSize: 13 },
