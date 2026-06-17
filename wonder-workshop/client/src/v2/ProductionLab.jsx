@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { generateImage, upscaleImage } from "./imageGen.js";
 import { hasSupabase } from "./supabaseClient.js";
 import { saveProductionAsset, listProductionAssets, deleteProductionAsset, downloadUrl } from "./productionAssets.js";
+import { refreshProjects, loadProjectAsync } from "./cloudPersistence.js";
 
 /* ------------------------------------------------------------------ config */
 
@@ -66,6 +67,27 @@ const VIDEO_DIRECTOR_SYSTEM =
   "consistent with the source image. Output ONLY the final prompt as plain text — no preamble, " +
   "no quotes, no explanation. Under 50 words.";
 
+// Run a Veo image-to-video job to completion; returns the mp4 Blob. Shared by the
+// Board cards (the Video tool has its own inline copy with live status UI).
+async function runVeoToBlob({ image, prompt, aspectRatio = "16:9", resolution = "720p", durationSeconds = "6" }) {
+  const startRes = await fetch("/api/video-veo", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, image, aspectRatio, resolution, durationSeconds }) });
+  if (!startRes.ok) throw new Error((await startRes.json().catch(() => ({}))).error || "Couldn't start the video");
+  const { operation } = await startRes.json();
+  const started = Date.now();
+  for (;;) {
+    if (Date.now() - started > 6 * 60 * 1000) throw new Error("Video timed out (6 min)");
+    await new Promise((r) => setTimeout(r, 6000));
+    const poll = await fetch(`/api/video-veo?op=${encodeURIComponent(operation)}`);
+    if (!poll.ok) throw new Error((await poll.json().catch(() => ({}))).error || "Polling failed");
+    if ((await poll.json()).done) {
+      const f = await fetch(`/api/video-veo?op=${encodeURIComponent(operation)}&file=1`);
+      if (!f.ok) throw new Error("Video finished but the download failed");
+      return f.blob();
+    }
+  }
+}
+
 async function directPrompt(system, userPrompt) {
   const res = await fetch("/api/chat", {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -103,6 +125,7 @@ const PROMPT_PRESETS = [
 ];
 const SAVED_KEY = "ww_prod_saved_prompts";
 const THEME_KEY = "ww_prod_theme";
+const BOARD_KEY = "ww_prod_board";
 const CREDIT_COST = { image: 30, enhance: 100, video: 100 };
 
 /* ------------------------------------------------------------------ themes */
@@ -164,7 +187,9 @@ export default function ProductionLab() {
   const [seed, setSeed] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem(THEME_KEY) || "dark"; } catch { return "dark"; } });
+  const [board, setBoard] = useState(() => { try { return JSON.parse(localStorage.getItem(BOARD_KEY) || "[]"); } catch { return []; } });
   const isMobile = useIsMobile();
+  useEffect(() => { try { localStorage.setItem(BOARD_KEY, JSON.stringify(board)); } catch { /* quota */ } }, [board]);
 
   useEffect(() => {
     if (!hasSupabase) return;
@@ -193,11 +218,12 @@ export default function ProductionLab() {
       <Header tool={tool} setTool={setTool} historyCount={assets.length} theme={theme} onToggleTheme={toggleTheme} isMobile={isMobile} />
       <div style={S.body}>
         <div style={{ ...S.column, ...(isMobile ? S.columnM : {}) }}>
-          {tool !== "history" && tool !== "uploads" && <ToolTabs tool={tool} setTool={setTool} isMobile={isMobile} />}
+          {!["history", "uploads", "board"].includes(tool) && <ToolTabs tool={tool} setTool={setTool} isMobile={isMobile} />}
           {tool === "image" && <ImageTool {...shared} />}
           {tool === "enhance" && <EnhanceTool {...shared} />}
           {tool === "video" && <VideoTool {...shared} />}
           {tool === "reformat" && <ComingSoon title="Reformat Image" blurb="Outpaint an existing asset to a new aspect ratio for any channel. On the roadmap — not built yet." />}
+          {tool === "board" && <BoardView board={board} setBoard={setBoard} saveAsset={saveAsset} cloud={hasSupabase} isMobile={isMobile} />}
           {tool === "history" && <GalleryPage title="My Generations" emptyLabel="No content found" emptySub="Create your first piece of content to get started" createLabel="Create New" onCreate={() => setTool("image")} items={assets} loading={loadingHistory} onEdit={editAsset} onDelete={removeAsset} cloud={hasSupabase} isMobile={isMobile} />}
           {tool === "uploads" && <GalleryPage title="My Uploads" emptyLabel="No uploads found" emptySub="Your uploaded source images appear here" createLabel="New Upload" onCreate={() => setTool("image")} items={uploads.map((u) => ({ id: u.id, kind: "image", url: u.image }))} loading={false} cloud isMobile={isMobile} />}
         </div>
@@ -230,6 +256,7 @@ function Header({ tool, setTool, historyCount, theme, onToggleTheme, isMobile })
             <div style={{ ...S.menu, right: 0, left: "auto" }} onMouseLeave={() => setMenuOpen(false)}>
               {NAV_TOOLS.map((t) => <button key={t.id} style={S.menuItem} onClick={() => { setTool(t.id); setMenuOpen(false); }}>{t.label}</button>)}
               <div style={S.menuSep} />
+              <button style={S.menuItem} onClick={() => { setTool("board"); setMenuOpen(false); }}>Boards</button>
               <button style={S.menuItem} onClick={() => { setTool("history"); setMenuOpen(false); }}>My Generations{historyCount ? ` (${historyCount})` : ""}</button>
               <button style={S.menuItem} onClick={() => { setTool("uploads"); setMenuOpen(false); }}>My Uploads</button>
               <div style={S.menuSep} />
@@ -256,6 +283,7 @@ function Header({ tool, setTool, historyCount, theme, onToggleTheme, isMobile })
             </div>
           )}
         </div>
+        <button style={{ ...S.navItem, ...(tool === "board" ? S.navOn : {}) }} onClick={() => setTool("board")}>Boards</button>
         <button style={{ ...S.navItem, ...(tool === "history" ? S.navOn : {}) }} onClick={() => setTool("history")}>My Generations{historyCount ? ` (${historyCount})` : ""}</button>
         <button style={{ ...S.navItem, ...(tool === "uploads" ? S.navOn : {}) }} onClick={() => setTool("uploads")}>My Uploads</button>
       </div>
@@ -717,6 +745,174 @@ function GalleryPage({ title, emptyLabel, emptySub, createLabel, onCreate, items
   );
 }
 
+/* ------------------------------------------------------------------ boards (import storyboard → produce → arrange → export) */
+
+function BoardView({ board, setBoard, saveAsset, cloud, isMobile }) {
+  const [view, setView] = useState("storyboard"); // storyboard | grid
+  const [importing, setImporting] = useState(false);
+
+  const update = (id, patch) => setBoard((b) => b.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const remove = (id) => setBoard((b) => b.filter((s) => s.id !== id));
+  const move = (id, dir) => setBoard((b) => {
+    const i = b.findIndex((s) => s.id === id); const j = i + dir;
+    if (i < 0 || j < 0 || j >= b.length) return b;
+    const next = b.slice(); [next[i], next[j]] = [next[j], next[i]]; return next;
+  });
+  const addShots = (shots) => setBoard((b) => [...b, ...shots]);
+
+  function downloadAll() {
+    board.forEach((s, i) => { const u = s.videoUrl || s.imageUrl || s.refImage; if (u) downloadUrl(u, `shot-${i + 1}.${s.videoUrl ? "mp4" : "png"}`); });
+  }
+  function printBoard() {
+    const w = window.open("", "_blank"); if (!w) return;
+    const cells = board.map((s, i) => { const u = s.imageUrl || s.refImage; return `<div class="c"><div class="n">${i + 1}</div>${u ? `<img src="${u}"/>` : ""}<p>${(s.caption || s.prompt || "").replace(/</g, "&lt;")}</p></div>`; }).join("");
+    w.document.write(`<html><head><title>Board</title><style>body{font-family:sans-serif;margin:24px}.c{display:inline-block;width:31%;vertical-align:top;margin:1%}.c img{width:100%;border-radius:8px}.n{font-weight:700}p{font-size:12px;color:#444}</style></head><body><h2>Storyboard</h2>${cells}</body></html>`);
+    w.document.close(); setTimeout(() => w.print(), 300);
+  }
+
+  if (!cloud) return <div style={S.coming}><div style={S.comingTitle}>Boards need the cloud</div><div style={S.comingBlurb}>Importing a Workshop storyboard and saving produced assets needs Supabase. Use wonderworkshop.cm.studio.</div></div>;
+
+  return (
+    <div>
+      <div style={{ ...S.galleryHead, ...(isMobile ? S.galleryHeadM : {}) }}>
+        <div style={S.galleryTitle}>Storyboard</div>
+        <div style={S.galleryActions}>
+          <div style={S.segWrap}>
+            <button style={{ ...S.seg, ...(view === "storyboard" ? S.segOn : {}) }} onClick={() => setView("storyboard")}>Storyboard</button>
+            <button style={{ ...S.seg, ...(view === "grid" ? S.segOn : {}) }} onClick={() => setView("grid")}>Grid</button>
+          </div>
+          <button style={S.ghostBtn} onClick={printBoard} disabled={!board.length}>Print / PDF</button>
+          <button style={S.ghostBtn} onClick={downloadAll} disabled={!board.length}>Download all</button>
+          <button style={S.darkBtn} onClick={() => setImporting(true)}>＋ Import from Workshop</button>
+        </div>
+      </div>
+
+      {board.length === 0 ? (
+        <div style={S.emptyState}>
+          <div style={S.emptyIcon}>▦</div>
+          <div style={S.emptyTitle}>No board yet</div>
+          <div style={S.emptySubT}>Import a storyboard from Workshop, then produce a polished image or video for each shot.</div>
+          <button style={S.darkBtn} onClick={() => setImporting(true)}>＋ Import from Workshop</button>
+        </div>
+      ) : (
+        <div style={view === "grid" ? S.grid : (isMobile ? S.boardListM : S.boardList)}>
+          {board.map((s, i) => (
+            <BoardCard key={s.id} shot={s} index={i} grid={view === "grid"} canMove={board.length > 1}
+              onUpdate={update} onRemove={remove} onMove={move} saveAsset={saveAsset} />
+          ))}
+        </div>
+      )}
+
+      {importing && <ImportModal onClose={() => setImporting(false)} onImport={(shots) => { addShots(shots); setImporting(false); }} />}
+    </div>
+  );
+}
+
+function BoardCard({ shot, index, grid, canMove, onUpdate, onRemove, onMove, saveAsset }) {
+  const busy = shot.status === "img" || shot.status === "vid";
+  const media = shot.videoUrl ? "video" : (shot.imageUrl || shot.refImage) ? "image" : "none";
+  const src = shot.videoUrl || shot.imageUrl || shot.refImage;
+
+  async function genImage() {
+    if (busy) return;
+    onUpdate(shot.id, { status: "img", error: null });
+    try {
+      let base = shot.prompt || "";
+      try { base = await directPrompt(imageDirectorSystem(!!shot.refImage), shot.prompt); } catch { /* keep raw */ }
+      if (shot.refImage) base += PRESERVE;
+      const img = await generateImage(base, { ratio: "16:9", referenceImages: shot.refImage ? [shot.refImage] : [] });
+      const row = await saveAsset({ kind: "image", dataUrl: img, prompt: shot.prompt, tool: "board", settings: { ratio: "16:9" } });
+      onUpdate(shot.id, { imageUrl: row?.url || img, status: "idle" });
+    } catch (e) { onUpdate(shot.id, { status: "error", error: e?.message || "Image failed" }); }
+  }
+  async function animate() {
+    if (busy) return;
+    const image = shot.imageUrl || shot.refImage;
+    if (!image) { onUpdate(shot.id, { status: "error", error: "Generate an image first" }); return; }
+    onUpdate(shot.id, { status: "vid", error: null });
+    try {
+      let motion = shot.prompt || "";
+      try { motion = await directPrompt(VIDEO_DIRECTOR_SYSTEM, shot.prompt); } catch { /* keep raw */ }
+      const blob = await runVeoToBlob({ image, prompt: motion, aspectRatio: "16:9", resolution: "720p", durationSeconds: "6" });
+      const row = await saveAsset({ kind: "video", blob, mime: "video/mp4", prompt: shot.prompt, tool: "board", settings: {} });
+      const url = row?.url || URL.createObjectURL(blob);
+      onUpdate(shot.id, { videoUrl: url, status: "idle" });
+    } catch (e) { onUpdate(shot.id, { status: "error", error: e?.message || "Video failed" }); }
+  }
+
+  return (
+    <div style={grid ? S.tile : S.boardCard}>
+      <div style={grid ? S.tileMediaWrap : S.boardMediaWrap}>
+        {media === "video" && <video src={src} style={S.tileImg} controls loop muted playsInline />}
+        {media === "image" && <img src={src} alt="" style={S.tileImg} />}
+        {media === "none" && <div style={S.shimmer}>no media yet</div>}
+        {busy && <div style={S.cardOverlay}><div style={S.spinner} /><div style={{ marginTop: 8, fontSize: 12 }}>{shot.status === "img" ? "Generating image…" : "Animating… ~1–2 min"}</div></div>}
+        <span style={S.shotNum}>{index + 1}</span>
+        {shot.videoUrl && <span style={S.kindBadge}>▶ video</span>}
+      </div>
+      {!grid && (
+        <div style={S.boardBody}>
+          <div style={S.boardCaption}>{shot.caption || "Untitled shot"}</div>
+          {shot.prompt && <div style={S.boardPrompt}>{shot.prompt}</div>}
+          {shot.error && <div style={{ ...S.tileErr, textAlign: "left", padding: "4px 0" }}>{shot.error}</div>}
+          <div style={S.boardActions}>
+            <button style={S.smallBtn} disabled={busy} onClick={genImage}>{shot.imageUrl ? "Regenerate" : "Generate image"}</button>
+            <button style={S.smallBtn} disabled={busy} onClick={animate}>Animate → video</button>
+            {src && <button style={S.smallBtn} onClick={() => downloadUrl(src, `shot-${index + 1}.${shot.videoUrl ? "mp4" : "png"}`)}>Save</button>}
+            {canMove && <button style={S.smallBtn} disabled={busy} onClick={() => onMove(shot.id, -1)} title="Move up">↑</button>}
+            {canMove && <button style={S.smallBtn} disabled={busy} onClick={() => onMove(shot.id, 1)} title="Move down">↓</button>}
+            <button style={S.smallBtn} disabled={busy} onClick={() => onRemove(shot.id)}>✕</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImportModal({ onClose, onImport }) {
+  const [projects, setProjects] = useState(null);
+  const [err, setErr] = useState(null);
+  const [loadingId, setLoadingId] = useState(null);
+  useEffect(() => { refreshProjects().then(setProjects).catch((e) => setErr(e?.message || "Couldn't list projects")); }, []);
+
+  async function pick(p) {
+    setLoadingId(p.id);
+    try {
+      const data = await loadProjectAsync(p.id);
+      const frames = data?.frames || [];
+      if (!frames.length) { setErr("That project has no storyboard frames."); setLoadingId(null); return; }
+      const shots = frames.map((f, i) => ({
+        id: `${Date.now()}-${i}`,
+        caption: f.shotType || (f.number != null ? `Shot ${f.number}` : `Shot ${i + 1}`),
+        prompt: f.brief || "",
+        refImage: f.uploadedImage || null,
+        imageUrl: f.uploadedImage || null,
+        videoUrl: null, status: "idle", error: null,
+      }));
+      onImport(shots);
+    } catch (e) { setErr(e?.message || "Couldn't load that project"); setLoadingId(null); }
+  }
+
+  return (
+    <div style={S.modalBack} onClick={onClose}>
+      <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={S.modalHead}><span style={S.modalTitle}>Import a storyboard</span><button style={S.modalClose} onClick={onClose}>×</button></div>
+        <div style={S.modalBody}>
+          {err && <div style={{ ...S.tileErr, textAlign: "left", marginBottom: 10 }}>{err}</div>}
+          {projects === null && <div style={S.emptySmall}>Loading your Workshop projects…</div>}
+          {projects && projects.length === 0 && <div style={S.emptySmall}>No Workshop projects found.</div>}
+          {projects && projects.map((p) => (
+            <button key={p.id} style={S.libItem} onClick={() => pick(p)} disabled={loadingId === p.id}>
+              <strong style={S.libItemLabel}>{p.name}</strong>
+              <span style={S.libItemText}>{loadingId === p.id ? "Loading frames…" : "Import its storyboard frames as shots"}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ComingSoon({ title, blurb }) {
   return <div style={S.coming}><div style={S.comingTitle}>{title}</div><div style={S.comingBadge}>Coming soon</div><div style={S.comingBlurb}>{blurb}</div></div>;
 }
@@ -849,6 +1045,23 @@ const S = {
   aiText: { fontSize: 13, color: C.dim, lineHeight: 1.55 },
   howH: { fontSize: 15, fontWeight: 700, marginTop: 16, marginBottom: 6 },
   howP: { fontSize: 13, color: C.dim, lineHeight: 1.55 },
+
+  // boards
+  segWrap: { display: "inline-flex", border: `1px solid ${C.line}`, borderRadius: 9, overflow: "hidden" },
+  seg: { padding: "7px 13px", fontSize: 12, fontWeight: 600, color: C.dim, background: "transparent", border: "none", cursor: "pointer" },
+  segOn: { background: C.panel2, color: C.text },
+  boardList: { display: "flex", flexDirection: "column", gap: 14 },
+  boardListM: { display: "flex", flexDirection: "column", gap: 14 },
+  boardCard: { display: "flex", gap: 16, flexWrap: "wrap", background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 14 },
+  boardMediaWrap: { position: "relative", width: 300, maxWidth: "100%", aspectRatio: "16/9", flexShrink: 0, borderRadius: 10, overflow: "hidden", background: C.panel, display: "flex", alignItems: "center", justifyContent: "center" },
+  tileMediaWrap: { position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" },
+  cardOverlay: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" },
+  shotNum: { position: "absolute", top: 8, left: 8, fontSize: 12, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.6)", borderRadius: 6, padding: "2px 8px" },
+  boardBody: { flex: 1, minWidth: 240, display: "flex", flexDirection: "column", gap: 6 },
+  boardCaption: { fontSize: 14, fontWeight: 700 },
+  boardPrompt: { fontSize: 12, color: C.dim, lineHeight: 1.45 },
+  boardActions: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 },
+  smallBtn: { fontSize: 12, fontWeight: 600, padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.line}`, background: C.panel2, color: C.text, cursor: "pointer" },
 
   coming: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 80 },
   comingTitle: { fontSize: 22, fontWeight: 700 },
