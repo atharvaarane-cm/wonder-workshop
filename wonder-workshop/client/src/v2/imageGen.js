@@ -57,7 +57,7 @@ export async function generateImage(prompt, opts = {}) {
       ? {
           prompt,
           ratio,
-          ...(referenceImages.length ? { referenceImages: referenceImages.slice(0, 4) } : {}),
+          ...(referenceImages.length ? { referenceImages: referenceImages.slice(0, 8) } : {}),
         }
       : { prompt, ...dims };
 

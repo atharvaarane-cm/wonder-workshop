@@ -185,6 +185,10 @@ export default function ProductionLab() {
   const [assets, setAssets] = useState([]);
   const [uploads, setUploads] = useState([]);
   const [seed, setSeed] = useState(null);
+  // Lifted out of ImageTool so generated results survive tool/nav switches —
+  // otherwise switching to My Generations and back unmounts the tool and the
+  // results panel comes back empty (looks like generation "didn't work").
+  const [imageResults, setImageResults] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem(THEME_KEY) || "dark"; } catch { return "dark"; } });
   const [board, setBoard] = useState(() => { try { return JSON.parse(localStorage.getItem(BOARD_KEY) || "[]"); } catch { return []; } });
@@ -205,7 +209,7 @@ export default function ProductionLab() {
     catch (e) { console.error("[production] save asset", e); return null; }
   }
   async function removeAsset(id) { setAssets((a) => a.filter((x) => x.id !== id)); try { await deleteProductionAsset(id); } catch (e) { console.error(e); } }
-  function editAsset(asset) { setSeed({ refs: [asset.url], prompt: asset.prompt || "", settings: asset.settings || {} }); setToolRaw(asset.tool === "video" ? "video" : "image"); }
+  function editAsset(asset) { setImageResults([]); setSeed({ refs: [asset.url], prompt: asset.prompt || "", settings: asset.settings || {} }); setToolRaw(asset.tool === "video" ? "video" : "image"); }
 
   const imageGenerations = assets.filter((a) => a.kind === "image").map((a) => ({ id: a.id, image: a.url }));
   const addUpload = (image) => setUploads((u) => [{ id: nid(), image }, ...u]);
@@ -219,7 +223,7 @@ export default function ProductionLab() {
       <div style={S.body}>
         <div style={{ ...S.column, ...(isMobile ? S.columnM : {}) }}>
           {!["history", "uploads", "board"].includes(tool) && <ToolTabs tool={tool} setTool={setTool} isMobile={isMobile} />}
-          {tool === "image" && <ImageTool {...shared} />}
+          {tool === "image" && <ImageTool {...shared} results={imageResults} setResults={setImageResults} />}
           {tool === "enhance" && <EnhanceTool {...shared} />}
           {tool === "video" && <VideoTool {...shared} />}
           {tool === "reformat" && <ComingSoon title="Reformat Image" blurb="Outpaint an existing asset to a new aspect ratio for any channel. On the roadmap — not built yet." />}
@@ -398,7 +402,7 @@ function SourcePills({ tab, setTab }) {
 
 /* ------------------------------------------------------------------ image tool */
 
-function ImageTool({ generations, uploads, addUpload, saveAsset, seed, isMobile }) {
+function ImageTool({ generations, uploads, addUpload, saveAsset, seed, isMobile, results, setResults }) {
   const [tab, setTab] = useState("add");
   const [refs, setRefs] = useState(() => seed?.refs || []);
   const [prompt, setPrompt] = useState(() => seed?.prompt || "");
@@ -406,7 +410,6 @@ function ImageTool({ generations, uploads, addUpload, saveAsset, seed, isMobile 
   const [resolution, setResolution] = useState(() => seed?.settings?.resolution || "2K");
   const [variants, setVariants] = useState(4);
   const [director, setDirector] = useState(true);
-  const [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false);
   const [libOpen, setLibOpen] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
@@ -968,9 +971,9 @@ const S = {
   dropHint: { fontSize: 14, color: C.dim },
   dropSub: { fontSize: 12, color: C.faint, marginTop: 6 },
   cardTextarea: { width: "100%", minHeight: 430, resize: "none", padding: 16, fontSize: 16, color: C.text, background: C.panel, border: "none", borderRadius: 10, fontFamily: "ui-monospace, monospace", boxSizing: "border-box" },
-  refStrip: { display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" },
-  refChip: { position: "relative", width: 76, height: 76, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.line2}` },
-  refImg: { width: "100%", height: "100%", objectFit: "cover" },
+  refStrip: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, width: "100%", alignContent: "flex-start" },
+  refChip: { position: "relative", aspectRatio: "1/1", borderRadius: 10, overflow: "hidden", border: `1px solid ${C.line2}`, background: C.panel },
+  refImg: { width: "100%", height: "100%", objectFit: "contain" },
   refX: { position: "absolute", top: 0, right: 0, width: 20, height: 20, lineHeight: "18px", fontSize: 14, border: "none", background: "rgba(0,0,0,0.7)", color: "#fff", cursor: "pointer" },
   pickWrap: { minHeight: 430, border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, overflowY: "auto" },
   pickGrid: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 },

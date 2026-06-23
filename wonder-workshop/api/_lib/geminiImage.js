@@ -60,7 +60,7 @@ export async function generateGeminiImage({ prompt, ratio = '1:1', referenceImag
   const aspectRatio = RATIO_MAP[ratio] || '1:1';
 
   const parts = [{ text: prompt }];
-  for (const refUrl of (referenceImages || []).slice(0, 4)) {
+  for (const refUrl of (referenceImages || []).slice(0, 8)) {
     const inline = await refToInlineData(refUrl);
     if (inline) parts.push({ inlineData: inline });
   }
