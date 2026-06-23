@@ -10,7 +10,9 @@
 //   - full: detail sheet for the video-gen pipeline. Adds full-body
 //     rotations and full descriptions.
 
-import PptxGenJS from 'pptxgenjs'
+// pptxgenjs is large and only needed when the user actually exports a deck,
+// so it's loaded on demand (dynamic import in exportPptx) to keep it out of
+// the initial bundle.
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from './characterPrompts.js'
 import { expandMentions } from './mentions.js'
 
@@ -89,6 +91,7 @@ export async function exportPptx(brief, images, opts = {}) {
   const products = brief?.productElements || []
   const shots = brief?.shotList || []
 
+  const { default: PptxGenJS } = await import('pptxgenjs')
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_WIDE'
   pptx.title = pi.projectName || brief?.title || 'Wonder Workshop Brief'

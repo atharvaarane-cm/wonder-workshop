@@ -1,3 +1,5 @@
+import { gate } from './_lib/auth.js'
+
 const KNOWN_BRANDS = {
   starbucks: {
     brand: 'Starbucks',
@@ -33,10 +35,72 @@ const KNOWN_BRANDS = {
     ],
     rules: 'Use generous whitespace, crisp product focus, neutral surfaces, and minimal copy.',
   },
+  pepsi: {
+    brand: 'Pepsi',
+    domain: 'pepsi.com',
+    sourceUrl: 'https://www.pepsi.com/',
+    colors: [
+      { hex: '#004B93', name: 'Pepsi Blue' },
+      { hex: '#E32934', name: 'Pepsi Red' },
+      { hex: '#FFFFFF', name: 'White' },
+    ],
+    rules: 'Use the Pepsi globe (blue/red/white) prominently, vibrant photography, energetic compositions, bold cropped typography. Maintain the classic Pepsi visual identity emphasizing refreshment, social moments, and contemporary culture.',
+  },
+  cocacola: {
+    brand: 'Coca-Cola',
+    domain: 'coca-cola.com',
+    sourceUrl: 'https://www.coca-cola.com/',
+    colors: [
+      { hex: '#F40009', name: 'Coca-Cola Red' },
+      { hex: '#FFFFFF', name: 'White' },
+      { hex: '#000000', name: 'Black' },
+    ],
+    rules: 'Use the classic Coca-Cola red dominantly, Spencerian script logo, joyful social compositions, warm cinematic lighting.',
+  },
+  adidas: {
+    brand: 'Adidas',
+    domain: 'adidas.com',
+    sourceUrl: 'https://www.adidas.com/',
+    colors: [
+      { hex: '#000000', name: 'Adidas Black' },
+      { hex: '#FFFFFF', name: 'White' },
+    ],
+    rules: 'High-contrast black-and-white athletic compositions with bold typography and graphic three-stripe motifs.',
+  },
+  spotify: {
+    brand: 'Spotify',
+    domain: 'spotify.com',
+    sourceUrl: 'https://www.spotify.com/',
+    colors: [
+      { hex: '#1DB954', name: 'Spotify Green' },
+      { hex: '#000000', name: 'Black' },
+      { hex: '#FFFFFF', name: 'White' },
+    ],
+    rules: 'Use Spotify green on black or white backgrounds, bold cropped portraiture, music-led energy, and minimal type.',
+  },
+};
+
+// Common nicknames / variants → canonical KNOWN_BRANDS key. Lets "Coke" resolve
+// to Coca-Cola instead of web-searching to the corporate site (which serves an
+// off-brand logo + muted colors).
+const BRAND_ALIASES = {
+  coke: 'cocacola',
+  cocacolacompany: 'cocacola',
+  thecocacolacompany: 'cocacola',
+  pepsico: 'pepsi',
 };
 
 function normalizeBrandName(value = '') {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Resolve to a KNOWN_BRANDS key space-insensitively ("Coca-Cola" → "cocacola")
+// and via aliases ("Coke" → "cocacola"). Returns null if not a known brand.
+function resolveKnownKey(brand) {
+  const despaced = normalizeBrandName(brand).replace(/\s+/g, '');
+  if (!despaced) return null;
+  const canonical = BRAND_ALIASES[despaced] || despaced;
+  return KNOWN_BRANDS[canonical] ? canonical : null;
 }
 
 function logoUrlForDomain(domain) {
@@ -116,19 +180,33 @@ async function extractSiteColors(sourceUrl) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!(await gate(req, res))) return; // auth gate (no-op until cloud env is set)
 
   const { brand = '' } = req.body || {};
   const key = normalizeBrandName(brand);
   if (!key) return res.status(400).json({ error: 'Brand is required' });
 
-  const known = KNOWN_BRANDS[key];
+  const canonicalKey = resolveKnownKey(brand);
+  const known = canonicalKey ? KNOWN_BRANDS[canonicalKey] : null;
   if (known) {
     res.json({ ...known, logoUrl: logoUrlForDomain(known.domain), lookup: 'known-brand' });
     return;
   }
 
   try {
-    const resolved = await findBrandDomain(brand);
+    let resolved = await findBrandDomain(brand);
+    let lookup = resolved?.domain ? 'web-search' : null;
+    // Heuristic fallback — if DuckDuckGo didn't return a domain,
+    // guess `{key}.com`. Clearbit's logo API serves a real logo for
+    // most major brands at that URL; a 404 is harmless (the <img>
+    // just fails to load and the panel shows the upload placeholder).
+    if (!resolved?.domain) {
+      const guessKey = key.replace(/\s+/g, '');
+      if (guessKey) {
+        resolved = { domain: `${guessKey}.com`, sourceUrl: `https://${guessKey}.com/` };
+        lookup = 'guess';
+      }
+    }
     const colors = await extractSiteColors(resolved?.sourceUrl);
     res.json({
       brand,
@@ -139,7 +217,7 @@ export default async function handler(req, res) {
       rules: resolved?.domain
         ? `Use colors and logo references from ${resolved.domain}. Keep the generated layout aligned to the brand's existing visual system.`
         : '',
-      lookup: resolved?.domain ? 'web-search' : 'none',
+      lookup: lookup || 'none',
     });
   } catch (err) {
     res.status(503).json({ error: err.message });

@@ -1,38 +1,235 @@
 import express from 'express';
-import { request as httpRequest } from 'http';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { gate, AUTH_ENABLED } from './api/_lib/auth.js';
 
 const app = express();
 const PORT = 4200;
 
 app.use(express.json({ limit: '20mb' }));
 
-function proxyTo(hostname, port, path, body, res) {
-  const data = JSON.stringify(body);
-  const req = httpRequest(
-    { hostname, port, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
-    (upstream) => {
-      res.status(upstream.statusCode);
-      res.setHeader('Content-Type', upstream.headers['content-type'] || 'application/json');
-      upstream.pipe(res);
-    }
-  );
-  req.on('error', () => {
-    if (!res.headersSent) res.status(503).json({ error: 'Service unavailable' });
-  });
-  req.write(data);
-  req.end();
-}
-
-// Ollama chat proxy
-app.post('/api/chat', (req, res) => {
-  proxyTo('127.0.0.1', 11434, '/api/chat', req.body, res);
+// Auth gate for every /api POST (mirrors the Vercel routes). No-op unless the
+// Supabase env is set on the server (SUPABASE_URL/ANON in the root .env.local),
+// so plain local dev is unchanged; set those to exercise the cloud auth path.
+app.use('/api', async (req, res, next) => {
+  if (req.method !== 'POST' || req.path === '/ping') return next();
+  if (!(await gate(req, res))) return;
+  next();
 });
 
-// Image generation via Pollinations.ai (free, no API key).
-// Return the URL directly — Pollinations takes 60–90s, which exceeds
-// Vercel's serverless function timeout in production. Letting the browser
-// load the URL itself sidesteps the timeout entirely, and the client uses
-// data.image as <img src> regardless of whether it's an https: or data: URL.
+// ---------------------------------------------------------------
+// Gemini setup. Mirrors api/chat.js + api/image-gemini.js so local
+// dev behavior matches production. Keys come from .env.local at the
+// project root (loaded via node --env-file-if-exists in bun run dev).
+// ---------------------------------------------------------------
+
+const TEXT_GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_IMAGE_API_KEY;
+const IMAGE_GEMINI_KEY = process.env.GEMINI_IMAGE_API_KEY || process.env.GEMINI_API_KEY;
+const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
+const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3-pro-image-preview';
+
+function ensureGeminiKey(res, key = TEXT_GEMINI_KEY) {
+  if (key) return true;
+  res.status(500).json({
+    error: 'Gemini API key not configured',
+    hint: 'Add GEMINI_API_KEY (and optionally GEMINI_IMAGE_API_KEY) to .env.local at the repo root, then restart bun run dev.',
+  });
+  return false;
+}
+
+const genAI = TEXT_GEMINI_KEY ? new GoogleGenerativeAI(TEXT_GEMINI_KEY) : null;
+
+// ---------------------------------------------------------------
+// /api/chat — Gemini text generation (mirrors api/chat.js).
+// Accepts the same { messages, tools?, stream } shape the client
+// already sends, returns { message: { content } } so existing
+// frontend code keeps working unchanged.
+// ---------------------------------------------------------------
+
+app.post('/api/chat', async (req, res) => {
+  if (!ensureGeminiKey(res, TEXT_GEMINI_KEY)) return;
+
+  const { messages = [], tools } = req.body || {};
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages array required' });
+  }
+
+  // System messages → instructionPart; convert assistant/user to
+  // Gemini's role names. Gemini requires the first non-system message
+  // be role: 'user'.
+  const systemMessages = messages.filter(m => m.role === 'system').map(m => m.content).filter(Boolean);
+  const convo = messages.filter(m => m.role !== 'system');
+  if (convo.length === 0) {
+    return res.status(400).json({ error: 'At least one user/assistant message required' });
+  }
+
+  // Gemini requires the history to START with a 'user' role — drop any leading
+  // assistant messages (the chat seeds an opening agent line). Parity with
+  // api/chat.js; without this, local chat 500s where prod works (Court #5).
+  let rawHistory = convo.slice(0, -1);
+  while (rawHistory.length && rawHistory[0].role === 'assistant') {
+    rawHistory = rawHistory.slice(1);
+  }
+  const history = rawHistory.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+  const last = convo[convo.length - 1];
+
+  const modelConfig = { model: TEXT_MODEL };
+  if (systemMessages.length) {
+    modelConfig.systemInstruction = systemMessages.join('\n\n');
+  }
+  if (Array.isArray(tools) && tools.length) {
+    modelConfig.tools = [{ functionDeclarations: tools }];
+  }
+
+  try {
+    const model = genAI.getGenerativeModel(modelConfig);
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessage(last.content);
+    const response = result.response;
+    const text = response.text();
+
+    // Tool calls — surface in the same shape api/chat.js returns so
+    // the client's applyChatToolCall handler works identically.
+    const candidates = response.candidates || [];
+    const actions = [];
+    for (const c of candidates) {
+      for (const part of c?.content?.parts || []) {
+        if (part.functionCall) {
+          actions.push({
+            name: part.functionCall.name,
+            arguments: part.functionCall.args || {},
+          });
+        }
+      }
+    }
+
+    res.json({
+      message: { content: text, role: 'assistant' },
+      functionCalls: actions.map(a => ({ name: a.name, args: a.arguments })),
+      actions,
+    });
+  } catch (err) {
+    console.error('[local /api/chat] Gemini error:', err?.message || err);
+    res.status(502).json({ error: 'Gemini call failed', detail: String(err?.message || err) });
+  }
+});
+
+// ---------------------------------------------------------------
+// /api/image-gemini — Nano Banana Pro image generation (mirrors
+// api/image-gemini.js exactly). Returns a data: URL the client uses
+// directly as <img src>.
+// ---------------------------------------------------------------
+
+const RATIO_MAP = {
+  '16:9': '16:9', '9:16': '9:16', '1:1': '1:1',
+  '4:5': '4:5', '5:4': '5:4', '4:3': '4:3', '3:4': '3:4',
+  '2:1': '16:9', '21:9': '16:9',
+};
+
+app.post('/api/image-gemini', async (req, res) => {
+  if (!ensureGeminiKey(res, IMAGE_GEMINI_KEY)) return;
+
+  const { prompt, ratio = '1:1', referenceImages = [] } = req.body || {};
+  if (!prompt || typeof prompt !== 'string') {
+    return res.status(400).json({ error: 'Prompt required' });
+  }
+
+  const aspectRatio = RATIO_MAP[ratio] || '1:1';
+  const parts = [{ text: prompt }];
+
+  for (const refUrl of referenceImages.slice(0, 4)) {
+    try {
+      let mimeType, base64;
+      if (refUrl.startsWith('data:')) {
+        const match = refUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) continue;
+        mimeType = match[1];
+        base64 = match[2];
+      } else {
+        const r = await fetch(refUrl);
+        if (!r.ok) continue;
+        mimeType = r.headers.get('content-type') || 'image/png';
+        const buf = Buffer.from(await r.arrayBuffer());
+        base64 = buf.toString('base64');
+      }
+      parts.push({ inlineData: { mimeType, data: base64 } });
+    } catch {
+      // Skip refs we can't load — better to generate without them
+      // than to fail the whole request.
+    }
+  }
+
+  const body = {
+    contents: [{ role: 'user', parts }],
+    generationConfig: {
+      responseModalities: ['IMAGE'],
+      imageConfig: { aspectRatio },
+    },
+  };
+
+  // Key via header, not query string (parity with api/image-gemini.js).
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent`;
+
+  let geminiRes;
+  try {
+    geminiRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': IMAGE_GEMINI_KEY },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return res.status(502).json({ error: 'Gemini fetch failed', detail: String(err?.message || err) });
+  }
+
+  const text = await geminiRes.text();
+  let data;
+  try { data = JSON.parse(text); } catch {
+    return res.status(502).json({ error: 'Gemini returned non-JSON', detail: text.slice(0, 400) });
+  }
+
+  if (!geminiRes.ok) {
+    return res.status(geminiRes.status).json({
+      error: data?.error?.message || 'Gemini error',
+      detail: data,
+    });
+  }
+
+  const candidates = data?.candidates || [];
+  let imagePart = null;
+  let safetyText = null;
+  for (const c of candidates) {
+    for (const p of c?.content?.parts || []) {
+      if (p.inlineData?.data && (p.inlineData.mimeType || '').startsWith('image/')) {
+        imagePart = p.inlineData;
+        break;
+      }
+      if (p.text) safetyText = p.text;
+    }
+    if (imagePart) break;
+  }
+
+  if (!imagePart) {
+    return res.status(502).json({
+      error: 'No image in Gemini response',
+      detail: safetyText || JSON.stringify(data).slice(0, 400),
+    });
+  }
+
+  const dataUrl = `data:${imagePart.mimeType};base64,${imagePart.data}`;
+  res.json({ image: dataUrl });
+});
+
+// ---------------------------------------------------------------
+// /api/image — Pollinations.ai (free fallback, no API key).
+// Returns the URL directly — Pollinations takes 60–90s, which
+// exceeds Vercel's serverless function timeout in production.
+// Letting the browser load the URL itself sidesteps the timeout,
+// and the client treats data.image as <img src> regardless of
+// whether it's https: or data:.
+// ---------------------------------------------------------------
+
 app.post('/api/image', (req, res) => {
   const { prompt, width = 896, height = 512 } = req.body || {};
   if (!prompt) { res.status(400).json({ error: 'Prompt required' }); return; }
@@ -40,6 +237,13 @@ app.post('/api/image', (req, res) => {
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true&enhance=false&seed=${Date.now()}`;
   res.json({ image: url });
 });
+
+// ---------------------------------------------------------------
+// /api/brand — brand-lookup mock with a small known-brands table
+// plus a DuckDuckGo + color-extraction fallback. Unchanged from
+// the original local dev server; the Vercel-side handler does the
+// same thing with different known-brand seeds.
+// ---------------------------------------------------------------
 
 const KNOWN_BRANDS = {
   starbucks: {
@@ -188,5 +392,9 @@ app.post('/api/brand', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`API server running at http://localhost:${PORT}`);
+  if (TEXT_GEMINI_KEY || IMAGE_GEMINI_KEY) {
+    console.log(`API server running at http://localhost:${PORT} (Gemini: ${TEXT_MODEL} + ${IMAGE_MODEL})`);
+  } else {
+    console.log(`API server running at http://localhost:${PORT} (no Gemini key — set GEMINI_API_KEY in .env.local)`);
+  }
 });

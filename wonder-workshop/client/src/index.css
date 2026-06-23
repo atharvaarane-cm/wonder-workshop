@@ -1,18 +1,68 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+}
+
+/* Text selection — a clear, high-contrast highlight that reads on both the
+   dark and light UI. Without it the browser default left selected text
+   invisible in dark surfaces like the Edit Brief textarea. */
+::selection { background: #2F6BFF; color: #fff; }
+::-moz-selection { background: #2F6BFF; color: #fff; }
+/* Form controls need the rule at element specificity too — a bare
+   (universal) ::selection is not reliably honored inside <textarea>/<input>
+   in some engines, which left the highlight invisible in the Edit Brief
+   modal even though the global rule was present. */
+textarea::selection, input::selection { background: #2F6BFF !important; color: #fff !important; }
+textarea::-moz-selection, input::-moz-selection { background: #2F6BFF !important; color: #fff !important; }
 
 :root {
   --bg:        #F0EFED;
-  --card:      #FFFFFF;
-  --sidebar:   #F7F6F4;
+  --card: oklch(1 0 0);
+  --sidebar: oklch(0.985 0 0);
   --dark:      #1A1A1A;
-  --border:    rgba(0,0,0,0.08);
+  --border: oklch(0.922 0 0);
   --border-md: rgba(0,0,0,0.14);
   --text:      #1A1A1A;
-  --muted:     rgba(0,0,0,0.42);
+  --muted: oklch(0.97 0 0);
   --faint:     rgba(0,0,0,0.22);
   --green:     #2D9A4E;
   --amber:     #D97706;
   --font:      'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --destructive-foreground: var(--color-red-700);
 }
 
 /* Dark theme — hex values sourced from the Wonder Workshop Figma mockup. */
@@ -26,12 +76,47 @@
   --text:      #E8E8E8;
   --muted:     #717171;       /* gray headline / label color — per mockup spec */
   --faint:     #4A4A4A;
+  --background: #0A0A0A;
+  --foreground: #E8E8E8;
+  --card-foreground: #E8E8E8;
+  --popover: #171717;
+  --popover-foreground: #E8E8E8;
+  --primary: #F4F4F5;
+  --primary-foreground: #18181B;
+  --secondary: #262626;
+  --secondary-foreground: #F5F5F5;
+  --muted-foreground: #A1A1AA;
+  --accent: #2A2A2A;
+  --accent-foreground: #F5F5F5;
+  --input: rgba(255,255,255,0.18);
+  --ring: rgba(255,255,255,0.28);
+  --sidebar-foreground: #E8E8E8;
+  --sidebar-primary: #F4F4F5;
+  --sidebar-primary-foreground: #18181B;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #F5F5F5;
+  --sidebar-border: rgba(255,255,255,0.12);
+  --sidebar-ring: rgba(255,255,255,0.28);
 }
 
-html { height: 100%; overflow: hidden; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100%; overflow: hidden; }
+html {
+  height: 100%;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 #root { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-button { font-family: var(--font); cursor: pointer; border: none; background: none; }
+button { font-family: var(--font); cursor: pointer; }
+button:not([data-slot]) { border: none; background: none; }
 textarea { font-family: var(--font); resize: none; }
 
 /* ── Discover layout ──────────────────────────────────────────── */
@@ -1256,6 +1341,24 @@ textarea { font-family: var(--font); resize: none; }
   line-height: 1.55;
 }
 .topbar-desc-textarea:focus { border-color: rgba(124,92,252,0.5); box-shadow: 0 0 0 2px rgba(124,92,252,0.12); }
+
+/* Browser autofill forces -webkit-text-fill-color to black, which turns
+   autofilled input text invisible on the dark theme (selecting a saved
+   "Pepsi summer" title made the text disappear). Force it back to the theme
+   text color in both modes. The autofill *background* is already handled by
+   the Input component (has-autofill bg + the long background-color transition),
+   so we only need to fix the text color here. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--text) !important;
+  caret-color: var(--text);
+}
 .topbar-desc-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
 .topbar-desc-cancel {
   font-size: 12px; padding: 0 12px; height: 30px; border-radius: 7px;
@@ -1540,6 +1643,12 @@ textarea { font-family: var(--font); resize: none; }
 @keyframes shimmer {
   0%   { background-position: -600px 0; }
   100% { background-position:  600px 0; }
+}
+/* Seamless, width-independent sweep for ShimmerOverlay — a full-cover bar
+   translated by its own width, so the loop reset is fully off-screen. */
+@keyframes shimmerSweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
 }
 .skeleton-line {
   height: 11px; border-radius: 6px; margin-bottom: 9px;
@@ -2837,6 +2946,29 @@ textarea { font-family: var(--font); resize: none; }
 .img-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .img-slot-empty-placeholder { color: var(--faint); font-size: 11px; }
 
+.img-hover-nav-anchor {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.img-hover-nav-popover {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.img-hover-nav-popover::before { display: none; }
+.img-hover-nav-popover [data-slot="popover-viewport"] {
+  overflow: visible;
+  padding: 0;
+}
+
 /* Blue floating hover-nav pill — Ravi's "hover nav" from the Figma
    canvas. Floats ABOVE the image (outside the slot's top edge) so its
    action buttons don't cover image content. Section-card no longer
@@ -2851,6 +2983,12 @@ textarea { font-family: var(--font); resize: none; }
   box-shadow: 0 4px 14px rgba(0,0,0,0.32);
   opacity: 0; pointer-events: none;
   transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.img-hover-nav-popover .img-hover-nav {
+  position: static;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
 }
 /* Toolbar is click-only — hover used to show it but Ed asked for a less
    chatty UI. Selection still reads clearly via the .img-slot.active
@@ -3396,22 +3534,6 @@ textarea { font-family: var(--font); resize: none; }
 .board-prompt-toggle.open svg { transform: rotate(180deg); }
 .board-prompt-toggle:hover { color: var(--text); }
 
-/* ── Toast notification ──────────────────────────────────────── */
-@keyframes toast-in {
-  from { opacity: 0; transform: translateY(-10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.ww-toast {
-  position: fixed; top: 16px; right: 20px; z-index: 9999;
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 16px; border-radius: 10px;
-  font-size: 13px; font-weight: 500; font-family: var(--font);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  animation: toast-in 0.2s ease;
-}
-.ww-toast-success { background: #1A1A1A; color: #fff; }
-.ww-toast-error   { background: #B91C1C; color: #fff; }
-
 /* ── Dark theme — Board ──────────────────────────────────────── */
 [data-theme="dark"] .board-screen { background: #111111; }
 /* Topbar keeps its rainbow gradient in both themes — flat dark
@@ -3652,22 +3774,43 @@ textarea { font-family: var(--font); resize: none; }
 
 /* ── One Pager ── */
 .onepager-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  /* Near-opaque dark canvas so the export reads as a true fullscreen preview
+     (the app no longer shows through behind the centered letter page —
+     Ravi's "not full screen" flag). */
+  position: fixed; inset: 0; background: rgba(9,9,11,0.985);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   display: flex; flex-direction: column; align-items: center;
-  overflow-y: auto; z-index: 500; padding: 24px 16px 40px;
+  overflow-y: auto; z-index: 500; padding: 16px 24px 32px;
 }
 .onepager-shell {
-  width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 0;
+  /* Export sheet width. Ravi (5/31 sync): the sheet reads "tiny" on a 4K
+     monitor — a 1500px column stranded in dead space — and asked to "make this
+     much bigger," ~50% bigger. Bumped 1500 -> 2200 so it fills the screen on
+     large displays while still bounded by viewport width on smaller ones. */
+  width: min(2200px, calc(100vw - 48px)); display: flex; flex-direction: column; gap: 0;
 }
 .onepager-toolbar {
   display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
   padding: 10px 0 12px;
 }
 .onepager-toolbar-title { color: #fff; font-size: 13px; font-weight: 600; opacity: 0.8; }
+.onepager-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 /* Production / Full detail mode switch in the one-pager toolbar. */
 .op-mode-switch {
   display: inline-flex; padding: 3px; border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06);
+}
+.op-section-select-trigger {
+  width: 220px;
+  min-width: 220px;
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.1);
+  color: #fff;
 }
 .op-mode-btn {
   padding: 6px 14px; border: none; background: none;
@@ -3715,25 +3858,63 @@ textarea { font-family: var(--font); resize: none; }
 /* Page itself */
 .onepager-page {
   background: #fff; color: #111; border-radius: 10px;
-  padding: 36px 40px 30px; font-family: 'Inter', sans-serif;
+  padding: 30px 36px 26px; font-family: 'Inter', sans-serif;
   box-shadow: 0 24px 80px rgba(0,0,0,0.35);
 }
 .op-header {
   display: flex; justify-content: space-between; align-items: flex-start;
-  padding-bottom: 16px; border-bottom: 2px solid #111; margin-bottom: 16px;
+  padding-bottom: 14px; border-bottom: 2px solid #111; margin-bottom: 14px;
 }
 .op-brand { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; line-height: 1; }
 .op-campaign { font-size: 13px; color: #666; margin-top: 4px; }
-.op-header-right { display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
-.op-meta-row { display: flex; gap: 8px; font-size: 11px; color: #444; }
+.op-header-right {
+  display: grid;
+  grid-template-areas:
+    "shots format"
+    "duration location";
+  grid-auto-flow: row;
+  grid-auto-columns: max-content;
+  gap: 4px 36px;
+  align-items: start;
+  justify-content: end;
+}
+.op-meta-row { display: flex; justify-content: flex-start; gap: 8px; font-size: 11px; color: #444; white-space: nowrap; }
 .op-meta-row span { color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.op-meta-row--format { grid-area: format; }
+.op-meta-row--duration { grid-area: duration; }
+.op-meta-row--shots { grid-area: shots; }
+.op-meta-row--location { grid-area: location; }
+.op-meta-row--project,
+.op-meta-row--job { grid-column: 1 / -1; }
 
-.op-section { margin-bottom: 16px; }
+.op-section { margin-bottom: 14px; }
 .op-section-label {
   font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
   color: #999; margin-bottom: 6px;
 }
-.op-direction { border-bottom: 1px solid #eee; padding-bottom: 14px; margin-bottom: 14px; }
+.op-sheet-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  align-items: start;
+}
+.op-sheet-main,
+.op-sheet-rail {
+  min-width: 0;
+}
+.op-sheet-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.op-sheet-rail .op-section {
+  margin-bottom: 0;
+}
+.op-direction {
+  border-top: 1px solid #eee;
+  padding: 10px 0;
+  margin-bottom: 0;
+}
 .op-body { font-size: 12px; color: #333; line-height: 1.55; margin: 0; }
 
 .op-two-col { display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; }
@@ -3810,7 +3991,7 @@ textarea { font-family: var(--font); resize: none; }
 
 .op-footer {
   display: flex; justify-content: space-between; align-items: center;
-  border-top: 1px solid #eee; padding-top: 12px; margin-top: 18px;
+  border-top: 1px solid #eee; padding-top: 10px; margin-top: 14px;
   font-size: 9px; color: #bbb; text-transform: uppercase; letter-spacing: 0.8px;
 }
 
@@ -3826,19 +4007,19 @@ textarea { font-family: var(--font); resize: none; }
 .op-talent-stack { display: flex; flex-direction: column; gap: 18px; }
 .op-character-sheet-compact {
   display: flex; flex-direction: column; gap: 8px;
-  width: 160px;
+  width: 80px;
   margin-bottom: 0;
 }
 .op-character-sheet-compact .op-char-name {
-  font-size: 16px; font-weight: 600; color: #111; letter-spacing: -0.01em;
+  font-size: 11px; font-weight: 600; color: #111; letter-spacing: -0.01em;
   margin-bottom: 0;
 }
 .op-character-sheet-compact .op-charsheet-ref {
-  width: 160px; height: 160px; object-fit: cover; border-radius: 8px;
+  width: 80px; height: 80px; object-fit: cover; border-radius: 8px;
   border: 1px solid #eee;
 }
 .op-charsheet-ref-empty {
-  width: 160px; height: 160px; border-radius: 8px;
+  width: 80px; height: 80px; border-radius: 8px;
   background: #f4f4f4; border: 1px solid #eee;
 }
 .op-char-bio { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; }
@@ -3875,6 +4056,7 @@ textarea { font-family: var(--font); resize: none; }
 
 /* Location — single hero with caption */
 .op-loc-hero { position: relative; border-radius: 6px; overflow: hidden; border: 1px solid #eee; }
+.op-loc-hero + .op-loc-hero { margin-top: 8px; }
 .op-loc-hero-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
 .op-loc-caption {
   position: absolute; left: 10px; bottom: 10px;
@@ -3883,8 +4065,63 @@ textarea { font-family: var(--font); resize: none; }
   font-size: 11px; font-weight: 600; letter-spacing: -0.005em;
 }
 
+.op-sheet-rail .op-section--locations {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.op-sheet-rail .op-section--locations .op-section-label {
+  grid-column: 1 / -1;
+  margin-bottom: -2px;
+}
+.op-sheet-rail .op-loc-hero + .op-loc-hero {
+  margin-top: 0;
+}
+.op-sheet-rail .op-loc-caption {
+  left: 5px;
+  bottom: 5px;
+  max-width: calc(100% - 12px);
+  padding: 2px 5px;
+  font-size: 8px;
+}
+.op-sheet-rail .op-elements-grid {
+  gap: 8px;
+}
+.op-sheet-rail .op-element-name {
+  font-size: 10px;
+  color: #111;
+  line-height: 1.2;
+}
+.op-mood-export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.op-mood-export-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.op-mood-export-img,
+.op-mood-export-empty {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  object-fit: cover;
+}
+.op-mood-export-empty {
+  background: #f5f5f5;
+  border-style: dashed;
+}
+.op-mood-export-caption {
+  font-size: 9px;
+  color: #444;
+  line-height: 1.25;
+}
+
 /* Storyboard — grid of frames (replaces the old text table) */
-.op-storyboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.op-storyboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 10px; }
 .op-sb-frame { display: flex; flex-direction: column; gap: 4px; }
 .op-shot-img-wrap {
   position: relative; width: 100%; border-radius: 5px; overflow: hidden;
@@ -3906,36 +4143,149 @@ textarea { font-family: var(--font); resize: none; }
   letter-spacing: 0.05em; text-transform: uppercase;
 }
 .op-shot-desc {
-  font-size: 10px; color: #444; line-height: 1.4; margin: 0;
+  font-size: 9px; color: #444; line-height: 1.34; margin: 0;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* ── Print CSS ── */
+@media screen and (max-width: 980px) {
+  .onepager-shell { max-width: 900px; }
+  .onepager-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .onepager-toolbar-controls {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  .op-sheet-body { grid-template-columns: 1fr; }
+  .op-sheet-rail { display: block; }
+  .op-sheet-rail .op-section { margin-bottom: 14px; }
+  .op-character-sheet-compact,
+  .op-character-sheet-compact .op-charsheet-ref,
+  .op-charsheet-ref-empty {
+    width: 160px;
+  }
+  .op-character-sheet-compact .op-charsheet-ref,
+  .op-charsheet-ref-empty {
+    height: 160px;
+  }
+  .op-character-sheet-compact .op-char-name { font-size: 16px; }
+  .op-shot-desc { -webkit-line-clamp: unset; }
+  .op-sheet-rail .op-section--locations {
+    display: block;
+  }
+  .op-sheet-rail .op-section--locations .op-section-label {
+    margin-bottom: 6px;
+  }
+  .op-sheet-rail .op-loc-hero + .op-loc-hero {
+    margin-top: 8px;
+  }
+}
+
+/* ── Print CSS ──
+   Goal: the OnePager must paginate naturally across multiple printed
+   pages. The old rules used `position: fixed; inset: 0` on `.onepager-page`,
+   which clips fixed elements to a single printed page — anything past the
+   bottom of page 1 silently dropped (this is why Maya kept disappearing
+   from Pepsi exports). Replace with normal flow + break-inside rules on
+   atomic blocks (frames, characters, locations, elements) so the printer
+   pages without splitting individual cards. */
+@page {
+  size: Letter landscape;
+  margin: 10mm 11mm;
+}
 @media print {
-  /* When printing the one pager, hide everything except the page itself */
-  .onepager-backdrop * { visibility: hidden; }
-  .onepager-page, .onepager-page * { visibility: visible; }
-  .onepager-backdrop {
-    position: fixed; inset: 0; overflow: visible;
-    background: none; padding: 0;
-  }
-  .onepager-shell { max-width: none; }
-  .onepager-toolbar { display: none; }
-  .onepager-page {
-    position: fixed; inset: 0; border-radius: 0;
-    padding: 20mm 22mm; box-shadow: none;
-    width: 100%; height: 100%;
-  }
-  /* When printing the board normally (no one pager open) */
+  /* Hide everything outside the OnePager modal when printing. We can't
+     use `body > *:not(.onepager-backdrop)` because the modal isn't always
+     a direct body child — instead hide every known chrome region. */
   .topbar, .agent-panel, .agent-panel-collapsed,
   .board-nav-dots, .readonly-banner,
   .img-hover-nav, .img-version-badge,
-  .img-slot-btn, .section-card-actions { display: none !important; }
+  .img-slot-btn, .section-card-actions,
+  .no-print, .onepager-toolbar { display: none !important; }
+
+  /* Strip the modal scrim + sizing constraints so the page flows. */
+  .onepager-backdrop {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  .onepager-shell {
+    max-width: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .onepager-page {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .op-sheet-body {
+    grid-template-columns: minmax(0, 1fr) 68mm !important;
+    gap: 8mm !important;
+  }
+  .op-storyboard {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 2.5mm 3mm !important;
+  }
+  .op-shot-desc {
+    font-size: 7.5pt !important;
+    line-height: 1.25 !important;
+    -webkit-line-clamp: 3 !important;
+  }
+  .op-body {
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+  .op-character-sheet-compact,
+  .op-character-sheet-compact .op-charsheet-ref,
+  .op-charsheet-ref-empty {
+    width: 18mm !important;
+  }
+  .op-character-sheet-compact .op-charsheet-ref,
+  .op-charsheet-ref-empty {
+    height: 18mm !important;
+  }
+  .op-talent-row {
+    gap: 4mm !important;
+  }
+
+  /* Keep atomic blocks intact across page breaks. The page itself flows. */
+  .op-header { break-after: avoid; }
+  .op-section { break-inside: auto; }
+  .op-section-label { break-after: avoid; }
+  .op-sb-frame { break-inside: avoid; }
+  .op-character-sheet,
+  .op-character-sheet-compact { break-inside: avoid; }
+  .op-loc-hero { break-inside: avoid; }
+  .op-element { break-inside: avoid; }
+  .op-char-views-group { break-inside: avoid; }
+  .op-footer { break-inside: avoid; }
+
+  /* When printing the board directly (no OnePager open) — legacy path. */
   .board-body { display: block !important; }
   .board-content { display: block !important; }
   .board-scroll { overflow: visible !important; height: auto !important; padding: 0 !important; }
   .board-pair-row { break-inside: avoid; }
   .section-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+
   body { background: #fff !important; }
+  /* Force image rendering — some browsers strip backgrounds and aggressively
+     compress in print; this hints to preserve color/contrast. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 
 /* ── Discover home: cinematic rotating backdrop ───────────────────────── */
@@ -3987,4 +4337,903 @@ textarea { font-family: var(--font); resize: none; }
 :root[data-theme="light"] .discover-form .input-card {
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(0, 0, 0, 0.08);
+}
+
+@theme inline { --font-heading: var(--font-sans); --font-sans: 'Geist Variable', sans-serif; --color-sidebar-ring: var(--sidebar-ring); --color-sidebar-border: var(--sidebar-border); --color-sidebar-accent-foreground: var(--sidebar-accent-foreground); --color-sidebar-accent: var(--sidebar-accent); --color-sidebar-primary-foreground: var(--sidebar-primary-foreground); --color-sidebar-primary: var(--sidebar-primary); --color-sidebar-foreground: var(--sidebar-foreground); --color-sidebar: var(--sidebar); --color-chart-5: var(--chart-5); --color-chart-4: var(--chart-4); --color-chart-3: var(--chart-3); --color-chart-2: var(--chart-2); --color-chart-1: var(--chart-1); --color-ring: var(--ring); --color-input: var(--input); --color-border: var(--border); --color-destructive: var(--destructive); --color-accent-foreground: var(--accent-foreground); --color-accent: var(--accent); --color-muted-foreground: var(--muted-foreground); --color-muted: var(--muted); --color-secondary-foreground: var(--secondary-foreground); --color-secondary: var(--secondary); --color-primary-foreground: var(--primary-foreground); --color-primary: var(--primary); --color-popover-foreground: var(--popover-foreground); --color-popover: var(--popover); --color-card-foreground: var(--card-foreground); --color-card: var(--card); --color-foreground: var(--foreground); --color-background: var(--background); --radius-sm: calc(var(--radius) * 0.6); --radius-md: calc(var(--radius) * 0.8); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.4); --radius-2xl: calc(var(--radius) * 1.8); --radius-3xl: calc(var(--radius) * 2.2); --radius-4xl: calc(var(--radius) * 2.6); --color-destructive-foreground: var(--destructive-foreground); --animate-toast-success-odd: toast-success-odd 0.32s cubic-bezier(0.5, 1, 0.89, 1); --animate-toast-success-even: toast-success-even 0.32s cubic-bezier(0.5, 1, 0.89, 1); --animate-toast-error-odd: toast-error-odd 0.28s cubic-bezier(0.5, 1, 0.89, 1); --animate-toast-error-even: toast-error-even 0.28s cubic-bezier(0.5, 1, 0.89, 1);
+  @keyframes toast-success-odd {
+  0% {
+    scale: 1;
+    }
+  30% {
+    scale: 1.025;
+    }
+  60% {
+    scale: 0.99;
+    }
+  100% {
+    scale: 1;
+    }
+  }
+  @keyframes toast-error-odd {
+  0% {
+    translate: 0 0;
+    }
+  25% {
+    translate: -3px 0;
+    }
+  50% {
+    translate: 3px 0;
+    }
+  75% {
+    translate: -3px 0;
+    }
+  100% {
+    translate: 0 0;
+    }
+  }
+  @keyframes toast-success-even {
+  0% {
+    scale: 1;
+    }
+  30% {
+    scale: 1.025;
+    }
+  60% {
+    scale: 0.99;
+    }
+  100% {
+    scale: 1;
+    }
+  }
+  @keyframes toast-error-even {
+  0% {
+    translate: 0 0;
+    }
+  25% {
+    translate: -3px 0;
+    }
+  50% {
+    translate: 3px 0;
+    }
+  75% {
+    translate: -3px 0;
+    }
+  100% {
+    translate: 0 0;
+    }
+  } }
+
+.dark { --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0); --card-foreground: oklch(0.985 0 0); --popover: oklch(0.205 0 0); --popover-foreground: oklch(0.985 0 0); --primary: oklch(0.922 0 0); --primary-foreground: oklch(0.205 0 0); --secondary: oklch(0.269 0 0); --secondary-foreground: oklch(0.985 0 0); --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0); --accent-foreground: oklch(0.985 0 0); --destructive: oklch(0.704 0.191 22.216); --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%); --ring: oklch(0.556 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --sidebar: oklch(0.205 0 0); --sidebar-foreground: oklch(0.985 0 0); --sidebar-primary: oklch(0.488 0.243 264.376); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.269 0 0); --sidebar-accent-foreground: oklch(0.985 0 0); --sidebar-border: oklch(1 0 0 / 10%); --sidebar-ring: oklch(0.556 0 0); --destructive-foreground: var(--color-red-400); }
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50; }
+  body {
+    @apply bg-background text-foreground; }
+  html {
+    @apply font-sans; } }
+
+/* Export-by-department view menu (ported from Court ckizer 46d82d5 — OnePager VIEW_PRESET_GROUPS) */
+.op-view-menu-trigger {
+  width: 230px;
+  min-width: 230px;
+  justify-content: space-between;
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.1) !important;
+  color: #fff !important;
+}
+.op-view-menu-trigger:hover,
+.op-view-menu-trigger[data-pressed] {
+  background: rgba(255,255,255,0.16) !important;
+}
+.op-view-menu-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.op-view-menu-popup {
+  min-width: 230px;
+  background: #1b1b1b !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #f5f5f5 !important;
+}
+.op-view-menu-popup [data-slot="menu-label"] {
+  color: rgba(255,255,255,0.44);
+}
+.op-view-menu-popup [data-slot="menu-item"],
+.op-view-menu-popup [data-slot="menu-sub-trigger"],
+.op-view-menu-popup [data-slot="menu-checkbox-item"] {
+  color: rgba(255,255,255,0.9);
+}
+.op-view-menu-popup [data-slot="menu-item"][data-highlighted],
+.op-view-menu-popup [data-slot="menu-sub-trigger"][data-highlighted],
+.op-view-menu-popup [data-slot="menu-sub-trigger"][data-popup-open],
+.op-view-menu-popup [data-slot="menu-checkbox-item"][data-highlighted] {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.op-view-menu-popup [data-slot="menu-separator"] {
+  background: rgba(255,255,255,0.1);
+}
+.op-view-preset-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.op-view-preset-copy span:first-child {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.94);
+}
+.op-view-preset-copy span:last-child {
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(255,255,255,0.44);
+}
+
+/* === OnePager export sheet — full block from Court ckizer 49e95b4 (Recommended Views + per-dept layout profiles + 8.5x11 @page). Appended last to supersede older onepager rules via cascade. === */
+.onepager-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: flex; flex-direction: column; align-items: center;
+  overflow-y: auto; z-index: 500; padding: 18px 24px 32px;
+}
+.onepager-shell {
+  width: min(1500px, calc(100vw - 48px), calc((100dvh - 126px) * 11 / 8.5));
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.onepager-toolbar {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) auto minmax(360px, 1fr);
+  align-items: center;
+  gap: 16px;
+  width: min(1280px, 100%);
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 14px;
+  background: rgba(18,18,19,0.92);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.06);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.onepager-toolbar-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.onepager-toolbar-title { color: #fff; font-size: 13px; font-weight: 600; opacity: 0.8; }
+.onepager-toolbar-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.onepager-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* Production / Full detail mode switch in the one-pager toolbar. */
+.op-mode-switch {
+  display: inline-flex; padding: 3px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06);
+}
+.op-view-menu-trigger {
+  width: 230px;
+  min-width: 230px;
+  justify-content: space-between;
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.1) !important;
+  color: #fff !important;
+}
+.op-view-menu-trigger:hover,
+.op-view-menu-trigger[data-pressed] {
+  background: rgba(255,255,255,0.16) !important;
+}
+.op-view-menu-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.op-view-menu-popup {
+  min-width: 230px;
+  background: #1b1b1b !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #f5f5f5 !important;
+}
+.op-view-menu-popup [data-slot="menu-label"] {
+  color: rgba(255,255,255,0.44);
+}
+.op-view-menu-popup [data-slot="menu-item"],
+.op-view-menu-popup [data-slot="menu-sub-trigger"],
+.op-view-menu-popup [data-slot="menu-checkbox-item"] {
+  color: rgba(255,255,255,0.9);
+}
+.op-view-menu-popup [data-slot="menu-item"][data-highlighted],
+.op-view-menu-popup [data-slot="menu-sub-trigger"][data-highlighted],
+.op-view-menu-popup [data-slot="menu-sub-trigger"][data-popup-open],
+.op-view-menu-popup [data-slot="menu-checkbox-item"][data-highlighted] {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.op-view-menu-popup [data-slot="menu-separator"] {
+  background: rgba(255,255,255,0.1);
+}
+.op-view-preset-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.op-view-preset-copy span:first-child {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.94);
+}
+.op-view-preset-copy span:last-child {
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(255,255,255,0.44);
+}
+.op-mode-btn {
+  padding: 6px 14px; border: none; background: none;
+  color: rgba(255,255,255,0.65); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+  border-radius: 6px; transition: background 0.12s, color 0.12s;
+}
+.op-mode-btn:hover { color: #fff; }
+.op-mode-btn.active { background: rgba(255,255,255,0.16); color: #fff; }
+/* Elements grid on the one-pager. 4-up product images with name caption. */
+.op-elements-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+}
+.op-element { display: flex; flex-direction: column; gap: 6px; }
+.op-element-img {
+  width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 8px;
+  background: #1a1a1a; border: 1px solid #282828;
+}
+.op-element-empty {
+  width: 100%; aspect-ratio: 1/1; border-radius: 8px;
+  background: #1a1a1a; border: 1px solid #282828;
+}
+.op-element-name {
+  font-size: 13px; font-weight: 700; color: #e2e2e2; text-align: center;
+}
+.op-element-desc { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.4; }
+.op-loc-hero + .op-loc-hero { margin-top: 14px; }
+.op-loc-hero-empty {
+  width: 100%; aspect-ratio: 16/9; border-radius: 10px;
+  background: #1a1a1a; border: 1px solid #282828;
+}
+.onepager-print-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.1); color: #fff; font-size: 12px; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+}
+.onepager-print-btn:hover { background: rgba(255,255,255,0.18); }
+.onepager-close-btn {
+  padding: 7px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+  background: none; color: rgba(255,255,255,0.7); cursor: pointer; line-height: 0;
+}
+.onepager-close-btn:hover { background: rgba(255,255,255,0.1); }
+
+/* Page itself */
+.onepager-page {
+  background: #fff; color: #111; border-radius: 10px;
+  width: 100%;
+  aspect-ratio: 11 / 8.5;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 30px 36px 26px; font-family: 'Inter', sans-serif;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+  display: flex;
+  flex-direction: column;
+}
+.op-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding-bottom: 14px; border-bottom: 2px solid #111; margin-bottom: 14px;
+}
+.op-brand { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; line-height: 1; }
+.op-campaign { font-size: 13px; color: #666; margin-top: 4px; }
+.op-header-right {
+  display: grid;
+  grid-template-areas:
+    "shots format"
+    "duration location";
+  grid-auto-flow: row;
+  grid-auto-columns: max-content;
+  gap: 4px 36px;
+  align-items: start;
+  justify-content: end;
+}
+.op-meta-row { display: flex; justify-content: flex-start; gap: 8px; font-size: 11px; color: #444; white-space: nowrap; }
+.op-meta-row span { color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.op-meta-row--format { grid-area: format; }
+.op-meta-row--duration { grid-area: duration; }
+.op-meta-row--shots { grid-area: shots; }
+.op-meta-row--location { grid-area: location; }
+.op-meta-row--project,
+.op-meta-row--job { grid-column: 1 / -1; }
+
+.op-section { margin-bottom: 14px; }
+.op-section-label {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+  color: #999; margin-bottom: 6px;
+}
+.op-sheet-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  align-items: start;
+  flex: 1;
+  min-height: 0;
+}
+.op-sheet-main,
+.op-sheet-rail {
+  min-width: 0;
+  min-height: 0;
+}
+.op-sheet-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.op-sheet-rail .op-section {
+  margin-bottom: 0;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-sheet-body,
+.onepager-page[data-layout-profile="art-reference"] .op-sheet-body,
+.onepager-page[data-layout-profile="location-reference"] .op-sheet-body {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-sheet-rail,
+.onepager-page[data-layout-profile="storyboard-focus"] .op-sheet-main:empty,
+.onepager-page[data-layout-profile="art-reference"] .op-sheet-main,
+.onepager-page[data-layout-profile="location-reference"] .op-sheet-main {
+  display: none;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-sheet-main,
+.onepager-page[data-layout-profile="storyboard-focus"] .op-section--storyboard,
+.onepager-page[data-layout-profile="art-reference"] .op-sheet-rail,
+.onepager-page[data-layout-profile="location-reference"] .op-sheet-rail {
+  height: 100%;
+}
+.onepager-page[data-layout-profile="production-balanced"][data-visible-sections="storyboard"] .op-sheet-body,
+.onepager-page[data-layout-profile="production-balanced"]:not([data-visible-sections*="talent"]):not([data-visible-sections*="locations"]):not([data-visible-sections*="elements"]):not([data-visible-sections*="mood"]) .op-sheet-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+.onepager-page[data-layout-profile="production-balanced"]:not([data-visible-sections*="talent"]):not([data-visible-sections*="locations"]):not([data-visible-sections*="elements"]):not([data-visible-sections*="mood"]) .op-sheet-rail {
+  display: none;
+}
+.op-direction {
+  border-top: 1px solid #eee;
+  padding: 10px 0;
+  margin-bottom: 0;
+}
+.op-body { font-size: 12px; color: #333; line-height: 1.55; margin: 0; }
+
+.op-two-col { display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; }
+.op-col {}
+
+.op-colors { display: flex; flex-wrap: wrap; gap: 8px; }
+.op-color { display: flex; align-items: center; gap: 7px; }
+.op-color-swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.08); flex-shrink: 0; }
+.op-color-hex { font-size: 10px; font-weight: 600; font-family: monospace; color: #333; }
+.op-color-name { font-size: 10px; color: #888; }
+
+.op-moods { display: flex; flex-direction: column; gap: 7px; }
+.op-mood { display: flex; gap: 8px; align-items: flex-start; }
+.op-mood-bar { width: 5px; flex-shrink: 0; border-radius: 3px; align-self: stretch; min-height: 32px; }
+.op-mood-name { font-size: 11px; font-weight: 600; color: #222; line-height: 1.2; }
+.op-mood-desc { font-size: 10px; color: #666; margin-top: 1px; line-height: 1.4; }
+.op-mood-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.op-mood-tag { font-size: 9px; padding: 1px 6px; border-radius: 10px; background: #f0f0f0; color: #555; }
+
+.op-shot-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+.op-shot-table thead tr { border-bottom: 1.5px solid #111; }
+.op-shot-table th {
+  text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: #999; padding: 0 6px 5px 0;
+}
+.op-shot-table td { padding: 4px 6px 4px 0; border-bottom: 1px solid #f0f0f0; color: #333; vertical-align: top; line-height: 1.4; }
+.op-shot-table tr:last-child td { border-bottom: none; }
+.op-shot-num { color: #999; font-weight: 600; white-space: nowrap; }
+.op-shot-frame { font-weight: 600; color: #111; white-space: nowrap; }
+.op-shot-camera { color: #777; white-space: nowrap; }
+.op-shot-dur { color: #777; white-space: nowrap; }
+
+/* Hero image */
+.op-hero { position: relative; width: 100%; height: 220px; border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+.op-hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.op-hero-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 55%);
+  display: flex; flex-direction: column; justify-content: flex-end; padding: 16px 18px;
+}
+.op-hero-brand { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+.op-hero-campaign { font-size: 12px; color: rgba(255,255,255,0.75); margin-top: 2px; }
+
+/* Meta strip (after hero) */
+.op-meta-strip {
+  display: flex; flex-wrap: wrap; gap: 14px 24px;
+  padding: 10px 0 14px; border-bottom: 1px solid #eee; margin-bottom: 14px;
+}
+.op-meta-item { display: flex; flex-direction: column; gap: 1px; }
+.op-meta-key { font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; color: #aaa; }
+.op-meta-val { font-size: 11px; font-weight: 600; color: #222; }
+
+/* Character */
+.op-char-row { display: flex; gap: 10px; align-items: flex-start; }
+.op-char-img { width: 72px; height: 96px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+
+/* Location */
+.op-loc-img { width: 100%; height: 90px; object-fit: cover; border-radius: 6px; }
+
+/* Mood thumbnails */
+.op-mood-thumb { width: 36px; height: 48px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+
+/* Image strips */
+.op-img-strip { display: flex; gap: 6px; }
+.op-strip-img { flex: 1; height: 90px; object-fit: cover; border-radius: 6px; min-width: 0; }
+.op-strip-wide { flex: 1.8; }
+.op-strip-square { aspect-ratio: 1/1; height: 80px; }
+
+/* Character reference strip */
+.op-char-ref-strip { display: flex; gap: 8px; }
+.op-char-ref-item { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+.op-char-ref-img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 6px; }
+.op-char-ref-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #999; }
+
+.op-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  border-top: 1px solid #eee; padding-top: 10px; margin-top: 14px;
+  font-size: 9px; color: #bbb; text-transform: uppercase; letter-spacing: 0.8px;
+}
+
+/* ── One-pager v2 — character sheet + storyboard frames ───────── */
+.op-character-sheet { margin-bottom: 18px; }
+.op-treatment-loading { color: var(--muted); font-style: italic; }
+/* Production talent: name ABOVE headshot, characters side-by-side in
+   a row with comfortable margin between them. Wraps onto a second row
+   when the character count exceeds what fits in one. */
+.op-talent-row {
+  display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start;
+}
+.op-talent-stack { display: flex; flex-direction: column; gap: 18px; }
+.op-character-sheet-compact {
+  display: flex; flex-direction: column; gap: 8px;
+  width: 80px;
+  margin-bottom: 0;
+}
+.op-character-sheet-compact .op-char-name {
+  font-size: 11px; font-weight: 600; color: #111; letter-spacing: -0.01em;
+  margin-bottom: 0;
+}
+.op-character-sheet-compact .op-charsheet-ref {
+  width: 80px; height: 80px; object-fit: cover; border-radius: 8px;
+  border: 1px solid #eee;
+}
+.op-charsheet-ref-empty {
+  width: 80px; height: 80px; border-radius: 8px;
+  background: #f4f4f4; border: 1px solid #eee;
+}
+.op-char-bio { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; }
+.op-charsheet-ref {
+  width: 130px; height: 130px; object-fit: cover; border-radius: 6px;
+  flex-shrink: 0; border: 1px solid #eee;
+}
+.op-char-bio-text { flex: 1; min-width: 0; }
+.op-char-name {
+  font-size: 18px; font-weight: 600; color: #111; margin-bottom: 4px;
+  letter-spacing: -0.01em;
+}
+.op-char-views-group { margin-top: 10px; }
+.op-char-views-label {
+  font-size: 11px; font-weight: 600; color: #555; margin-bottom: 5px;
+  letter-spacing: -0.005em;
+}
+.op-char-views {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+.op-char-view { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
+.op-char-view-img {
+  width: 100%; aspect-ratio: 177/268; object-fit: cover; border-radius: 6px;
+  border: 1px solid #eee;
+}
+.op-char-view-empty {
+  width: 100%; aspect-ratio: 177/268; border-radius: 6px;
+  background: #f5f5f5; border: 1px dashed #ddd;
+}
+.op-char-view-cap {
+  font-size: 8.5px; font-weight: 700; color: #999; letter-spacing: 0.06em;
+  text-transform: uppercase; text-align: center;
+}
+
+/* Location — single hero with caption */
+.op-loc-hero { position: relative; border-radius: 6px; overflow: hidden; border: 1px solid #eee; }
+.op-loc-hero + .op-loc-hero { margin-top: 8px; }
+.op-loc-hero-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+.op-loc-caption {
+  position: absolute; left: 10px; bottom: 10px;
+  padding: 5px 10px; border-radius: 5px;
+  background: rgba(0,0,0,0.65); color: #fff;
+  font-size: 11px; font-weight: 600; letter-spacing: -0.005em;
+}
+
+.op-sheet-rail .op-section--locations {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.op-sheet-rail .op-section--locations .op-section-label {
+  grid-column: 1 / -1;
+  margin-bottom: -2px;
+}
+.op-sheet-rail .op-loc-hero + .op-loc-hero {
+  margin-top: 0;
+}
+.op-sheet-rail .op-loc-caption {
+  left: 5px;
+  bottom: 5px;
+  max-width: calc(100% - 12px);
+  padding: 2px 5px;
+  font-size: 8px;
+}
+.op-sheet-rail .op-elements-grid {
+  gap: 8px;
+}
+.op-sheet-rail .op-element-name {
+  font-size: 10px;
+  color: #111;
+  line-height: 1.2;
+}
+.op-mood-export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.op-mood-export-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.op-mood-export-img,
+.op-mood-export-empty {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  object-fit: cover;
+}
+.op-mood-export-empty {
+  background: #f5f5f5;
+  border-style: dashed;
+}
+.op-mood-export-caption {
+  font-size: 9px;
+  color: #444;
+  line-height: 1.25;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-sheet-rail {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.72fr) minmax(0, 2.28fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px 26px;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-section {
+  min-height: 0;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-section--talent {
+  grid-column: 1;
+  grid-row: 1;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-section--elements {
+  grid-column: 1;
+  grid-row: 2;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-section--mood {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-talent-row,
+.onepager-page[data-layout-profile="art-reference"] .op-elements-grid,
+.onepager-page[data-layout-profile="art-reference"] .op-mood-export-grid {
+  height: calc(100% - 20px);
+}
+.onepager-page[data-layout-profile="art-reference"] .op-talent-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 18px;
+  align-content: stretch;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-character-sheet-compact {
+  width: 100%;
+  gap: 10px;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-character-sheet-compact .op-char-name {
+  font-size: 15px;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-character-sheet-compact .op-charsheet-ref,
+.onepager-page[data-layout-profile="art-reference"] .op-charsheet-ref-empty {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-elements-grid {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-element-name {
+  color: #111;
+  font-size: 14px;
+  line-height: 1.15;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-mood-export-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(150px, 1fr);
+  gap: 16px;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-mood-export-img,
+.onepager-page[data-layout-profile="art-reference"] .op-mood-export-empty {
+  aspect-ratio: 16 / 9;
+  min-height: 118px;
+}
+.onepager-page[data-layout-profile="art-reference"] .op-mood-export-caption {
+  font-size: 11px;
+  line-height: 1.28;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.onepager-page[data-layout-profile="location-reference"] .op-sheet-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 22px;
+  align-content: stretch;
+}
+.onepager-page[data-layout-profile="location-reference"] .op-section--locations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+.onepager-page[data-layout-profile="location-reference"] .op-section--locations .op-section-label {
+  grid-column: 1 / -1;
+}
+.onepager-page[data-layout-profile="location-reference"] .op-loc-hero-img,
+.onepager-page[data-layout-profile="location-reference"] .op-loc-hero-empty {
+  min-height: 190px;
+}
+
+/* Storyboard — grid of frames (replaces the old text table) */
+.op-storyboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 10px; }
+.op-sb-frame { display: flex; flex-direction: column; gap: 4px; }
+.op-shot-img-wrap {
+  position: relative; width: 100%; border-radius: 5px; overflow: hidden;
+  border: 1px solid #eee;
+}
+.op-shot-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+.op-shot-empty {
+  width: 100%; aspect-ratio: 16/9; background: #f5f5f5; border: 1px dashed #ddd;
+}
+.op-shot-badge-num {
+  position: absolute; top: 5px; left: 5px;
+  font-size: 9px; font-weight: 700; color: #fff;
+  background: rgba(0,0,0,0.62); padding: 1px 6px; border-radius: 10px;
+}
+.op-shot-badge-framing {
+  position: absolute; bottom: 5px; left: 5px;
+  font-size: 8px; font-weight: 700; color: #fff;
+  background: rgba(0,0,0,0.62); padding: 1px 6px; border-radius: 10px;
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+.op-shot-desc {
+  font-size: 9px; color: #444; line-height: 1.34; margin: 0;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-storyboard {
+  height: calc(100% - 18px);
+  grid-template-columns: repeat(var(--op-story-cols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--op-story-rows), minmax(0, 1fr));
+  gap: 14px 16px;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-sb-frame {
+  min-height: 0;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-shot-img-wrap {
+  flex: 1;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-shot-img,
+.onepager-page[data-layout-profile="storyboard-focus"] .op-shot-empty {
+  height: 100%;
+  aspect-ratio: auto;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-shot-desc {
+  font-size: 10px;
+  line-height: 1.25;
+  -webkit-line-clamp: 1;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-shot-badge-num {
+  font-size: 11px;
+  padding: 2px 7px;
+}
+.onepager-page[data-layout-profile="storyboard-focus"] .op-shot-badge-framing {
+  font-size: 9px;
+  padding: 2px 7px;
+}
+
+@media screen and (max-width: 980px) {
+  .onepager-shell { max-width: 900px; }
+  .onepager-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .onepager-toolbar-controls {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  .op-sheet-body { grid-template-columns: 1fr; }
+  .op-sheet-rail { display: block; }
+  .op-sheet-rail .op-section { margin-bottom: 14px; }
+  .op-character-sheet-compact,
+  .op-character-sheet-compact .op-charsheet-ref,
+  .op-charsheet-ref-empty {
+    width: 160px;
+  }
+  .op-character-sheet-compact .op-charsheet-ref,
+  .op-charsheet-ref-empty {
+    height: 160px;
+  }
+  .op-character-sheet-compact .op-char-name { font-size: 16px; }
+  .op-shot-desc { -webkit-line-clamp: unset; }
+  .op-sheet-rail .op-section--locations {
+    display: block;
+  }
+  .op-sheet-rail .op-section--locations .op-section-label {
+    margin-bottom: 6px;
+  }
+  .op-sheet-rail .op-loc-hero + .op-loc-hero {
+    margin-top: 8px;
+  }
+}
+
+/* ── Print CSS ──
+   Goal: the OnePager must paginate naturally across multiple printed
+   pages. The old rules used `position: fixed; inset: 0` on `.onepager-page`,
+   which clips fixed elements to a single printed page — anything past the
+   bottom of page 1 silently dropped (this is why Maya kept disappearing
+   from Pepsi exports). Replace with normal flow + break-inside rules on
+   atomic blocks (frames, characters, locations, elements) so the printer
+   pages without splitting individual cards. */
+@page {
+  size: Letter landscape;
+  margin: 10mm 11mm;
+}
+@media print {
+  /* Hide everything outside the OnePager modal when printing. We can't
+     use `body > *:not(.onepager-backdrop)` because the modal isn't always
+     a direct body child — instead hide every known chrome region. */
+  .topbar, .agent-panel, .agent-panel-collapsed,
+  .board-nav-dots, .readonly-banner,
+  .img-hover-nav, .img-version-badge,
+  .img-slot-btn, .section-card-actions,
+  .no-print, .onepager-toolbar { display: none !important; }
+
+  /* Strip the modal scrim + sizing constraints so the page flows. */
+  .onepager-backdrop {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  .onepager-shell {
+    max-width: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .onepager-page {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    aspect-ratio: auto !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .op-sheet-body {
+    grid-template-columns: minmax(0, 1fr) 68mm !important;
+    gap: 8mm !important;
+  }
+  .onepager-page[data-layout-profile="storyboard-focus"] .op-sheet-body,
+  .onepager-page[data-layout-profile="art-reference"] .op-sheet-body,
+  .onepager-page[data-layout-profile="location-reference"] .op-sheet-body {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+  .onepager-page[data-layout-profile="storyboard-focus"] .op-sheet-rail,
+  .onepager-page[data-layout-profile="art-reference"] .op-sheet-main,
+  .onepager-page[data-layout-profile="location-reference"] .op-sheet-main {
+    display: none !important;
+  }
+  .onepager-page[data-layout-profile="art-reference"] .op-sheet-rail {
+    display: grid !important;
+    grid-template-columns: minmax(34mm, 0.72fr) minmax(0, 2.28fr) !important;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 5mm 6mm !important;
+  }
+  .onepager-page[data-layout-profile="art-reference"] .op-mood-export-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 4mm !important;
+  }
+  .op-storyboard {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 2.5mm 3mm !important;
+  }
+  .onepager-page[data-layout-profile="storyboard-focus"] .op-storyboard {
+    grid-template-columns: repeat(var(--op-story-cols), minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(var(--op-story-rows), minmax(0, 1fr)) !important;
+    gap: 3mm !important;
+  }
+  .op-shot-desc {
+    font-size: 7.5pt !important;
+    line-height: 1.25 !important;
+    -webkit-line-clamp: 3 !important;
+  }
+  .op-body {
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+  .op-character-sheet-compact,
+  .op-character-sheet-compact .op-charsheet-ref,
+  .op-charsheet-ref-empty {
+    width: 18mm !important;
+  }
+  .op-character-sheet-compact .op-charsheet-ref,
+  .op-charsheet-ref-empty {
+    height: 18mm !important;
+  }
+  .op-talent-row {
+    gap: 4mm !important;
+  }
+
+  /* Keep atomic blocks intact across page breaks. The page itself flows. */
+  .op-header { break-after: avoid; }
+  .op-section { break-inside: auto; }
+  .op-section-label { break-after: avoid; }
+  .op-sb-frame { break-inside: avoid; }
+  .op-character-sheet,
+  .op-character-sheet-compact { break-inside: avoid; }
+  .op-loc-hero { break-inside: avoid; }
+  .op-element { break-inside: avoid; }
+  .op-char-views-group { break-inside: avoid; }
+  .op-footer { break-inside: avoid; }
+
+  /* When printing the board directly (no OnePager open) — legacy path. */
+  .board-body { display: block !important; }
+  .board-content { display: block !important; }
+  .board-scroll { overflow: visible !important; height: auto !important; padding: 0 !important; }
+  .board-pair-row { break-inside: avoid; }
+  .section-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+
+  body { background: #fff !important; }
+  /* Force image rendering — some browsers strip backgrounds and aggressively
+     compress in print; this hints to preserve color/contrast. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }

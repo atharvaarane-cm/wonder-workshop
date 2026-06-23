@@ -1,9 +1,286 @@
-import { useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  ChevronDownIcon,
+  ClapperboardIcon,
+  MapPinIcon,
+  PaletteIcon,
+  ShirtIcon,
+  SlidersHorizontalIcon,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Menu,
+  MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from '@/components/ui/menu'
 import { VIEWS, closeupPrompt, fullbodyPrompt, referencePrompt } from '../utils/characterPrompts.js'
 import { expandMentions } from '../utils/mentions.js'
 import { exportPptx } from '../utils/pptxExport.js'
 import { generateTreatmentFromShots, getCachedTreatment, cacheTreatment } from '../utils/treatment.js'
-import { ProjectContext } from '../hooks/useProject.js'
+
+const SECTION_OPTIONS = {
+  headerFooter: 'Header & Footer',
+  storyboard: 'Storyboard',
+  treatment: 'Treatment Brief',
+  talent: 'Talent',
+  locations: 'Locations',
+  elements: 'Elements',
+  mood: 'Mood',
+}
+
+const SECTION_VALUES = Object.keys(SECTION_OPTIONS)
+const DEFAULT_SECTIONS = ['headerFooter', 'storyboard', 'treatment', 'locations', 'talent']
+const LAYOUT_PROFILES = {
+  productionBalanced: 'production-balanced',
+  storyboardFocus: 'storyboard-focus',
+  artReference: 'art-reference',
+  locationReference: 'location-reference',
+  fullDetail: 'full-detail',
+}
+
+const VIEW_PRESET_GROUPS = [
+  {
+    id: 'viewAll',
+    label: 'View All',
+    icon: SlidersHorizontalIcon,
+    presets: [
+      {
+        id: 'productionAll',
+        label: 'Production Sheet',
+        triggerLabel: 'View: All +4 more',
+        description: 'Header, storyboard, treatment, locations, talent',
+        sections: DEFAULT_SECTIONS,
+        layoutProfile: LAYOUT_PROFILES.productionBalanced,
+      },
+      {
+        id: 'fullAll',
+        label: 'Full Sheet',
+        triggerLabel: 'View: All Sections',
+        description: 'Every printable section',
+        sections: SECTION_VALUES,
+        layoutProfile: LAYOUT_PROFILES.fullDetail,
+      },
+      {
+        id: 'coreThree',
+        label: '3 Sections',
+        triggerLabel: 'View: 3 Sections',
+        description: 'Header, storyboard, treatment',
+        sections: ['headerFooter', 'storyboard', 'treatment'],
+        layoutProfile: LAYOUT_PROFILES.productionBalanced,
+      },
+    ],
+  },
+  {
+    id: 'recommended',
+    label: 'Recommended Views',
+    icon: SlidersHorizontalIcon,
+    presets: [
+      {
+        id: 'recommendedProduction',
+        label: 'Production Sheet',
+        triggerLabel: 'View: All +4 more',
+        description: 'Storyboard plus crew essentials',
+        sections: DEFAULT_SECTIONS,
+        layoutProfile: LAYOUT_PROFILES.productionBalanced,
+      },
+      {
+        id: 'recommendedFull',
+        label: 'Full Detail Sheet',
+        triggerLabel: 'View: All Sections',
+        description: 'Every printable section',
+        sections: SECTION_VALUES,
+        layoutProfile: LAYOUT_PROFILES.fullDetail,
+      },
+      {
+        id: 'storyboardReview',
+        label: 'Storyboard Review',
+        triggerLabel: 'View: Storyboard Review',
+        description: 'Large storyboard frames',
+        sections: ['storyboard'],
+        layoutProfile: LAYOUT_PROFILES.storyboardFocus,
+      },
+      {
+        id: 'artDeptRecommended',
+        label: 'Art Dept',
+        triggerLabel: 'View: Art Dept (3)',
+        description: 'Talent, elements, mood',
+        sections: ['talent', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
+      },
+      {
+        id: 'cameraDeptRecommended',
+        label: 'Camera Dept',
+        triggerLabel: 'View: Camera Dept',
+        description: 'Storyboard only',
+        sections: ['storyboard'],
+        layoutProfile: LAYOUT_PROFILES.storyboardFocus,
+      },
+      {
+        id: 'locationDeptRecommended',
+        label: 'Location Dept',
+        triggerLabel: 'View: Location Dept',
+        description: 'Scout sheet',
+        sections: ['locations'],
+        layoutProfile: LAYOUT_PROFILES.locationReference,
+      },
+      {
+        id: 'wardrobeDeptRecommended',
+        label: 'Wardrobe Dept',
+        triggerLabel: 'View: Wardrobe Dept (3)',
+        description: 'Talent, elements, mood',
+        sections: ['talent', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
+      },
+    ],
+  },
+  {
+    id: 'art',
+    label: 'Art Dept',
+    icon: PaletteIcon,
+    presets: [
+      {
+        id: 'artBoard',
+        label: 'Art Dept (3)',
+        triggerLabel: 'View: Art Dept (3)',
+        description: 'Talent, elements, mood',
+        sections: ['talent', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
+      },
+      {
+        id: 'artBuild',
+        label: 'Build Reference',
+        triggerLabel: 'View: Art Build',
+        description: 'Locations, elements, mood',
+        sections: ['locations', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
+      },
+    ],
+  },
+  {
+    id: 'camera',
+    label: 'Camera Dept',
+    icon: ClapperboardIcon,
+    presets: [
+      {
+        id: 'cameraStoryboard',
+        label: 'Storyboard Images',
+        triggerLabel: 'View: Camera Dept',
+        description: 'Storyboard only',
+        sections: ['storyboard'],
+        layoutProfile: LAYOUT_PROFILES.storyboardFocus,
+      },
+      {
+        id: 'cameraContext',
+        label: 'Shot Context',
+        triggerLabel: 'View: Camera Dept (3)',
+        description: 'Header, storyboard, treatment',
+        sections: ['headerFooter', 'storyboard', 'treatment'],
+        layoutProfile: LAYOUT_PROFILES.productionBalanced,
+      },
+    ],
+  },
+  {
+    id: 'location',
+    label: 'Location Dept',
+    icon: MapPinIcon,
+    presets: [
+      {
+        id: 'locationScout',
+        label: 'Scout Sheet',
+        triggerLabel: 'View: Location Dept',
+        description: 'Locations plus storyboard context',
+        sections: ['headerFooter', 'storyboard', 'locations'],
+        layoutProfile: LAYOUT_PROFILES.locationReference,
+      },
+      {
+        id: 'locationOnly',
+        label: 'Locations Only',
+        triggerLabel: 'View: Locations',
+        description: 'Location thumbnails only',
+        sections: ['locations'],
+        layoutProfile: LAYOUT_PROFILES.locationReference,
+      },
+    ],
+  },
+  {
+    id: 'wardrobe',
+    label: 'Wardrobe Dept',
+    icon: ShirtIcon,
+    presets: [
+      {
+        id: 'wardrobeTalent',
+        label: 'Wardrobe Dept (3)',
+        triggerLabel: 'View: Wardrobe Dept (3)',
+        description: 'Talent, elements, mood',
+        sections: ['talent', 'elements', 'mood'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
+      },
+      {
+        id: 'wardrobeTalentOnly',
+        label: 'Talent Only',
+        triggerLabel: 'View: Talent',
+        description: 'Talent references only',
+        sections: ['talent'],
+        layoutProfile: LAYOUT_PROFILES.artReference,
+      },
+    ],
+  },
+]
+
+const VIEW_PRESETS = VIEW_PRESET_GROUPS.flatMap(group => group.presets.map(preset => ({
+  ...preset,
+  groupLabel: group.label,
+})))
+
+function sameSections(a = [], b = []) {
+  if (a.length !== b.length) return false
+  const set = new Set(a)
+  return b.every(value => set.has(value))
+}
+
+function getPresetById(id) {
+  return VIEW_PRESETS.find(option => option.id === id)
+}
+
+function getViewTriggerLabel(value, activePresetId = null) {
+  const activePreset = getPresetById(activePresetId)
+  if (activePreset && sameSections(value, activePreset.sections)) return activePreset.triggerLabel
+  const preset = VIEW_PRESETS.find(option => sameSections(value, option.sections))
+  if (preset) return preset.triggerLabel
+  if (!value?.length) return 'View: No Sections'
+  if (value.length === 1) return `View: ${SECTION_OPTIONS[value[0]] || '1 Section'}`
+  return `View: ${value.length} Sections`
+}
+
+function getStoryboardGrid(count) {
+  if (count <= 1) return { cols: 1, rows: 1 }
+  if (count === 2) return { cols: 2, rows: 1 }
+  if (count <= 4) return { cols: 2, rows: 2 }
+  if (count <= 6) return { cols: 3, rows: 2 }
+  if (count <= 9) return { cols: 3, rows: 3 }
+  return { cols: 4, rows: 3 }
+}
+
+function inferLayoutProfile(sections, mode, activePresetId = null) {
+  if (mode === 'full') return LAYOUT_PROFILES.fullDetail
+  const activePreset = getPresetById(activePresetId)
+  if (activePreset && sameSections(sections, activePreset.sections)) return activePreset.layoutProfile
+  const preset = VIEW_PRESETS.find(option => sameSections(sections, option.sections))
+  if (preset?.layoutProfile) return preset.layoutProfile
+  const set = new Set(sections)
+  if (sections.length === 1 && set.has('storyboard')) return LAYOUT_PROFILES.storyboardFocus
+  if (sections.length === 1 && set.has('locations')) return LAYOUT_PROFILES.locationReference
+  if (!set.has('storyboard')) return LAYOUT_PROFILES.artReference
+  return LAYOUT_PROFILES.productionBalanced
+}
 
 // Resolve a generated image src by trying the stable slot ID first, then
 // falling back to the legacy prompt-keyed entry. Mirrors ImageSlot's own
@@ -33,6 +310,7 @@ function charSlotId(key, kind, viewId) {
 function envSlotId(key) { return `env.${key}` }
 function productSlotId(idx) { return `product.${idx}` }
 function shotSlotId(shot, idx) { return `shot.${shot.id || `idx-${idx}`}` }
+function moodSlotId(item, idx) { return `mood.${item.id || `idx-${idx}`}` }
 
 function SectionLabel({ children }) {
   return <div className="op-section-label">{children}</div>
@@ -141,7 +419,7 @@ function CharacterSheet({ character, characterKey, images, mode }) {
 //     No full-body grid, no brand-asset chrome.
 //   - full: detail sheet for the video-gen pipeline. Adds full-body
 //     grids + the full description text.
-export default function OnePager({ brief, images = {}, onClose }) {
+export default function OnePager({ brief, images = {}, onClose, projectId = null }) {
   const cd    = brief?.creativeDirection || {}
   const pi    = brief?.projectInfo || {}
   const shots = brief?.shotList || []
@@ -151,9 +429,25 @@ export default function OnePager({ brief, images = {}, onClose }) {
 
   const [mode, setMode] = useState('production')
   const [exportingPptx, setExportingPptx] = useState(false)
-  const project = useContext(ProjectContext)
   const [treatment, setTreatment] = useState('')
   const [treatmentLoading, setTreatmentLoading] = useState(false)
+  const [visibleSections, setVisibleSections] = useState(DEFAULT_SECTIONS)
+  const [activePresetId, setActivePresetId] = useState('recommendedProduction')
+  const isVisible = (section) => visibleSections.includes(section)
+  const viewTriggerLabel = getViewTriggerLabel(visibleSections, activePresetId)
+
+  function applyViewPreset(preset) {
+    setVisibleSections(preset.sections)
+    setActivePresetId(preset.id)
+  }
+
+  function toggleSection(section, checked) {
+    setActivePresetId(null)
+    setVisibleSections(current => {
+      if (checked) return current.includes(section) ? current : [...current, section]
+      return current.filter(value => value !== section)
+    })
+  }
 
   // Storyboard frames — stable ID per shot.id, legacy prompt as fallback.
   const shotFrames = shots.map((shot, idx) => {
@@ -162,6 +456,9 @@ export default function OnePager({ brief, images = {}, onClose }) {
     const src = resolveSlot(images, shotSlotId(shot, idx), legacyPrompt)
     return { shot, src }
   })
+  const layoutProfile = inferLayoutProfile(visibleSections, mode, activePresetId)
+  const storyboardGrid = getStoryboardGrid(shotFrames.length)
+  const visibleSectionAttr = visibleSections.join(' ')
 
   // Primary character + additional characters with their stable index.
   const characters = []
@@ -204,6 +501,20 @@ export default function OnePager({ brief, images = {}, onClose }) {
     }
   }).filter(e => e.product?.name || e.product?.description || e.src)
 
+  const moodItems = (brief?.moodBoard || []).map((item, i) => {
+    const caption = (item.caption || '').trim()
+    const brand = cd.brand || ''
+    const description = cd.description || ''
+    const legacyPrompt = caption
+      ? `${caption}, ${brand} ${description}, mood board reference, cinematic aesthetic, editorial`
+      : `mood-board:${item.id}`
+    return {
+      item,
+      caption,
+      src: resolveSlot(images, moodSlotId(item, i), legacyPrompt),
+    }
+  }).filter(m => m.caption || m.src)
+
   async function handleExportPptx() {
     if (exportingPptx) return
     setExportingPptx(true)
@@ -225,7 +536,7 @@ export default function OnePager({ brief, images = {}, onClose }) {
   useEffect(() => {
     let aborted = false
     const controller = new AbortController()
-    const cached = getCachedTreatment(project?.id, shots)
+    const cached = getCachedTreatment(projectId, shots)
     if (cached) {
       setTreatment(cached)
       return () => { aborted = true; controller.abort() }
@@ -241,12 +552,12 @@ export default function OnePager({ brief, images = {}, onClose }) {
         if (aborted) return
         setTreatment(text)
         setTreatmentLoading(false)
-        if (text) cacheTreatment(project?.id, shots, text)
+        if (text) cacheTreatment(projectId, shots, text)
       })
       .catch(() => { if (!aborted) setTreatmentLoading(false) })
     return () => { aborted = true; controller.abort() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, shots.length, shots.map(s => `${s.framing || ''}|${s.description || ''}`).join('::')])
+  }, [projectId, shots.length, shots.map(s => `${s.framing || ''}|${s.description || ''}`).join('::')])
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
@@ -258,30 +569,99 @@ export default function OnePager({ brief, images = {}, onClose }) {
     <div className="onepager-backdrop" onClick={onClose}>
       <div className="onepager-shell" onClick={e => e.stopPropagation()}>
 
-        {/* Toolbar (hidden in print) */}
         <div className="onepager-toolbar no-print">
-          <span className="onepager-toolbar-title">One Pager Preview</span>
-          <div className="op-mode-switch" role="tablist" aria-label="Sheet mode">
-            <button
-              role="tab"
-              aria-selected={mode === 'production'}
-              className={`op-mode-btn${mode === 'production' ? ' active' : ''}`}
-              onClick={() => setMode('production')}
-              title="Clean sheet for crew / DP — storyboard, talent, locations, elements"
-            >
-              Production
-            </button>
-            <button
-              role="tab"
-              aria-selected={mode === 'full'}
-              className={`op-mode-btn${mode === 'full' ? ' active' : ''}`}
-              onClick={() => setMode('full')}
-              title="Full detail sheet for the video-gen pipeline — adds full-body rotations + full descriptions"
-            >
-              Full detail
-            </button>
+          <div className="onepager-toolbar-left">
+            <span className="onepager-toolbar-title">One Pager Preview</span>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="onepager-toolbar-controls">
+            <div className="op-mode-switch" role="tablist" aria-label="Sheet mode">
+              <button
+                role="tab"
+                aria-selected={mode === 'production'}
+                className={`op-mode-btn${mode === 'production' ? ' active' : ''}`}
+                onClick={() => setMode('production')}
+                title="Clean sheet for crew / DP — storyboard, talent, locations, elements"
+              >
+                Production
+              </button>
+              <button
+                role="tab"
+                aria-selected={mode === 'full'}
+                className={`op-mode-btn${mode === 'full' ? ' active' : ''}`}
+                onClick={() => setMode('full')}
+                title="Full detail sheet for the video-gen pipeline — adds full-body rotations + full descriptions"
+              >
+                Full detail
+              </button>
+            </div>
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button
+                    aria-label="Select export sheet view"
+                    className="op-view-menu-trigger"
+                    size="sm"
+                    variant="outline"
+                  />
+                }
+              >
+                <span className="op-view-menu-trigger-label">{viewTriggerLabel}</span>
+                <ChevronDownIcon aria-hidden="true" className="size-4" />
+              </MenuTrigger>
+              <MenuPopup align="start" sideOffset={6} className="op-view-menu-popup">
+                <MenuGroup>
+                  <MenuGroupLabel>Recommended Views</MenuGroupLabel>
+                  {VIEW_PRESET_GROUPS.find(group => group.id === 'recommended')?.presets.map((preset) => (
+                    <MenuItem key={preset.id} onClick={() => applyViewPreset(preset)}>
+                      <span className="op-view-preset-copy">
+                        <span>{preset.label}</span>
+                        <span>{preset.description}</span>
+                      </span>
+                    </MenuItem>
+                  ))}
+                </MenuGroup>
+                <MenuSeparator />
+                <MenuGroup>
+                  <MenuGroupLabel>Departments</MenuGroupLabel>
+                  {VIEW_PRESET_GROUPS.filter(group => !['recommended', 'viewAll'].includes(group.id)).map((group) => {
+                    const Icon = group.icon
+                    return (
+                      <MenuSub key={group.id}>
+                        <MenuSubTrigger>
+                          <Icon aria-hidden="true" />
+                          {group.label}
+                        </MenuSubTrigger>
+                        <MenuSubPopup className="op-view-menu-popup">
+                          {group.presets.map((preset) => (
+                            <MenuItem key={preset.id} onClick={() => applyViewPreset(preset)}>
+                              <span className="op-view-preset-copy">
+                                <span>{preset.label}</span>
+                                <span>{preset.description}</span>
+                              </span>
+                            </MenuItem>
+                          ))}
+                        </MenuSubPopup>
+                      </MenuSub>
+                    )
+                  })}
+                </MenuGroup>
+                <MenuSeparator />
+                <MenuGroup>
+                  <MenuGroupLabel>Custom sections</MenuGroupLabel>
+                  {SECTION_VALUES.map((value) => (
+                    <MenuCheckboxItem
+                      key={value}
+                      checked={visibleSections.includes(value)}
+                      onCheckedChange={(checked) => toggleSection(value, checked)}
+                    >
+                      {SECTION_OPTIONS[value]}
+                    </MenuCheckboxItem>
+                  ))}
+                </MenuGroup>
+              </MenuPopup>
+            </Menu>
+          </div>
+          <div className="onepager-toolbar-actions">
             <button className="onepager-print-btn" onClick={handleExportPptx} disabled={exportingPptx}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
@@ -306,127 +686,164 @@ export default function OnePager({ brief, images = {}, onClose }) {
           </div>
         </div>
 
-        <div className="onepager-page">
+        <div
+          className={`onepager-page onepager-page--${mode}`}
+          data-layout-profile={layoutProfile}
+          data-visible-sections={visibleSectionAttr}
+          data-storyboard-count={shotFrames.length}
+          style={{
+            '--op-story-cols': storyboardGrid.cols,
+            '--op-story-rows': storyboardGrid.rows,
+          }}
+        >
 
           {/* ── Header ── */}
-          <div className="op-header">
-            <div className="op-header-left">
-              <div className="op-brand">{cd.brand || pi.clientName || '—'}</div>
-              <div className="op-campaign">{pi.brandCampaignName || brief?.title || ''}</div>
+          {isVisible('headerFooter') && (
+            <div className="op-header">
+              <div className="op-header-left">
+                <div className="op-brand">{cd.brand || pi.clientName || '—'}</div>
+                <div className="op-campaign">{pi.brandCampaignName || brief?.title || ''}</div>
+              </div>
+              <div className="op-header-right">
+                {pi.projectName && <div className="op-meta-row op-meta-row--project"><span>Project</span>{pi.projectName}</div>}
+                {pi.jobNumber   && <div className="op-meta-row op-meta-row--job"><span>Job #</span>{pi.jobNumber}</div>}
+                {cd.format      && <div className="op-meta-row op-meta-row--format"><span>Format</span>{cd.format}</div>}
+                {cd.duration    && <div className="op-meta-row op-meta-row--duration"><span>Duration</span>{cd.duration}</div>}
+                {cd.shots       && <div className="op-meta-row op-meta-row--shots"><span>Shots</span>{cd.shots}</div>}
+                {cd.location    && <div className="op-meta-row op-meta-row--location"><span>Location</span>{cd.location}</div>}
+              </div>
             </div>
-            <div className="op-header-right">
-              {pi.projectName && <div className="op-meta-row"><span>Project</span>{pi.projectName}</div>}
-              {pi.jobNumber   && <div className="op-meta-row"><span>Job #</span>{pi.jobNumber}</div>}
-              {cd.format      && <div className="op-meta-row"><span>Format</span>{cd.format}</div>}
-              {cd.duration    && <div className="op-meta-row"><span>Duration</span>{cd.duration}</div>}
-              {cd.shots       && <div className="op-meta-row"><span>Shots</span>{cd.shots}</div>}
-              {cd.location    && <div className="op-meta-row"><span>Location</span>{cd.location}</div>}
-            </div>
-          </div>
+          )}
 
-          {/* ── Storyboard FIRST — the 95% conversation piece in production. */}
-          {shotFrames.length > 0 && (
-            <div className="op-section">
-              <SectionLabel>Storyboard</SectionLabel>
-              <div className="op-storyboard">
-                {shotFrames.map(({ shot, src }, i) => (
-                  <div key={i} className="op-sb-frame">
-                    <div className="op-shot-img-wrap">
-                      {src
-                        ? <img src={src} alt={`Shot ${shot.num}`} className="op-shot-img" />
-                        : <div className="op-shot-empty" />
-                      }
-                      <span className="op-shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
-                      <span className="op-shot-badge-framing">{shot.framing}</span>
-                    </div>
-                    {shot.description && (
-                      <p className="op-shot-desc">{shot.description}</p>
-                    )}
+          <div className="op-sheet-body">
+            <div className="op-sheet-main">
+              {/* ── Storyboard FIRST — the 95% conversation piece in production. */}
+              {isVisible('storyboard') && shotFrames.length > 0 && (
+                <div className="op-section op-section--storyboard">
+                  <SectionLabel>Storyboard</SectionLabel>
+                  <div className="op-storyboard">
+                    {shotFrames.map(({ shot, src }, i) => (
+                      <div key={i} className="op-sb-frame">
+                        <div className="op-shot-img-wrap">
+                          {src
+                            ? <img src={src} alt={`Shot ${shot.num}`} className="op-shot-img" />
+                            : <div className="op-shot-empty" />
+                          }
+                          <span className="op-shot-badge-num">{String(shot.num).padStart(2, '0')}</span>
+                          <span className="op-shot-badge-framing">{shot.framing}</span>
+                        </div>
+                        {shot.description && (
+                          <p className="op-shot-desc">{shot.description}</p>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Talent. Production mode lays the characters out in a row;
-              full-detail stacks the full bio + headshots + full-body grids
-              per character. */}
-          {characters.length > 0 && (
-            <div className="op-section">
-              <SectionLabel>Talent</SectionLabel>
-              <div className={mode === 'production' ? 'op-talent-row' : 'op-talent-stack'}>
-                {characters.map(({ character, key }) => (
-                  <CharacterSheet
-                    key={key}
-                    character={character}
-                    characterKey={key}
-                    images={images}
-                    mode={mode}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Locations ── */}
-          {locations.length > 0 && (
-            <div className="op-section">
-              <SectionLabel>Locations</SectionLabel>
-              {locations.map(({ data, src }, i) => (
-                <div key={i} className="op-loc-hero">
-                  {src
-                    ? <img src={src} alt={data.heroName || 'Location'} className="op-loc-hero-img" />
-                    : <div className="op-loc-hero-empty" />
-                  }
-                  {data.heroName && <div className="op-loc-caption">{data.heroName}</div>}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* ── Elements / Products ── */}
-          {elements.length > 0 && (
-            <div className="op-section">
-              <SectionLabel>Elements</SectionLabel>
-              <div className="op-elements-grid">
-                {elements.map(({ product, src }, i) => (
-                  <div key={i} className="op-element">
-                    {src
-                      ? <img src={src} alt={product?.name || 'Element'} className="op-element-img" />
-                      : <div className="op-element-empty" />
-                    }
-                    {product?.name && <div className="op-element-name">{product.name}</div>}
-                    {mode === 'full' && product?.description && (
-                      <p className="op-body op-element-desc">{product.description}</p>
-                    )}
+              {/* ── Treatment — auto-generated narrative from the storyboard
+                  captions. Present-tense short story used to pitch the spot.
+                  Falls back to the brief's creative-direction prose if
+                  generation fails or shots are absent. */}
+              {isVisible('treatment') && (treatment || treatmentLoading || cd.description) && (
+                <div className="op-section op-direction">
+                  <SectionLabel>Treatment</SectionLabel>
+                  {treatmentLoading && !treatment && (
+                    <p className="op-body op-treatment-loading">Composing treatment from the storyboard…</p>
+                  )}
+                  {treatment && <p className="op-body">{treatment}</p>}
+                  {!treatment && !treatmentLoading && cd.description && (
+                    <p className="op-body">{cd.description}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="op-sheet-rail">
+              {/* ── Talent. Production mode lays the characters out in a row;
+                  full-detail stacks the full bio + headshots + full-body grids
+                  per character. */}
+              {isVisible('talent') && characters.length > 0 && (
+                <div className="op-section op-section--talent">
+                  <SectionLabel>Talent</SectionLabel>
+                  <div className={mode === 'production' ? 'op-talent-row' : 'op-talent-stack'}>
+                    {characters.map(({ character, key }) => (
+                      <CharacterSheet
+                        key={key}
+                        character={character}
+                        characterKey={key}
+                        images={images}
+                        mode={mode}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Treatment — auto-generated narrative from the storyboard
-              captions. Present-tense short story used to pitch the spot.
-              Falls back to the brief's creative-direction prose if
-              generation fails or shots are absent. */}
-          {(treatment || treatmentLoading || cd.description) && (
-            <div className="op-section op-direction">
-              <SectionLabel>Treatment</SectionLabel>
-              {treatmentLoading && !treatment && (
-                <p className="op-body op-treatment-loading">Composing treatment from the storyboard…</p>
+                </div>
               )}
-              {treatment && <p className="op-body">{treatment}</p>}
-              {!treatment && !treatmentLoading && cd.description && (
-                <p className="op-body">{cd.description}</p>
+
+              {/* ── Locations ── */}
+              {isVisible('locations') && locations.length > 0 && (
+                <div className="op-section op-section--locations">
+                  <SectionLabel>Locations</SectionLabel>
+                  {locations.map(({ data, src }, i) => (
+                    <div key={i} className="op-loc-hero">
+                      {src
+                        ? <img src={src} alt={data.heroName || 'Location'} className="op-loc-hero-img" />
+                        : <div className="op-loc-hero-empty" />
+                      }
+                      {data.heroName && <div className="op-loc-caption">{data.heroName}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Elements / Products ── */}
+              {isVisible('elements') && elements.length > 0 && (
+                <div className="op-section op-section--elements">
+                  <SectionLabel>Elements</SectionLabel>
+                  <div className="op-elements-grid">
+                    {elements.map(({ product, src }, i) => (
+                      <div key={i} className="op-element">
+                        {src
+                          ? <img src={src} alt={product?.name || 'Element'} className="op-element-img" />
+                          : <div className="op-element-empty" />
+                        }
+                        {product?.name && <div className="op-element-name">{product.name}</div>}
+                        {mode === 'full' && product?.description && (
+                          <p className="op-body op-element-desc">{product.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Mood ── */}
+              {isVisible('mood') && moodItems.length > 0 && (
+                <div className="op-section op-section--mood">
+                  <SectionLabel>Mood</SectionLabel>
+                  <div className="op-mood-export-grid">
+                    {moodItems.map(({ item, caption, src }, i) => (
+                      <div key={item.id || i} className="op-mood-export-item">
+                        {src
+                          ? <img src={src} alt={caption || 'Mood reference'} className="op-mood-export-img" />
+                          : <div className="op-mood-export-empty" />
+                        }
+                        {caption && <div className="op-mood-export-caption">{caption}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
-          )}
-
-          <div className="op-footer">
-            <span>WONDER WORKSHOP</span>
-            <span>{mode === 'full' ? 'Full Detail Sheet' : 'Production Sheet'}</span>
-            <span>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
           </div>
+
+          {isVisible('headerFooter') && (
+            <div className="op-footer">
+              <span>WONDER WORKSHOP</span>
+              <span>{mode === 'full' ? 'Full Detail Sheet' : 'Production Sheet'}</span>
+              <span>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
